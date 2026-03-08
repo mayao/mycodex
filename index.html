@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Snake</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="app">
+    <header class="hud">
+      <h1>Snake</h1>
+      <div class="stats">
+        <span>Score: <strong id="score">0</strong></span>
+        <span id="status">Running</span>
+      </div>
+      <div class="actions">
+        <button id="pause-btn" type="button">Pause</button>
+        <button id="restart-btn" type="button">Restart</button>
+      </div>
+    </header>
+
+    <section aria-label="Snake board" class="board-wrap">
+      <div id="board" class="board"></div>
+    </section>
+
+    <section class="controls" aria-label="On-screen controls">
+      <button data-dir="up" type="button">Up</button>
+      <div class="controls-row">
+        <button data-dir="left" type="button">Left</button>
+        <button data-dir="down" type="button">Down</button>
+        <button data-dir="right" type="button">Right</button>
+      </div>
+    </section>
+
+    <p class="help">Use arrow keys or WASD. Press P to pause/resume, R to restart.</p>
+  </main>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
