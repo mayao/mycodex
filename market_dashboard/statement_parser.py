@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +14,9 @@ if str(DEPS_DIR) not in sys.path:
 import pdfplumber  # type: ignore
 
 try:
-    from statement_sources import STATEMENT_SOURCES
+    from statement_sources import get_statement_sources
 except ModuleNotFoundError:
-    from market_dashboard.statement_sources import STATEMENT_SOURCES
+    from market_dashboard.statement_sources import get_statement_sources
 
 
 CACHE_PATH = Path(__file__).resolve().parent / "statement_cache.json"
@@ -26,6 +27,21 @@ SYMBOL_ALIASES = {
 NAME_TO_SYMBOL = {
     "诺辉健康": "06606.HK",
 }
+
+
+def load_portfolio_cache() -> dict[str, Any] | None:
+    if not CACHE_PATH.exists():
+        return None
+    try:
+        payload = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    cached_payload = payload.get("payload")
+    if not isinstance(cached_payload, dict):
+        return None
+    return payload
 
 
 def to_float(value: str | None) -> float | None:
@@ -61,7 +77,7 @@ def normalize_symbol(raw: str) -> str:
 
 def file_signature() -> list[dict[str, Any]]:
     signature = []
-    for source in STATEMENT_SOURCES:
+    for source in get_statement_sources():
         path = Path(source["path"])
         signature.append(
             {
@@ -454,7 +470,19 @@ def parse_longbridge(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def parse_accounts() -> list[dict[str, Any]]:
+def summarize_source_issue(exc: Exception) -> str:
+    if isinstance(exc, FileNotFoundError):
+        return "源文件不存在"
+    text = str(exc).strip()
+    if not text:
+        return exc.__class__.__name__
+    return text.splitlines()[0][:160]
+
+
+def parse_accounts(
+    cached_accounts_by_id: dict[str, dict[str, Any]] | None = None,
+    strict_account_ids: set[str] | None = None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     parsers = {
         "tiger_activity": parse_tiger,
         "ib_daily": parse_ib,
@@ -462,14 +490,60 @@ def parse_accounts() -> list[dict[str, Any]]:
         "futu_monthly_hk": parse_futu_monthly_hk,
         "longbridge_daily": parse_longbridge,
     }
+    strict_ids = strict_account_ids or set()
+    cached_by_id = cached_accounts_by_id or {}
     accounts = []
-    for source in STATEMENT_SOURCES:
+    source_states = []
+    failures = []
+    for source in get_statement_sources():
+        account_id = source["account_id"]
+        path = Path(source["path"])
         parser = parsers[source["type"]]
-        accounts.append(parser(source))
-    return accounts
+        state = {
+            "broker": source["broker"],
+            "account_id": account_id,
+            "statement_type": source["type"],
+            "source_mode": source.get("source_mode", "default"),
+            "uploaded_at": source.get("uploaded_at"),
+            "file_name": path.name,
+            "file_exists": path.exists(),
+            "load_status": "parsed",
+            "issue": None,
+            "statement_date": None,
+        }
+        try:
+            if not path.exists():
+                raise FileNotFoundError(path)
+            account = parser(source)
+            account["load_status"] = "parsed"
+            account["load_issue"] = None
+            state["statement_date"] = account.get("statement_date")
+            accounts.append(account)
+        except Exception as exc:  # noqa: BLE001
+            issue = summarize_source_issue(exc)
+            cached_account = cached_by_id.get(account_id)
+            if cached_account is not None and account_id not in strict_ids:
+                account = deepcopy(cached_account)
+                account["load_status"] = "cache"
+                account["load_issue"] = issue
+                state["statement_date"] = account.get("statement_date")
+                state["load_status"] = "cache"
+                state["issue"] = issue
+                accounts.append(account)
+            else:
+                state["load_status"] = "error"
+                state["issue"] = issue
+                failures.append(f"{source['broker']} / {account_id}: {issue}")
+        source_states.append(state)
+    if failures:
+        raise RuntimeError("; ".join(failures))
+    return accounts, source_states
 
 
-def aggregate_portfolio(accounts: list[dict[str, Any]]) -> dict[str, Any]:
+def aggregate_portfolio(
+    accounts: list[dict[str, Any]],
+    source_states: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     holdings_map: dict[str, dict[str, Any]] = {}
     recent_trades = [trade for account in accounts for trade in account["recent_trades"]]
     derivatives = [item | {"account_id": account["account_id"], "broker": account["broker"]} for account in accounts for item in account["derivatives"]]
@@ -559,7 +633,7 @@ def aggregate_portfolio(accounts: list[dict[str, Any]]) -> dict[str, Any]:
         if total_statement_value_hkd
         else 0.0
     )
-    return {
+    payload = {
         "accounts": accounts,
         "aggregate_holdings": aggregate_holdings,
         "recent_trades": sorted(recent_trades, key=lambda item: item["date"], reverse=True),
@@ -569,19 +643,43 @@ def aggregate_portfolio(accounts: list[dict[str, Any]]) -> dict[str, Any]:
         "total_financing_hkd": round(total_financing_hkd, 2),
         "top5_ratio": round(top5_ratio, 2),
     }
+    if source_states is not None:
+        payload["source_states"] = source_states
+        payload["source_health"] = {
+            "parsed_count": sum(1 for item in source_states if item.get("load_status") == "parsed"),
+            "cached_count": sum(1 for item in source_states if item.get("load_status") == "cache"),
+            "error_count": sum(1 for item in source_states if item.get("load_status") == "error"),
+        }
+    return payload
 
 
-def load_real_portfolio(force_refresh: bool = False) -> dict[str, Any]:
+def load_real_portfolio(
+    force_refresh: bool = False,
+    allow_cached_fallback: bool = True,
+    strict_account_ids: set[str] | None = None,
+) -> dict[str, Any]:
     signature = file_signature()
-    if not force_refresh and CACHE_PATH.exists():
-        try:
-            cache = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-            if cache.get("signature") == signature:
-                return cache["payload"]
-        except (json.JSONDecodeError, OSError, KeyError):
-            pass
+    cache = load_portfolio_cache()
+    if cache and not force_refresh and cache.get("signature") == signature:
+        return cache["payload"]
 
-    payload = aggregate_portfolio(parse_accounts())
+    cached_accounts_by_id = {}
+    if cache and isinstance(cache.get("payload"), dict):
+        cached_accounts_by_id = {
+            account["account_id"]: account
+            for account in cache["payload"].get("accounts", [])
+            if isinstance(account, dict) and account.get("account_id")
+        }
+    try:
+        accounts, source_states = parse_accounts(
+            cached_accounts_by_id=cached_accounts_by_id,
+            strict_account_ids=strict_account_ids,
+        )
+        payload = aggregate_portfolio(accounts, source_states=source_states)
+    except Exception:  # noqa: BLE001
+        if allow_cached_fallback and cache and cache.get("payload"):
+            return cache["payload"]
+        raise
     try:
         CACHE_PATH.write_text(json.dumps({"signature": signature, "payload": payload}, ensure_ascii=False), encoding="utf-8")
     except OSError:

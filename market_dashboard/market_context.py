@@ -534,11 +534,80 @@ def severity_label(score: int, title_blob: str) -> str:
     return "低"
 
 
+def headline_digest_cn(topic: dict[str, Any], title: str) -> str:
+    lower = title.lower()
+    topic_id = topic.get("id")
+    if topic_id == "fed":
+        if "payroll" in lower or "jobs" in lower or "employment" in lower:
+            return "美国就业数据重新成为降息节奏判断的核心变量。"
+        if "inflation" in lower or "cpi" in lower or "pce" in lower:
+            return "美国通胀信号继续左右成长股估值与降息预期。"
+        if "fed" in lower or "powell" in lower or "rate cut" in lower:
+            return "美联储表态仍在主导利率敏感资产的风险偏好。"
+        return "美国增长与利率预期仍在反复拉扯市场定价。"
+    if topic_id == "trade":
+        if "tariff" in lower:
+            return "关税议题升温，出口链与全球风险偏好同步承压。"
+        if "export control" in lower or "license" in lower or "chip" in lower or "semiconductor" in lower:
+            return "芯片出口限制仍在收紧，算力链地域分配的不确定性上升。"
+        return "贸易与合规约束仍是科技链估值的重要折价因子。"
+    if topic_id == "china_policy":
+        if "stimulus" in lower or "consumption" in lower:
+            return "中国政策重点仍在稳增长、促消费与平台经济修复。"
+        if "property" in lower:
+            return "地产与内需政策进展继续影响港股互联网和消费链风险偏好。"
+        return "内需政策与平台环境改善，决定港股修复的持续性。"
+    if topic_id == "ai_capex":
+        if "capex" in lower or "datacenter" in lower or "data center" in lower:
+            return "云厂商资本开支仍是算力链最关键的需求验证指标。"
+        if "hbm" in lower or "nvidia" in lower or "gpu" in lower:
+            return "算力产业链继续围绕 GPU、HBM 与网络扩容定价。"
+        return "AI 资本开支主线未改，但分化转向兑现节奏。"
+    if topic_id == "crypto":
+        if "stablecoin" in lower:
+            return "稳定币立法推进，合规平台与支付基础设施更受关注。"
+        if "bitcoin" in lower or "etf" in lower:
+            return "比特币资金流与监管口径继续决定高 Beta 资产方向。"
+        if "regulation" in lower or "sec" in lower:
+            return "监管边界越清晰，行业内部质量分化会越明显。"
+        return "Crypto 仍由监管进展与风险偏好共同驱动。"
+    return "相关新闻已纳入中文摘要。"
+
+
+def topic_summary_cn_core(topic: dict[str, Any], headlines: list[dict[str, Any]]) -> str:
+    if not headlines:
+        return "暂无可用新闻。"
+    title_blob = " ".join(item["title"].lower() for item in headlines)
+    if topic["id"] == "fed":
+        detail = "重点看就业、通胀和联储表态是否把降息窗口继续往后推。"
+        impact = "这会直接影响 AI、高估值成长股和高 Beta 仓位的估值承受力。"
+    elif topic["id"] == "trade":
+        detail = "核心不确定性在于出口许可、关税与全球供应链合规要求。"
+        impact = "算力链与中概/港股科技链的风险溢价容易因此再抬升。"
+    elif topic["id"] == "china_policy":
+        detail = "政策重点仍在促消费、稳增长与平台经济常态化。"
+        impact = "港股互联网和中国需求链的修复更依赖政策持续性与盈利兑现。"
+    elif topic["id"] == "ai_capex":
+        detail = "大厂 Capex、HBM 供需和数据中心订单仍是最硬的验证指标。"
+        impact = "龙头受益仍然明确，但二三线标的会更看兑现速度。"
+    elif topic["id"] == "crypto":
+        detail = "监管框架、稳定币立法和 BTC 资金流仍是三条主线。"
+        impact = "合规平台受益更明显，但高杠杆高 Beta 标的波动仍会放大。"
+    else:
+        detail = "近期新闻正在改变该主题的预期路径。"
+        impact = "需要结合持仓敞口和交易节奏持续跟踪。"
+    if "tariff" in title_blob or "export control" in title_blob or "sanction" in title_blob:
+        impact = f"{impact} 同时要额外留意政策冲击引发的估值折价。"
+    if "stimulus" in title_blob or "rate cut" in title_blob or "stablecoin" in title_blob:
+        impact = f"{impact} 一旦政策兑现，相关主题的顺风可能会更快传导到股价。"
+    return f"{detail}{impact}"
+
+
 def topic_summary(topic: dict[str, Any], headlines: list[dict[str, Any]]) -> str:
     if not headlines:
         return "暂无可用新闻。"
-    titles = "；".join(item["title"] for item in headlines[:2])
-    return f"{topic['name']} 近 7 天主要焦点：{titles}"
+    titles = "；".join(headline_digest_cn(topic, item["title"]) for item in headlines[:2])
+    return f"{topic_summary_cn_core(topic, headlines)} 近期焦点：{titles}"
 
 
 def fetch_macro_topic(topic: dict[str, Any]) -> dict[str, Any]:
@@ -567,6 +636,7 @@ def fetch_macro_topic(topic: dict[str, Any]) -> dict[str, Any]:
         "name": topic["name"],
         "impact_categories": topic["impact_categories"],
         "headlines": headlines,
+        "headline_cn": headline_digest_cn(topic, headlines[0]["title"]) if headlines else "暂无可用新闻。",
         "score": total_score,
         "severity": severity_label(total_score, " ".join(item["title"] for item in headlines)),
         "summary": topic_summary(topic, headlines),

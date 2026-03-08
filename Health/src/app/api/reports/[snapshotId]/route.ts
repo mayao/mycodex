@@ -1,0 +1,29 @@
+import { jsonOk, jsonSafeError } from "../../../../server/http/safe-response";
+import { getReportSnapshotDetail } from "../../../../server/services/report-service";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ snapshotId: string }> }
+) {
+  try {
+    const { snapshotId } = await context.params;
+    const report = await getReportSnapshotDetail(decodeURIComponent(snapshotId));
+
+    if (!report) {
+      return jsonSafeError("未找到对应报告。", 404);
+    }
+
+    return jsonOk(report);
+  } catch (error) {
+    return jsonSafeError({
+      message: "报告详情暂时不可用。",
+      error,
+      context: {
+        route: "/api/reports/[snapshotId]",
+        method: "GET"
+      }
+    });
+  }
+}

@@ -10,12 +10,12 @@ from typing import Any
 try:
     from market_context import fetch_live_bundle, fetch_macro_bundle, load_local_analysis_cache
     from statement_parser import USD_HKD_RATE, load_real_portfolio
-    from statement_sources import REFERENCE_ANALYSIS_SOURCES, STATEMENT_SOURCES
+    from statement_sources import REFERENCE_ANALYSIS_SOURCES, get_statement_sources
     from universe import ASSETS, CATEGORIES
 except ModuleNotFoundError:
     from market_dashboard.market_context import fetch_live_bundle, fetch_macro_bundle, load_local_analysis_cache
     from market_dashboard.statement_parser import USD_HKD_RATE, load_real_portfolio
-    from market_dashboard.statement_sources import REFERENCE_ANALYSIS_SOURCES, STATEMENT_SOURCES
+    from market_dashboard.statement_sources import REFERENCE_ANALYSIS_SOURCES, get_statement_sources
     from market_dashboard.universe import ASSETS, CATEGORIES
 
 
@@ -198,6 +198,152 @@ ACTION_PLAYBOOK: dict[str, dict[str, str]] = {
         "stance": "极小仓跟踪",
         "risk": "流动性、监管和商业兑现都偏弱，承受不了大仓位。",
         "action": "如果继续保留，只适合极小仓位观察，不宜占用过多注意力。",
+    },
+}
+CATEGORY_FUNDAMENTAL_TEMPLATES: dict[str, dict[str, str]] = {
+    "hk_internet": {
+        "earnings_driver": "核心看广告、交易/佣金、平台抽成、回购与政策环境是否同步改善。",
+        "valuation_anchor": "估值更依赖盈利修复和南向风险偏好，而不是单一事件催化。",
+        "catalyst": "内需修复、监管常态化、回购与核心业务利润率改善。",
+        "balance_sheet": "平台资产现金流通常好于制造业，但政策与竞争会压制估值弹性。",
+        "red_flags": "竞争补贴、监管扰动、消费恢复不及预期。",
+    },
+    "ai_compute": {
+        "earnings_driver": "收入核心来自数据中心、云订单、AI 资本开支与算力供需结构。",
+        "valuation_anchor": "估值围绕订单能见度、毛利率、供给瓶颈和资本开支兑现程度。",
+        "catalyst": "大客户 Capex 指引、产品放量、HBM/云订单与企业客户扩张。",
+        "balance_sheet": "前排龙头现金流扎实，后排高弹性标的更依赖景气和融资窗口。",
+        "red_flags": "出口限制、估值过热、需求递延或供应链卡点。",
+    },
+    "crypto_beta": {
+        "earnings_driver": "主要由 BTC 价格、链上活跃度、交易量与监管清晰度驱动。",
+        "valuation_anchor": "看风险偏好、融资能力、稳定币/交易量增长和合规边界。",
+        "catalyst": "BTC 强趋势、稳定币立法、ETF 资金流与交易活跃度提升。",
+        "balance_sheet": "波动高于传统成长股，仓位纪律比静态估值更重要。",
+        "red_flags": "监管收紧、BTC 回撤、融资成本上升、同一因子重复暴露。",
+    },
+    "growth_platform": {
+        "earnings_driver": "核心由广告、流量、券商交易活跃度和付费服务渗透率决定。",
+        "valuation_anchor": "估值依赖利润率提升、用户活跃度和 AI/产品创新带来的再加速。",
+        "catalyst": "广告恢复、产品迭代、交易活跃度上升、AI 商业化兑现。",
+        "balance_sheet": "成熟平台股现金流和经营杠杆较强，适合承担部分质量仓。",
+        "red_flags": "活跃度回落、监管合规压力、风险偏好快速降温。",
+    },
+    "ev_beta": {
+        "earnings_driver": "销量、ASP、价格战、海外扩张与融资环境共同决定弹性。",
+        "valuation_anchor": "看交付、亏损收敛和行业竞争格局，赔率常高于确定性。",
+        "catalyst": "新车型放量、价格战缓和、政策刺激、海外销售突破。",
+        "balance_sheet": "多数仍在投入期，仓位应服从资金消耗与市场风格。",
+        "red_flags": "价格战、盈利兑现延后、融资压力、行业需求转弱。",
+    },
+    "healthcare_special": {
+        "earnings_driver": "产品销售、渠道放量、监管节点和现金消耗速度是核心变量。",
+        "valuation_anchor": "更像事件驱动或单品兑现交易，适合跟踪验证而非盲目重仓。",
+        "catalyst": "产品销售、医保/监管节点、渠道拓展、亏损收窄。",
+        "balance_sheet": "若现金流弱或产品单一，基本面容错率会明显下降。",
+        "red_flags": "监管变化、单品依赖、销售不及预期、再融资压力。",
+    },
+    "other": {
+        "earnings_driver": "优先追踪主营收入来源、利润率趋势和现金流稳定性。",
+        "valuation_anchor": "看盈利兑现、资产负债表质量和市场风险偏好是否匹配。",
+        "catalyst": "业绩超预期、回购、政策变化或新业务放量。",
+        "balance_sheet": "如果缺少稳定现金流，就不应承担过高的组合权重。",
+        "red_flags": "盈利下修、现金流转弱、过度依赖单一叙事。",
+    },
+}
+STYLE_EXECUTION_TEMPLATES: dict[str, str] = {
+    "quality": "更适合承担底仓或核心观察仓，而不是高频交易仓。",
+    "defensive_growth": "适合作为波动缓冲资产，优先看经营质量而不是极端弹性。",
+    "platform": "适合放在修复或成长框架里，关键是盈利兑现而非简单摊平。",
+    "turnaround": "必须盯盈利和政策拐点，不成立时要及时降权。",
+    "cyclical": "更依赖景气周期和库存变化，仓位应随景气强弱动态调整。",
+    "high_growth": "赔率高但估值敏感，适合以节奏管理替代一把梭。",
+    "stablecoin": "兼具成长和监管变量，适合在主题顺风时保留弹性。",
+    "crypto_beta": "只能拿明确的风险预算，不能和衍生品仓位混账。",
+    "speculative": "只适合轻仓或事件仓，不能承担组合修复任务。",
+    "leveraged": "本质是交易工具，需单独管理持有周期和退出纪律。",
+    "unclassified": "先小仓验证，再决定是否升级为正式配置。",
+}
+FUNDAMENTAL_DETAIL_OVERRIDES: dict[str, dict[str, str]] = {
+    "00700.HK": {
+        "business_model": "社交、游戏、广告、支付和云生态共同驱动，是港股里少数兼具流量与现金流的平台资产。",
+        "earnings_driver": "视频号广告、游戏新品周期、回购强度与支付/金融科技利润率是关键变量。",
+        "valuation_anchor": "估值核心不在高增长想象，而在稳健现金流、回购和政策扰动后的再定价。",
+        "catalyst": "视频号商业化提速、游戏版号与新游贡献、持续大额回购。",
+        "balance_sheet": "自由现金流和净现金能力强，具备底仓属性。",
+        "red_flags": "监管、广告景气回落、游戏节奏不及预期。",
+    },
+    "03690.HK": {
+        "business_model": "本地生活平台龙头，外卖、到店与新业务共同决定利润结构。",
+        "earnings_driver": "外卖竞争强度、到店利润率、履约效率和新业务亏损收敛是主线。",
+        "valuation_anchor": "估值修复需要利润率兑现，而不是单看收入增长。",
+        "catalyst": "补贴趋稳、到店利润恢复、外卖竞争缓和、回购或指引改善。",
+        "balance_sheet": "经营体量大，但竞争投入会压制利润释放节奏。",
+        "red_flags": "价格战、监管、消费走弱、长期亏损仓位带来的执行失真。",
+    },
+    "MSTR": {
+        "business_model": "本质是以 BTC 储备和资本市场融资能力驱动的高弹性资产负债表工具。",
+        "earnings_driver": "BTC 趋势、增发/可转债融资条件和持币规模变化决定弹性。",
+        "valuation_anchor": "更像 BTC 杠杆映射，不适合套用传统软件股估值。",
+        "catalyst": "BTC 创新高、融资窗口改善、机构资金继续拥挤入场。",
+        "balance_sheet": "杠杆与波动都高，和卖 Put 同时存在时风险会成倍放大。",
+        "red_flags": "BTC 回撤、融资收紧、溢价压缩。",
+    },
+    "NVDA": {
+        "business_model": "AI 训练与推理平台的核心基础设施，定价权和生态位置都在产业链最前排。",
+        "earnings_driver": "数据中心收入、Blackwell 节奏、毛利率和云巨头 Capex 指引。",
+        "valuation_anchor": "估值取决于订单能见度是否持续高于市场预期，而不是短期交易情绪。",
+        "catalyst": "新架构放量、超大客户追加 Capex、推理需求继续扩散。",
+        "balance_sheet": "经营质量极强，但高估值意味着回撤也会更陡。",
+        "red_flags": "出口限制、供给约束、AI 需求递延、估值消化不足。",
+    },
+    "CRCL": {
+        "business_model": "围绕 USDC、支付结算与链上美元流通的合规基础设施平台。",
+        "earnings_driver": "USDC 流通量、利率环境、支付合作与监管进展。",
+        "valuation_anchor": "核心看稳定币渗透率、利息收入质量和合规壁垒。",
+        "catalyst": "稳定币法案推进、USDC 增长、支付网络合作扩张。",
+        "balance_sheet": "成长性高，但仍属于主题交易密集区，容易受风险偏好影响。",
+        "red_flags": "监管边界变化、利率下行过快、竞争平台分流。",
+    },
+    "META": {
+        "business_model": "广告现金流平台叠加 AI 分发和效率提升，是质量型成长资产。",
+        "earnings_driver": "广告单价与展示量、AI 提升广告效率、资本开支回报。",
+        "valuation_anchor": "看广告利润率、回购、AI 商业化兑现，而不是短期流量噪声。",
+        "catalyst": "广告周期改善、Reels/AI 变现、回购与利润率继续抬升。",
+        "balance_sheet": "现金流极强，适合承担质量锚角色。",
+        "red_flags": "监管罚款、广告周期回落、Capex 过快扩张。",
+    },
+    "AMD": {
+        "business_model": "CPU、GPU、服务器与 AI 加速卡并进，属于 AI 第二梯队里的高质量进攻仓。",
+        "earnings_driver": "MI 系列放量、服务器市占率、毛利率和 PC 周期修复。",
+        "valuation_anchor": "估值取决于 AI 份额兑现速度和服务器业务增长质量。",
+        "catalyst": "MI 系列客户扩张、EPYC 市占率提升、业绩指引上修。",
+        "balance_sheet": "经营质量稳健，但兑现速度若不及预期，估值弹性会回吐。",
+        "red_flags": "AI 市占率不及预期、竞争加剧、估值先行透支。",
+    },
+    "09988.HK": {
+        "business_model": "电商、云和本地化平台资产组合，核心是效率改善和资本回报重估。",
+        "earnings_driver": "电商利润率、云恢复、回购节奏和组织效率提升。",
+        "valuation_anchor": "估值修复依赖盈利和回购兑现，不能只靠情绪修复。",
+        "catalyst": "云业务改善、回购加强、消费企稳、组织调整见效。",
+        "balance_sheet": "现金流和现金储备充足，问题更多在增长质量和市场信心。",
+        "red_flags": "电商竞争、云恢复不及预期、政策与消费疲软。",
+    },
+    "ORCL": {
+        "business_model": "数据库与企业云基础设施结合，AI 订单让传统软件平台重获成长溢价。",
+        "earnings_driver": "云订单、数据库续费、企业客户扩张与资本开支回报。",
+        "valuation_anchor": "看剩余履约义务、云增速和 AI 基建订单兑现。",
+        "catalyst": "大型云订单落地、AI 数据中心合作、指引上修。",
+        "balance_sheet": "现金流稳定，波动低于纯 AI 高弹性标的。",
+        "red_flags": "云执行不达预期、Capex 回报偏弱、企业支出收缩。",
+    },
+    "07709.HK": {
+        "business_model": "这是两倍做多海力士的杠杆工具，不是常规经营型公司。",
+        "earnings_driver": "收益完全取决于海力士股价路径、波动和持有期限。",
+        "valuation_anchor": "没有传统基本面锚，重点是路径损耗和交易纪律。",
+        "catalyst": "HBM 景气、海力士强趋势、短线风险偏好提升。",
+        "balance_sheet": "工具属性强，长持会损耗，不适合放进长期收益预期。",
+        "red_flags": "趋势反转、持有周期过长、把交易仓误当价值仓。",
     },
 }
 REFERENCE_FRAMEWORK = [
@@ -407,6 +553,33 @@ def normalize_holding(row: dict[str, Any], total_value_hkd: float) -> dict[str, 
     }
 
 
+def fundamental_details_for_holding(holding: dict[str, Any]) -> dict[str, str]:
+    category_defaults = CATEGORY_FUNDAMENTAL_TEMPLATES.get(
+        holding["category"],
+        CATEGORY_FUNDAMENTAL_TEMPLATES["other"],
+    )
+    symbol_override = lookup_symbol_value(FUNDAMENTAL_DETAIL_OVERRIDES, holding["symbol"], {}) or {}
+    business_model = symbol_override.get("business_model") or holding["business_note"]
+    earnings_driver = symbol_override.get("earnings_driver") or category_defaults["earnings_driver"]
+    valuation_anchor = symbol_override.get("valuation_anchor") or category_defaults["valuation_anchor"]
+    catalyst = symbol_override.get("catalyst") or category_defaults["catalyst"]
+    balance_sheet = symbol_override.get("balance_sheet") or category_defaults["balance_sheet"]
+    red_flags = symbol_override.get("red_flags") or category_defaults["red_flags"]
+    quality_line = (
+        f"基本面 {holding['fundamental_label']} / 风险级别 {holding['risk_level']}。"
+        f"{STYLE_EXECUTION_TEMPLATES.get(holding['style'], STYLE_EXECUTION_TEMPLATES['unclassified'])}"
+    )
+    return {
+        "business_model": business_model,
+        "earnings_driver": earnings_driver,
+        "quality_line": quality_line,
+        "valuation_anchor": valuation_anchor,
+        "catalyst": catalyst,
+        "balance_sheet": balance_sheet,
+        "red_flags": red_flags,
+    }
+
+
 def derivative_underlyings(description: str) -> list[str]:
     matches = set()
     text = description.upper()
@@ -526,6 +699,41 @@ def build_breakdown(rows: list[dict[str, Any]], key: str, label_key: str) -> lis
                 **item,
                 "value_hkd": round(item["value_hkd"], 2),
                 "weight_pct": round(safe_pct(item["value_hkd"], total) or 0.0, 2),
+            }
+        )
+    result.sort(key=lambda item: item["value_hkd"], reverse=True)
+    return result
+
+
+def build_theme_breakdown(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, dict[str, Any]] = {}
+    total = sum(item["statement_value_hkd"] for item in holdings)
+    for row in holdings:
+        entry = grouped.setdefault(
+            row["category"],
+            {
+                "id": row["category"],
+                "label": row["category_name"],
+                "value_hkd": 0.0,
+                "count": 0,
+                "members": [],
+            },
+        )
+        entry["value_hkd"] += row["statement_value_hkd"]
+        entry["count"] += 1
+        entry["members"].append(row)
+    result = []
+    for entry in grouped.values():
+        members = sorted(entry["members"], key=lambda item: item["statement_value_hkd"], reverse=True)
+        result.append(
+            {
+                "id": entry["id"],
+                "label": entry["label"],
+                "value_hkd": round(entry["value_hkd"], 2),
+                "weight_pct": round(safe_pct(entry["value_hkd"], total) or 0.0, 2),
+                "count": entry["count"],
+                "core_holdings": [item["name"] for item in members[:3]],
+                "core_symbols": [item["symbol"] for item in members[:3]],
             }
         )
     result.sort(key=lambda item: item["value_hkd"], reverse=True)
@@ -674,6 +882,7 @@ def build_scatter_points(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]
             {
                 "symbol": item["symbol"],
                 "name": item["name"],
+                "market": item["market"],
                 "x": item["weight_pct"],
                 "y": item["statement_pnl_pct"] if item["statement_pnl_pct"] is not None else 0.0,
                 "size": item["statement_value_hkd"],
@@ -686,17 +895,16 @@ def build_scatter_points(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]
 
 def build_performance_chart(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
-    for item in holdings:
-        if item.get("normalized_history"):
-            rows.append(
-                {
-                    "symbol": item["symbol"],
-                    "name": item["name"],
-                    "points": item["normalized_history"],
-                }
-            )
-        if len(rows) >= 6:
-            break
+    for item in holdings[:10]:
+        rows.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "market": item["market"],
+                "points": item.get("normalized_history") or [],
+                "available": bool(item.get("normalized_history")),
+            }
+        )
     return rows
 
 
@@ -713,15 +921,18 @@ def build_style_mix_chart(holdings: list[dict[str, Any]]) -> list[dict[str, Any]
                 "weighted_fundamental": 0.0,
                 "weighted_pnl": 0.0,
                 "count": 0,
+                "members": [],
             },
         )
         entry["weight_pct"] += item["weight_pct"]
         entry["weighted_fundamental"] += item["weight_pct"] * item["fundamental_score"]
         entry["weighted_pnl"] += item["weight_pct"] * (item.get("statement_pnl_pct") or 0.0)
         entry["count"] += 1
+        entry["members"].append(item)
     rows = []
     for entry in grouped.values():
         weight = entry["weight_pct"] or 1.0
+        top_members = sorted(entry["members"], key=lambda item: item["statement_value_hkd"], reverse=True)[:3]
         rows.append(
             {
                 "id": entry["id"],
@@ -730,6 +941,7 @@ def build_style_mix_chart(holdings: list[dict[str, Any]]) -> list[dict[str, Any]
                 "avg_fundamental": round(entry["weighted_fundamental"] / weight, 2),
                 "avg_pnl_pct": round(entry["weighted_pnl"] / weight, 2),
                 "count": entry["count"],
+                "core_holdings": [item["name"] for item in top_members],
             }
         )
     rows.sort(key=lambda item: item["weight_pct"], reverse=True)
@@ -739,25 +951,48 @@ def build_style_mix_chart(holdings: list[dict[str, Any]]) -> list[dict[str, Any]
 def build_price_regime_chart(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
     order = ["强势上行", "修复抬头", "震荡待确认", "高位震荡", "弱势下行", "无数据"]
     grouped = {
-        label: {"label": label, "weight_pct": 0.0, "count": 0, "avg_signal": 0.0}
+        label: {"label": label, "weight_pct": 0.0, "count": 0, "avg_signal": 0.0, "members": []}
         for label in order
     }
     for item in holdings:
         label = item.get("trend_state", "无数据")
-        entry = grouped.setdefault(label, {"label": label, "weight_pct": 0.0, "count": 0, "avg_signal": 0.0})
+        entry = grouped.setdefault(label, {"label": label, "weight_pct": 0.0, "count": 0, "avg_signal": 0.0, "members": []})
         entry["weight_pct"] += item["weight_pct"]
         entry["count"] += 1
         entry["avg_signal"] += item.get("signal_score", 0)
+        entry["members"].append(item)
     rows = []
     for label in order:
         entry = grouped[label]
         avg_signal = entry["avg_signal"] / entry["count"] if entry["count"] else 0.0
+        top_members = sorted(entry["members"], key=lambda item: item["statement_value_hkd"], reverse=True)[:3]
         rows.append(
             {
                 "label": label,
                 "weight_pct": round(entry["weight_pct"], 2),
                 "count": entry["count"],
                 "avg_signal": round(avg_signal, 2),
+                "core_holdings": [item["name"] for item in top_members],
+            }
+        )
+    return rows
+
+
+def build_fundamental_deep_dive(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    rows = []
+    for item in holdings[:8]:
+        details = fundamental_details_for_holding(item)
+        rows.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "weight_pct": item["weight_pct"],
+                "category_name": item["category_name"],
+                "style_label": item["style_label"],
+                "fundamental_label": item["fundamental_label"],
+                "signal_score": item.get("signal_score", 50),
+                "stance": diagnose_holding(item)["stance"],
+                **details,
             }
         )
     return rows
@@ -811,12 +1046,36 @@ def build_health_radar(
     drawdown_weight = sum(item["weight_pct"] for item in holdings if (item.get("statement_pnl_pct") or 0.0) <= -30)
     discipline_score = max(0.0, min(100.0, 100.0 - tactical_weight * 1.4 - drawdown_weight * 0.9))
     return [
-        {"label": "质量", "value": round(quality_score, 1)},
-        {"label": "趋势", "value": round(trend_score, 1)},
-        {"label": "宏观", "value": round(macro_score, 1)},
-        {"label": "分散", "value": round(diversification_score, 1)},
-        {"label": "杠杆", "value": round(leverage_score, 1)},
-        {"label": "纪律", "value": round(discipline_score, 1)},
+        {
+            "label": "质量",
+            "value": round(quality_score, 1),
+            "summary": f"强基本面仓位约 {sum(item['weight_pct'] for item in holdings if item['fundamental_score'] >= 4):.2f}%，反映组合的盈利质量底子。",
+        },
+        {
+            "label": "趋势",
+            "value": round(trend_score, 1),
+            "summary": f"顺势仓约 {positive_trend_weight:.2f}% ，弱势下行仓约 {negative_trend_weight:.2f}%。",
+        },
+        {
+            "label": "宏观",
+            "value": round(macro_score, 1),
+            "summary": "看组合持仓所处主题与当前政策/国际环境是顺风还是逆风。",
+        },
+        {
+            "label": "分散",
+            "value": round(diversification_score, 1),
+            "summary": f"前五大仓位占比 {top5_ratio:.2f}% ，占比越高，分散分越低。",
+        },
+        {
+            "label": "杠杆",
+            "value": round(leverage_score, 1),
+            "summary": f"融资约占净资产 {financing_ratio:.2f}% ，衍生品名义本金约占 {derivative_ratio:.2f}%。",
+        },
+        {
+            "label": "纪律",
+            "value": round(discipline_score, 1),
+            "summary": f"高波动/杠杆/深亏仓合计约 {tactical_weight + drawdown_weight:.2f}% ，越高越需要纪律约束。",
+        },
     ]
 
 
@@ -824,7 +1083,7 @@ def build_macro_flash_topics(macro_bundle: dict[str, Any], holdings: list[dict[s
     rows = []
     for item in macro_bundle.get("topics", []):
         impact_labels = "、".join(CATEGORY_BY_ID.get(category, {"name": category})["name"] for category in item["impact_categories"])
-        top_headline = item["headlines"][0]["title"] if item.get("headlines") else "暂无标题"
+        top_headline = item.get("headline_cn") or (item["headlines"][0]["title"] if item.get("headlines") else "暂无标题")
         top_source = item["headlines"][0].get("source") if item.get("headlines") else None
         top_published_at = item["headlines"][0].get("published_at") if item.get("headlines") else None
         impact_weight_pct = round(
@@ -933,7 +1192,10 @@ def build_strategy_views(
     trend_up = sum(item["weight_pct"] for item in holdings if item.get("trend_state") in {"强势上行", "修复抬头"})
     trend_down = sum(item["weight_pct"] for item in holdings if item.get("trend_state") == "弱势下行")
     strongest_macro = macro_bundle.get("topics", [])[:1]
-    macro_text = (strongest_macro[0].get("headlines") or [{}])[0].get("title", "暂无宏观快照") if strongest_macro else "暂无宏观快照"
+    macro_text = (
+        strongest_macro[0].get("headline_cn")
+        or (strongest_macro[0].get("headlines") or [{}])[0].get("title", "暂无宏观快照")
+    ) if strongest_macro else "暂无宏观快照"
     financing_ratio = safe_pct(total_financing_hkd, total_nav_hkd) or 0.0
     derivative_ratio = safe_pct(total_derivative_notional_hkd, total_nav_hkd) or 0.0
     best_quality = next((item for item in holdings if item["fundamental_score"] >= 4), None)
@@ -1243,22 +1505,47 @@ def build_priority_actions(
 
 def monitored_statements(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
     date_by_account = {account["account_id"]: account["statement_date"] for account in accounts}
+    source_states = {}
+    for account in accounts:
+        account_id = account.get("account_id")
+        if account_id:
+            source_states[account_id] = {
+                "statement_date": account.get("statement_date"),
+                "load_status": account.get("load_status"),
+                "issue": account.get("load_issue"),
+            }
     rows = []
-    for item in STATEMENT_SOURCES:
+    for item in get_statement_sources():
+        path = Path(item["path"])
+        status = source_states.get(item["account_id"], {})
         rows.append(
             {
                 "broker": item["broker"],
                 "account_id": item["account_id"],
                 "statement_type": item["type"],
-                "statement_date": date_by_account.get(item["account_id"]),
-                "file_name": Path(item["path"]).name,
+                "statement_date": status.get("statement_date") or date_by_account.get(item["account_id"]),
+                "file_name": path.name,
+                "source_mode": item.get("source_mode", "default"),
+                "uploaded_at": item.get("uploaded_at"),
+                "file_exists": path.exists(),
+                "load_status": status.get("load_status") or ("parsed" if path.exists() else "error"),
+                "issue": status.get("issue"),
             }
         )
     return rows
 
 
-def build_dashboard_payload(force_refresh: bool = False, include_live: bool = True) -> dict[str, Any]:
-    portfolio = load_real_portfolio(force_refresh=force_refresh)
+def build_dashboard_payload(
+    force_refresh: bool = False,
+    include_live: bool = True,
+    allow_cached_fallback: bool = True,
+    strict_account_ids: set[str] | None = None,
+) -> dict[str, Any]:
+    portfolio = load_real_portfolio(
+        force_refresh=force_refresh,
+        allow_cached_fallback=allow_cached_fallback,
+        strict_account_ids=strict_account_ids,
+    )
     research_cache = load_local_analysis_cache()
     accounts = portfolio["accounts"]
     total_value_hkd = portfolio["total_statement_value_hkd"]
@@ -1294,10 +1581,11 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
     )
 
     snapshot_dates = sorted(account["statement_date"] for account in accounts)
-    theme_breakdown = build_breakdown(holdings, "category", "category_name")
+    theme_breakdown = build_theme_breakdown(holdings)
     market_breakdown = build_breakdown(holdings, "market", "market")
     broker_breakdown = build_broker_breakdown(account_cards)
     holding_notes = [diagnose_holding(item) for item in holdings]
+    fundamental_deep_dive = build_fundamental_deep_dive(holdings)
     macro_topics = build_macro_flash_topics(macro_bundle, holdings)
     strategy_views = build_strategy_views(
         holdings,
@@ -1307,6 +1595,7 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
         portfolio["total_nav_hkd"],
     )
     key_drivers = build_key_drivers(holdings, risk_flags, macro_topics)
+    source_health = portfolio.get("source_health") or {"parsed_count": len(accounts), "cached_count": 0, "error_count": 0}
 
     main_theme_names = "、".join(item["label"] for item in theme_breakdown[:3])
     top_names = "、".join(item["name"] for item in holdings[:5])
@@ -1322,6 +1611,9 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
         "cache": "本地研究快照",
         "empty": "静态框架",
     }
+    source_cache_overview = ""
+    if source_health.get("cached_count"):
+        source_cache_overview = f"结单层有 {source_health['cached_count']} 个账户使用缓存快照。"
     headline = (
         f"截至 {snapshot_dates[-1]} 的真实结单快照显示，这是一组以 {main_theme_names} 为主轴、"
         f"头部仓位集中在 {top_names} 的高波动组合。"
@@ -1331,6 +1623,7 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
         f"融资相关负现金约 HK${portfolio['total_financing_hkd']:,.0f}。"
         f"当前价格层使用 {live_mode_map.get(live_bundle.get('source_mode'), '离线快照')}，"
         f"宏观层使用 {macro_mode_map.get(macro_bundle.get('source_mode'), '静态框架')}。"
+        f"{source_cache_overview}"
         "建议阅读顺序是：先看关键驱动与风险旗标，再看优先动作，最后逐只检查个股定位。"
     )
 
@@ -1367,6 +1660,7 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
             "errors": macro_bundle.get("errors", []),
             "source_mode": macro_bundle.get("source_mode", "empty"),
         },
+        "source_health": source_health,
         "key_drivers": key_drivers,
         "risk_flags": risk_flags,
         "accounts": account_cards,
@@ -1394,6 +1688,7 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
         },
         "holdings": holdings,
         "top_holdings": holdings[:10],
+        "fundamental_deep_dive": fundamental_deep_dive,
         "trades": trades[:12],
         "derivatives": derivatives,
         "strategy_views": strategy_views,
@@ -1415,9 +1710,9 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
             ),
         },
         "update_guide": [
-            "保持 `statement_sources.py` 指向最新结单文件；文件时间戳变更后，点击页面右上角“强制刷新”即可重建缓存。",
-            "网页展示以结单快照为准，适合做真实仓位复盘、集中度监控和账户风险管理。",
-            "如果后续新增券商或想补基金/现金类细项，只需要扩充解析器，不必重做前端。",
+            "右上角“上传新结单”可为指定账户替换最新 PDF，并立即重建结单缓存；无需再手动改 `statement_sources.py`。",
+            "“刷新行情与宏观”继续走外部行情接口和新闻搜索，用于更新价格、走势与国际政治经济摘要。",
+            "网页展示以真实结单快照为准，适合做仓位复盘、集中度监控、融资/衍生品风险管理和个股跟踪。",
         ],
         "statement_sources": monitored_statements(accounts),
         "reference_sources": [
@@ -1434,7 +1729,7 @@ def build_dashboard_payload(force_refresh: bool = False, include_live: bool = Tr
 def validate_payload(payload: dict[str, Any]) -> list[str]:
     errors = []
     summary = payload["summary"]
-    if summary["account_count"] != len(STATEMENT_SOURCES):
+    if summary["account_count"] != len(get_statement_sources()):
         errors.append("account count mismatch")
     if summary["holding_count"] < 20:
         errors.append("too few holdings")

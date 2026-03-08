@@ -88,7 +88,13 @@
       flex-direction: column;
       align-items: flex-end;
       gap: 10px;
-      min-width: 260px;
+      min-width: 320px;
+    }
+    .toolbar-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
     }
     button {
       appearance: none;
@@ -101,6 +107,12 @@
       color: #04101c;
       background: linear-gradient(135deg, var(--cyan), #86f7ff);
       box-shadow: var(--shadow);
+    }
+    button.secondary {
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(99, 129, 170, 0.42), rgba(40, 76, 119, 0.76));
+      border: 1px solid rgba(98, 231, 255, 0.16);
+      box-shadow: none;
     }
     .status {
       font-size: 13px;
@@ -136,11 +148,11 @@
       gap: 16px;
     }
     .hero-grid {
-      grid-template-columns: 1.3fr 0.7fr;
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
       align-items: start;
     }
     .metric-grid {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       margin-top: 18px;
     }
     .driver-grid {
@@ -194,9 +206,11 @@
       margin-bottom: 10px;
     }
     .metric-card .value {
-      font-size: clamp(1.28rem, 2.2vw, 1.9rem);
+      font-size: clamp(1.05rem, 1.65vw, 1.45rem);
       font-weight: 800;
       letter-spacing: -0.03em;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
     }
     .metric-card .foot {
       margin-top: 10px;
@@ -240,10 +254,122 @@
       align-items: baseline;
       margin-bottom: 10px;
     }
+    .hero-side {
+      display: grid;
+      gap: 14px;
+    }
+    .asset-stage {
+      padding: 18px 20px;
+      border-radius: 22px;
+      border: 1px solid rgba(98, 231, 255, 0.12);
+      background:
+        radial-gradient(circle at top right, rgba(98, 231, 255, 0.18), transparent 36%),
+        linear-gradient(180deg, rgba(10, 30, 53, 0.98), rgba(8, 20, 36, 0.96));
+      min-width: 0;
+    }
+    .asset-stage .kicker {
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .asset-main {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .asset-main strong {
+      display: block;
+      font-size: clamp(1.5rem, 2.3vw, 2.2rem);
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      margin-bottom: 6px;
+      overflow-wrap: anywhere;
+    }
+    .asset-main span,
+    .asset-sub span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .asset-sub {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .asset-sub strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 1rem;
+    }
     .summary {
       color: var(--muted);
       font-size: 14px;
       line-height: 1.65;
+    }
+    .hero-summary-board {
+      display: grid;
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .hero-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .hero-note-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(98, 231, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .hero-note-card .label {
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .hero-note-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+    .hero-progress-list {
+      display: grid;
+      gap: 10px;
+    }
+    .hero-progress {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02);
+    }
+    .hero-progress-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .hero-progress-label strong {
+      color: var(--text);
+    }
+    .hero-progress-track {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .hero-progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--teal));
     }
     .signal-list {
       display: grid;
@@ -276,6 +402,16 @@
       align-items: center;
       gap: 10px;
       min-width: 0;
+    }
+    .legend-main {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+    }
+    .legend-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
     }
     .dot {
       width: 10px;
@@ -378,6 +514,9 @@
       grid-template-columns: 1.15fr 0.85fr;
       align-items: start;
     }
+    .trade-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
     .table-wrap {
       overflow-x: auto;
       max-width: 100%;
@@ -435,12 +574,152 @@
     .chart-host.compact {
       height: 250px;
     }
+    .chart-host.scatter-host {
+      height: 360px;
+    }
     .chart-empty {
       display: grid;
       place-items: center;
       height: 100%;
       color: var(--muted);
       font-size: 14px;
+    }
+    .scatter-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(230px, 0.55fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .scatter-legend {
+      display: grid;
+      gap: 10px;
+      max-height: 360px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .scatter-item {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(98, 231, 255, 0.1);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .scatter-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .scatter-item .meta {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+    .selector-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .selector-chip {
+      appearance: none;
+      border: 1px solid rgba(98, 231, 255, 0.16);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      box-shadow: none;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+    .selector-chip.active {
+      color: #04101c;
+      background: linear-gradient(135deg, var(--cyan), #86f7ff);
+    }
+    .fundamental-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .fundamental-card {
+      padding: 18px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(98, 231, 255, 0.1);
+      background: linear-gradient(180deg, rgba(10, 24, 43, 0.92), rgba(12, 21, 37, 0.98));
+      box-shadow: var(--shadow);
+    }
+    .fundamental-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .fundamental-head h3 {
+      margin: 0 0 4px;
+    }
+    .fact-list {
+      display: grid;
+      gap: 10px;
+    }
+    .fact {
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    .fact .label {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .fact .text {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .upload-panel {
+      display: grid;
+      gap: 12px;
+      padding: 16px 18px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(11, 27, 47, 0.96), rgba(8, 19, 35, 0.96));
+      border: 1px solid rgba(98, 231, 255, 0.12);
+      box-shadow: var(--shadow);
+    }
+    .upload-panel[hidden] {
+      display: none;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+    .field label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .field select,
+    .field input[type="file"] {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid rgba(98, 231, 255, 0.16);
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 13px;
+    }
+    .upload-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .upload-status {
+      color: var(--muted);
+      font-size: 12px;
+      min-height: 18px;
     }
     .heatmap-wrap {
       display: grid;
@@ -518,6 +797,11 @@
       font-size: 12px;
       line-height: 1.6;
     }
+    .regime-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
     .source-list {
       display: grid;
       gap: 10px;
@@ -535,10 +819,10 @@
       font-size: 13px;
     }
     @media (max-width: 1240px) {
-      .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .driver-grid {
+      .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .driver-grid, .fundamental-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-      .hero-grid, .chart-grid, .split-grid {
+      .hero-grid, .chart-grid, .split-grid, .trade-grid, .scatter-layout, .form-grid, .hero-summary-grid {
         grid-template-columns: 1fr;
       }
       .panel.span-2 {
@@ -550,7 +834,7 @@
         padding-left: 12px;
         padding-right: 12px;
       }
-      .topbar, .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .chart-grid, .hero-grid, .split-grid, .driver-grid {
+      .topbar, .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .chart-grid, .hero-grid, .split-grid, .driver-grid, .fundamental-grid, .scatter-layout, .form-grid, .trade-grid, .asset-main, .asset-sub, .hero-summary-grid {
         grid-template-columns: 1fr;
         display: grid;
       }
@@ -560,6 +844,9 @@
       }
       .toolbar {
         align-items: stretch;
+      }
+      .toolbar-row {
+        justify-content: stretch;
       }
       .hero, .panel, .metric-card, .driver-card, .account-card, .action-card, .view-card, .macro-card {
         padding: 16px;
@@ -574,23 +861,47 @@
   <div class="wrap">
     <div class="topbar">
       <div>
-        <div class="eyebrow">Portfolio Command Center</div>
+        <div class="eyebrow">真实结单驱动的投资工作台</div>
         <h1>个人投资工作台</h1>
         <p class="lead" id="headline"></p>
       </div>
       <div class="toolbar">
-        <button id="refreshBtn">刷新行情与结单</button>
+        <div class="toolbar-row">
+          <button class="secondary" id="uploadToggleBtn">上传新结单</button>
+          <button id="refreshBtn">刷新行情与宏观</button>
+        </div>
         <div class="status" id="status">等待加载</div>
       </div>
     </div>
+    <section class="upload-panel" id="uploadPanel" hidden>
+      <div class="upload-note">
+        上传新的账户结单后，会替换该账户当前监听文件并立即重建组合快照。行情与宏观刷新按钮仍单独保留，用于从外部接口和新闻搜索更新市场信息。
+      </div>
+      <form class="form-grid" id="uploadForm">
+        <div class="field">
+          <label for="uploadAccount">替换账户</label>
+          <select id="uploadAccount" name="account_id"></select>
+        </div>
+        <div class="field">
+          <label for="uploadFile">结单文件</label>
+          <input id="uploadFile" name="statement_file" type="file" accept=".pdf,application/pdf" />
+        </div>
+        <button id="uploadSubmitBtn" type="submit">上传并刷新</button>
+      </form>
+      <div class="upload-status" id="uploadStatus"></div>
+    </section>
 
     <section class="hero">
       <div class="hero-grid">
         <div>
-          <div class="eyebrow">Research Summary</div>
+          <div class="eyebrow">组合摘要</div>
           <div class="summary" id="overview"></div>
+          <div class="hero-summary-board" id="heroSummaryBoard"></div>
         </div>
-        <div class="signal-list" id="riskFlags"></div>
+        <div class="hero-side">
+          <section class="asset-stage" id="heroAsset"></section>
+          <div class="signal-list" id="riskFlags"></div>
+        </div>
       </div>
       <div class="metric-grid" id="heroMetrics"></div>
       <div class="driver-grid" id="keyDrivers"></div>
@@ -615,6 +926,7 @@
           <span class="muted">质量 / 趋势 / 宏观 / 分散 / 杠杆 / 纪律</span>
         </div>
         <div class="chart-host compact" id="healthRadar"></div>
+        <div class="legend-list" id="healthRadarNotes"></div>
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -635,7 +947,10 @@
           <h3>持仓权重 vs 浮盈亏</h3>
           <span class="muted">气泡越大，市值越高</span>
         </div>
-        <div class="chart-host" id="holdingScatter"></div>
+        <div class="scatter-layout">
+          <div class="chart-host scatter-host" id="holdingScatter"></div>
+          <div class="scatter-legend" id="holdingScatterLegend"></div>
+        </div>
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -650,6 +965,7 @@
           <span class="muted">归一化起点 = 100</span>
         </div>
         <div class="chart-host" id="performanceChart"></div>
+        <div class="selector-bar" id="performanceSelector"></div>
         <div class="legend-list" id="performanceLegend"></div>
       </section>
       <section class="panel">
@@ -710,38 +1026,53 @@
     </div>
     <div class="action-grid" id="priorityActions"></div>
 
-    <div class="split-grid">
+    <div class="section-title">
+      <h2>核心个股基本面拆解</h2>
+      <div class="meta">把商业模式、盈利驱动、估值锚、催化剂和风险点拆开看</div>
+    </div>
+    <div class="fundamental-grid" id="fundamentalDeepDive"></div>
+
+    <div class="section-title">
+      <h2>个股定位与策略矩阵</h2>
+      <div class="meta">矩阵建议单独展开，不再和交易区并列</div>
+    </div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>个股定位与策略矩阵</h3>
+        <span class="muted">多风格综合建议</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>代码</th>
+              <th>股票</th>
+              <th>定位</th>
+              <th>建议</th>
+              <th>价格状态</th>
+              <th>核心逻辑</th>
+              <th>跟踪点</th>
+              <th>主要风险</th>
+              <th>执行动作</th>
+            </tr>
+          </thead>
+          <tbody id="briefBody"></tbody>
+        </table>
+      </div>
+      <div class="footnote" id="disclaimer"></div>
+    </section>
+
+    <div class="section-title">
+      <h2>近期交易与衍生品</h2>
+      <div class="meta">检查仓位变化是否与当前策略一致</div>
+    </div>
+    <div class="split-grid trade-grid">
       <section class="panel">
         <div class="panel-head">
-          <h3>个股定位与策略矩阵</h3>
-          <span class="muted">多风格综合建议</span>
+          <h3>近期交易</h3>
+          <span class="muted">近阶段加减仓记录</span>
         </div>
         <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>代码</th>
-                <th>股票</th>
-                <th>定位</th>
-                <th>建议</th>
-                <th>价格状态</th>
-                <th>核心逻辑</th>
-                <th>跟踪点</th>
-                <th>主要风险</th>
-                <th>执行动作</th>
-              </tr>
-            </thead>
-            <tbody id="briefBody"></tbody>
-          </table>
-        </div>
-        <div class="footnote" id="disclaimer"></div>
-      </section>
-      <section class="panel">
-        <div class="panel-head">
-          <h3>近期交易与衍生品</h3>
-          <span class="muted">检查仓位变化是否与策略一致</span>
-        </div>
-        <div class="table-wrap" style="margin-bottom: 14px;">
           <table>
             <thead>
               <tr>
@@ -755,6 +1086,12 @@
             </thead>
             <tbody id="tradesBody"></tbody>
           </table>
+        </div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>衍生品敞口</h3>
+          <span class="muted">卖 Put / FCN 等结构性暴露</span>
         </div>
         <div class="table-wrap">
           <table>
@@ -798,6 +1135,7 @@
                 <th>账户</th>
                 <th>日期</th>
                 <th>类型</th>
+                <th>来源状态</th>
                 <th>文件名</th>
               </tr>
             </thead>
@@ -821,8 +1159,7 @@
   </div>
 
   <script>
-    const state = { data: null };
-    const LABEL_MAP = {US: "美股", HK: "港股"};
+    const state = { data: null, uploadOpen: false, performanceSelection: [] };
     const COLORS = ["#53d7ff", "#3fd0b2", "#ffcb6b", "#7d87ff", "#ff8c66", "#66e4a5", "#c991ff"];
 
     function byId(id) {
@@ -832,6 +1169,11 @@
     function fmtMoney(value) {
       if (value == null || Number.isNaN(Number(value))) return "--";
       return Number(value).toLocaleString("zh-CN", {maximumFractionDigits: 2});
+    }
+
+    function fmtWholeMoney(value) {
+      if (value == null || Number.isNaN(Number(value))) return "--";
+      return Math.round(Number(value)).toLocaleString("zh-CN");
     }
 
     function fmtPct(value) {
@@ -844,13 +1186,17 @@
       return `${Number(value).toFixed(2)}%`;
     }
 
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
     function toneClass(value) {
       if (value == null) return "muted";
       return value >= 0 ? "positive" : "negative";
     }
 
     function stanceTone(text = "") {
-      if (text.includes("减仓") || text.includes("清理")) return "down";
+      if (text.includes("减仓") || text.includes("清理") || text.includes("防守")) return "down";
       if (text.includes("交易仓") || text.includes("观察") || text.includes("谨慎")) return "warn";
       return "up";
     }
@@ -894,6 +1240,113 @@
       return {x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad)};
     }
 
+    function toggleUploadPanel(force) {
+      state.uploadOpen = typeof force === "boolean" ? force : !state.uploadOpen;
+      byId("uploadPanel").hidden = !state.uploadOpen;
+      byId("uploadToggleBtn").textContent = state.uploadOpen ? "收起上传入口" : "上传新结单";
+      if (state.uploadOpen) {
+        byId("uploadStatus").textContent = "";
+      }
+    }
+
+    function populateUploadTargets(rows) {
+      const select = byId("uploadAccount");
+      const previous = select.value;
+      select.innerHTML = (rows || []).map(row => {
+        const mode = row.source_mode === "upload" ? "已上传替代" : "默认来源";
+        return `<option value="${row.account_id}">${row.broker} · ${row.account_id} · ${mode} · ${row.file_name}</option>`;
+      }).join("");
+      if (previous && [...select.options].some(option => option.value === previous)) {
+        select.value = previous;
+      }
+    }
+
+    function renderHeroAsset(summary) {
+      byId("heroAsset").innerHTML = `
+        <div class="kicker">资产总览</div>
+        <div class="asset-main">
+          <div>
+            <strong>HK$${fmtWholeMoney(summary.total_nav_hkd)}</strong>
+            <span>组合净资产，优先放到首屏留白区显示。</span>
+          </div>
+          <div>
+            <strong>HK$${fmtWholeMoney(summary.total_statement_value_hkd)}</strong>
+            <span>真实股票市值，以结单口径聚合。</span>
+          </div>
+        </div>
+        <div class="asset-sub">
+          <div>
+            <strong>${summary.account_count || 0}</strong>
+            <span>账户数量</span>
+          </div>
+          <div>
+            <strong>${summary.holding_count || 0}</strong>
+            <span>持仓数量</span>
+          </div>
+          <div>
+            <strong>${summary.trade_count || 0}</strong>
+            <span>近期交易</span>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHeroSummaryBoard(summary, data) {
+      const firstFlag = (data.risk_flags || [])[0];
+      const firstAction = ((data.brief || {}).priority_actions || [])[0];
+      const totalNav = Number(summary.total_nav_hkd || 0);
+      const financingRatio = totalNav ? Number(summary.total_financing_hkd || 0) / totalNav * 100 : 0;
+      const derivativeRatio = totalNav ? Number(summary.total_derivative_notional_hkd || 0) / totalNav * 100 : 0;
+      const pressureMax = Math.max(summary.top5_ratio || 0, financingRatio, derivativeRatio, 1);
+      const bars = [
+        {
+          label: "集中度压力",
+          value: Number(summary.top5_ratio || 0),
+          tone: "linear-gradient(90deg,#62e7ff,#8c98ff)",
+          detail: "前五大仓位占比",
+        },
+        {
+          label: "融资压力",
+          value: financingRatio,
+          tone: "linear-gradient(90deg,#ffd782,#ff9c63)",
+          detail: "融资相关负现金 / 净资产",
+        },
+        {
+          label: "衍生品压力",
+          value: derivativeRatio,
+          tone: "linear-gradient(90deg,#ff7373,#c991ff)",
+          detail: "衍生品名义本金 / 净资产",
+        },
+      ];
+      byId("heroSummaryBoard").innerHTML = `
+        <div class="hero-summary-grid">
+          <div class="hero-note-card">
+            <div class="label">核心诊断</div>
+            <strong>${firstFlag ? firstFlag.title : "当前组合以头部仓位和杠杆管理为主线。"}</strong>
+            <div class="summary">${firstFlag ? firstFlag.detail : data.overview || ""}</div>
+          </div>
+          <div class="hero-note-card">
+            <div class="label">建议动作</div>
+            <strong>${firstAction ? firstAction.title : "先处理风险预算，再看个股执行。"}</strong>
+            <div class="summary">${firstAction ? firstAction.detail : "优先处理集中度、融资和衍生品暴露，再逐只评估个股。"} </div>
+          </div>
+        </div>
+        <div class="hero-progress-list">
+          ${bars.map(bar => `
+            <div class="hero-progress">
+              <div class="hero-progress-head">
+                <div class="hero-progress-label"><strong>${bar.label}</strong><br><span>${bar.detail}</span></div>
+                <span>${fmtShare(bar.value)}</span>
+              </div>
+              <div class="hero-progress-track">
+                <div class="hero-progress-fill" style="width:${Math.min(bar.value / pressureMax * 100, 100)}%;background:${bar.tone}"></div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }
+
     function renderDonut(rows) {
       if (!rows || !rows.length) {
         byId("themeDonut").innerHTML = '<div class="chart-empty">暂无数据</div>';
@@ -926,7 +1379,10 @@
         <div class="legend-row">
           <div class="legend-left">
             <span class="dot" style="background:${COLORS[index % COLORS.length]}"></span>
-            <span>${row.label}</span>
+            <div class="legend-main">
+              <span>${row.label}</span>
+              <span class="legend-note">核心股票：${(row.core_holdings || []).join("、") || "--"}</span>
+            </div>
           </div>
           <span class="number">${fmtShare(row.weight_pct)}</span>
         </div>
@@ -953,87 +1409,202 @@
       `).join("");
     }
 
-    function renderScatter(points) {
-      if (!points || !points.length) {
-        byId("holdingScatter").innerHTML = '<div class="chart-empty">暂无数据</div>';
-        return;
-      }
-      const width = 520;
-      const height = 320;
-      const pad = {top: 20, right: 22, bottom: 34, left: 46};
-      const maxX = Math.max(...points.map(p => Number(p.x || 0)), 20);
-      const yVals = points.map(p => Number(p.y || 0));
+    function buildScatterNodes(points, pad, width, height) {
+      const maxX = Math.max(...points.map(point => Number(point.x || 0)), 20);
+      const yVals = points.map(point => Number(point.y || 0));
       const minY = Math.min(...yVals, -80);
       const maxY = Math.max(...yVals, 40);
       const plotW = width - pad.left - pad.right;
       const plotH = height - pad.top - pad.bottom;
-      const x = val => pad.left + (val / maxX) * plotW;
-      const y = val => pad.top + ((maxY - val) / (maxY - minY || 1)) * plotH;
-      const sizeMax = Math.max(...points.map(p => Number(p.size || 0)), 1);
-      const r = size => 6 + Math.sqrt(size / sizeMax) * 18;
-      const zeroY = y(0);
-      const grid = [0.25, 0.5, 0.75, 1].map(f => {
-        const xx = pad.left + plotW * f;
-        return `<line x1="${xx}" y1="${pad.top}" x2="${xx}" y2="${pad.top + plotH}" stroke="rgba(255,255,255,0.05)"></line>`;
-      }).join("") + [minY, 0, maxY].map(val => `
-        <line x1="${pad.left}" y1="${y(val)}" x2="${pad.left + plotW}" y2="${y(val)}" stroke="${val === 0 ? 'rgba(255,107,107,0.22)' : 'rgba(255,255,255,0.05)'}"></line>
+      const xScale = value => pad.left + (value / maxX) * plotW;
+      const yScale = value => pad.top + ((maxY - value) / (maxY - minY || 1)) * plotH;
+      const sizeMax = Math.max(...points.map(point => Number(point.size || 0)), 1);
+      const radius = value => 7 + Math.sqrt(value / sizeMax) * 15;
+      const nodes = points.map((point, index) => ({
+        ...point,
+        weightPct: Number(point.x || 0),
+        pnlPct: Number(point.y || 0),
+        displayLabel: point.market === "HK" ? point.name : point.symbol,
+        color: point.macro_signal === "逆风" ? "#ff6b6b" : point.macro_signal === "顺风" ? "#1dd990" : COLORS[index % COLORS.length],
+        anchorX: xScale(Number(point.x || 0)),
+        anchorY: yScale(Number(point.y || 0)),
+        x: xScale(Number(point.x || 0)),
+        y: yScale(Number(point.y || 0)),
+        r: radius(Number(point.size || 0)),
+      }));
+      for (let iteration = 0; iteration < 80; iteration += 1) {
+        nodes.forEach(node => {
+          node.x += (node.anchorX - node.x) * 0.08;
+          node.y += (node.anchorY - node.y) * 0.08;
+        });
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const a = nodes[i];
+            const b = nodes[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const distance = Math.hypot(dx, dy) || 0.01;
+            const minDistance = a.r + b.r + 8;
+            if (distance < minDistance) {
+              const push = (minDistance - distance) / 2;
+              const ux = dx / distance;
+              const uy = dy / distance;
+              a.x -= ux * push;
+              a.y -= uy * push;
+              b.x += ux * push;
+              b.y += uy * push;
+            }
+          }
+        }
+        nodes.forEach(node => {
+          node.x = clamp(node.x, pad.left + node.r, width - pad.right - node.r);
+          node.y = clamp(node.y, pad.top + node.r, height - pad.bottom - node.r);
+        });
+      }
+      return {nodes, maxX, minY, maxY, plotW, plotH, xScale, yScale};
+    }
+
+    function buildScatterLabels(nodes, width, height, pad) {
+      const groups = {
+        left: nodes.filter(node => node.x < width * 0.48).sort((a, b) => a.y - b.y),
+        right: nodes.filter(node => node.x >= width * 0.48).sort((a, b) => a.y - b.y),
+      };
+      const layouts = [];
+      [["left", pad.left + 6, "start"], ["right", width - pad.right - 6, "end"]].forEach(([side, labelX, anchor]) => {
+        const rows = groups[side];
+        let previousY = pad.top + 10;
+        rows.forEach(node => {
+          const desiredY = clamp(node.y, pad.top + 12, height - pad.bottom - 10);
+          const labelY = Math.max(desiredY, previousY);
+          previousY = labelY + 14;
+          layouts.push({node, labelX, labelY: clamp(labelY, pad.top + 12, height - pad.bottom - 10), anchor});
+        });
+      });
+      return layouts.map(layout => `
+        <line x1="${layout.node.x}" y1="${layout.node.y}" x2="${layout.labelX}" y2="${layout.labelY}" stroke="rgba(255,255,255,0.16)"></line>
+        <text x="${layout.labelX}" y="${layout.labelY - 2}" text-anchor="${layout.anchor}" fill="#edf5ff" font-size="10.5" font-weight="700">${layout.node.displayLabel}</text>
       `).join("");
-      const bubbles = points.map((p, index) => {
-        const color = p.macro_signal === "逆风" ? "#ff6b6b" : p.macro_signal === "顺风" ? "#1dd990" : COLORS[index % COLORS.length];
-        return `
-          <circle cx="${x(Number(p.x || 0))}" cy="${y(Number(p.y || 0))}" r="${r(Number(p.size || 0))}" fill="${color}" fill-opacity="0.65" stroke="${color}" stroke-width="1.5"></circle>
-          <text x="${x(Number(p.x || 0))}" y="${y(Number(p.y || 0)) + 4}" text-anchor="middle" fill="#07111f" font-size="11" font-weight="700">${p.symbol}</text>
-        `;
-      }).join("");
+    }
+
+    function renderScatter(points) {
+      if (!points || !points.length) {
+        byId("holdingScatter").innerHTML = '<div class="chart-empty">暂无数据</div>';
+        byId("holdingScatterLegend").innerHTML = "";
+        return;
+      }
+      const width = 640;
+      const height = 360;
+      const pad = {top: 20, right: 28, bottom: 38, left: 52};
+      const {nodes, minY, maxY, plotW, plotH, yScale} = buildScatterNodes(points, pad, width, height);
+      const zeroY = yScale(0);
+      const grid = [0.25, 0.5, 0.75, 1].map(fraction => {
+        const xx = pad.left + plotW * fraction;
+        return `<line x1="${xx}" y1="${pad.top}" x2="${xx}" y2="${pad.top + plotH}" stroke="rgba(255,255,255,0.05)"></line>`;
+      }).join("") + [minY, 0, maxY].map(value => `
+        <line x1="${pad.left}" y1="${yScale(value)}" x2="${pad.left + plotW}" y2="${yScale(value)}" stroke="${value === 0 ? 'rgba(255,107,107,0.22)' : 'rgba(255,255,255,0.05)'}"></line>
+      `).join("");
+      const labels = buildScatterLabels(nodes, width, height, pad);
+      const bubbles = nodes.map(node => `
+        <circle cx="${node.x}" cy="${node.y}" r="${node.r}" fill="${node.color}" fill-opacity="0.58" stroke="${node.color}" stroke-width="1.5"></circle>
+      `).join("");
       byId("holdingScatter").innerHTML = `
         <svg viewBox="0 0 ${width} ${height}" aria-label="holding scatter">
+          <rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="rgba(255,255,255,0.015)" rx="18"></rect>
           ${grid}
           <line x1="${pad.left}" y1="${zeroY}" x2="${pad.left + plotW}" y2="${zeroY}" stroke="rgba(255,107,107,0.3)"></line>
           ${bubbles}
-          <text x="${pad.left}" y="${height - 8}" fill="#8ca2c4" font-size="12">权重 →</text>
-          <text x="6" y="${pad.top + 8}" fill="#8ca2c4" font-size="12">浮盈亏%</text>
+          ${labels}
+          <text x="${pad.left}" y="${height - 10}" fill="#8ca2c4" font-size="12">权重 →</text>
+          <text x="10" y="${pad.top + 10}" fill="#8ca2c4" font-size="12">浮盈亏%</text>
         </svg>
       `;
+      byId("holdingScatterLegend").innerHTML = nodes
+        .slice()
+        .sort((left, right) => Number(right.size || 0) - Number(left.size || 0))
+        .map(node => `
+          <div class="scatter-item">
+            <strong><span class="dot" style="background:${node.color};margin-right:8px;display:inline-block;"></span>${node.displayLabel}</strong>
+            <div class="meta">${node.category_name || "--"} · 权重 ${fmtShare(node.weightPct)}</div>
+            <div class="meta">浮盈亏 ${fmtPct(node.pnlPct)} · 市值 HK$${fmtWholeMoney(node.size)}</div>
+          </div>
+        `).join("");
+    }
+
+    function updatePerformanceSelection(symbol) {
+      const next = new Set(state.performanceSelection);
+      if (next.has(symbol) && next.size > 1) {
+        next.delete(symbol);
+      } else if (!next.has(symbol)) {
+        if (next.size >= 4) {
+          next.delete([...next][0]);
+        }
+        next.add(symbol);
+      }
+      state.performanceSelection = [...next];
+      renderLineChart((state.data?.charts || {}).performance || []);
     }
 
     function renderLineChart(series) {
       if (!series || !series.length) {
         byId("performanceChart").innerHTML = '<div class="chart-empty">暂无实时走势</div>';
+        byId("performanceSelector").innerHTML = "";
         byId("performanceLegend").innerHTML = "";
         return;
       }
+      const validSymbols = new Set(series.map(item => item.symbol));
+      state.performanceSelection = (state.performanceSelection || []).filter(symbol => validSymbols.has(symbol));
+      if (!state.performanceSelection.length) {
+        state.performanceSelection = series.slice(0, Math.min(3, series.length)).map(item => item.symbol);
+      }
+      const selected = series.filter(item => state.performanceSelection.includes(item.symbol));
       const width = 520;
       const height = 320;
       const pad = {top: 18, right: 24, bottom: 28, left: 42};
-      const pointsMax = Math.max(...series.map(item => item.points.length), 2);
-      const allValues = series.flatMap(item => item.points.map(point => Number(point.price || 0)));
+      const pointsMax = Math.max(...selected.map(item => item.points.length), 2);
+      const allValues = selected.flatMap(item => item.points.map(point => Number(point.price || 0)));
       const minY = Math.min(...allValues, 85);
       const maxY = Math.max(...allValues, 130);
       const plotW = width - pad.left - pad.right;
       const plotH = height - pad.top - pad.bottom;
       const x = idx => pad.left + (idx / (pointsMax - 1 || 1)) * plotW;
-      const y = val => pad.top + ((maxY - val) / (maxY - minY || 1)) * plotH;
-      const lines = series.map((item, index) => {
+      const y = value => pad.top + ((maxY - value) / (maxY - minY || 1)) * plotH;
+      const lines = selected.map((item, index) => {
         const d = item.points.map((point, idx) => `${idx === 0 ? "M" : "L"} ${x(idx)} ${y(Number(point.price || 0))}`).join(" ");
         const color = COLORS[index % COLORS.length];
         return `<path d="${d}" fill="none" stroke="${color}" stroke-width="2.2"></path>`;
       }).join("");
-      const grid = [0, 0.5, 1].map(f => {
-        const yy = pad.top + plotH * f;
+      const grid = [0, 0.5, 1].map(fraction => {
+        const yy = pad.top + plotH * fraction;
         return `<line x1="${pad.left}" y1="${yy}" x2="${pad.left + plotW}" y2="${yy}" stroke="rgba(255,255,255,0.05)"></line>`;
       }).join("");
+      const referencePoints = selected[0]?.points || [];
+      const tickIndexes = [0, Math.max(Math.floor((referencePoints.length - 1) / 2), 0), Math.max(referencePoints.length - 1, 0)];
+      const tickLabels = tickIndexes.map(index => referencePoints[index]?.date || "").filter(Boolean);
       byId("performanceChart").innerHTML = `
         <svg viewBox="0 0 ${width} ${height}" aria-label="performance chart">
           ${grid}
           ${lines}
-          <text x="${pad.left}" y="${height - 8}" fill="#8ca2c4" font-size="12">60 日归一化走势</text>
+          ${tickIndexes.map((index, tickIndex) => `
+            <text x="${x(index)}" y="${height - 8}" text-anchor="${tickIndex === 0 ? 'start' : tickIndex === tickIndexes.length - 1 ? 'end' : 'middle'}" fill="#8ca2c4" font-size="11">${tickLabels[tickIndex] || ''}</text>
+          `).join("")}
         </svg>
       `;
-      byId("performanceLegend").innerHTML = series.map((item, index) => `
+      byId("performanceSelector").innerHTML = series.map(item => `
+        <button class="selector-chip ${state.performanceSelection.includes(item.symbol) ? 'active' : ''}" data-symbol="${item.symbol}" type="button">
+          ${item.market === "HK" ? item.name : item.symbol}
+        </button>
+      `).join("");
+      byId("performanceSelector").querySelectorAll("[data-symbol]").forEach(button => {
+        button.addEventListener("click", () => updatePerformanceSelection(button.dataset.symbol));
+      });
+      byId("performanceLegend").innerHTML = selected.map((item, index) => `
         <div class="legend-row">
           <div class="legend-left">
             <span class="dot" style="background:${COLORS[index % COLORS.length]}"></span>
-            <span>${item.symbol} ${item.name}</span>
+            <div class="legend-main">
+              <span>${item.market === "HK" ? item.name : item.symbol}</span>
+              <span class="legend-note">${item.points[0]?.date || "--"} 至 ${item.points[item.points.length - 1]?.date || "--"}</span>
+            </div>
           </div>
         </div>
       `).join("");
@@ -1041,10 +1612,8 @@
 
     function renderMetrics(summary) {
       const cards = [
-        {label: "组合净资产", value: `HK$${fmtMoney(summary.total_nav_hkd)}`, foot: "结单净值折算港币"},
-        {label: "股票市值", value: `HK$${fmtMoney(summary.total_statement_value_hkd)}`, foot: "真实持仓总额"},
-        {label: "融资敞口", value: `HK$${fmtMoney(summary.total_financing_hkd)}`, foot: "负现金折算口径"},
-        {label: "衍生品名义本金", value: `HK$${fmtMoney(summary.total_derivative_notional_hkd)}`, foot: "卖 Put 与 FCN 估算值"},
+        {label: "融资敞口", value: `HK$${fmtWholeMoney(summary.total_financing_hkd)}`, foot: "负现金折算口径"},
+        {label: "衍生品名义本金", value: `HK$${fmtWholeMoney(summary.total_derivative_notional_hkd)}`, foot: "卖 Put 与 FCN 估算值"},
         {label: "前五大仓位", value: fmtShare(summary.top5_ratio), foot: "头部集中度"},
         {label: "单一最大仓", value: fmtShare(summary.top1_weight_pct), foot: "单仓风险上限"},
       ];
@@ -1060,7 +1629,7 @@
     function renderKeyDrivers(rows) {
       byId("keyDrivers").innerHTML = (rows || []).map(row => `
         <section class="driver-card ${row.tone || 'warn'}">
-          <div class="label">Key Driver</div>
+          <div class="label">关键驱动</div>
           <div class="title">${row.title}</div>
           <div class="summary">${row.detail}</div>
         </section>
@@ -1070,6 +1639,7 @@
     function renderHealthRadar(metrics) {
       if (!metrics || !metrics.length) {
         byId("healthRadar").innerHTML = '<div class="chart-empty">暂无数据</div>';
+        byId("healthRadarNotes").innerHTML = "";
         return;
       }
       const size = 280;
@@ -1114,6 +1684,17 @@
           ${labels}
         </svg>
       `;
+      byId("healthRadarNotes").innerHTML = metrics.map(metric => `
+        <div class="legend-row" style="align-items:flex-start;">
+          <div class="legend-left">
+            <span class="dot" style="background:${metric.value >= 70 ? '#22e6a2' : metric.value >= 50 ? '#ffd782' : '#ff7373'}"></span>
+            <div class="legend-main">
+              <span>${metric.label} ${Math.round(metric.value)} 分</span>
+              <span class="legend-note">${metric.summary || ""}</span>
+            </div>
+          </div>
+        </div>
+      `).join("");
     }
 
     function renderStyleMix(rows) {
@@ -1170,6 +1751,7 @@
             <div class="regime-fill" style="width:${Math.min(Number(row.weight_pct || 0) / maxWeight * 100, 100)}%;background:${row.label === '弱势下行' ? 'linear-gradient(90deg,#ff7373,#ff9c63)' : row.label === '强势上行' ? 'linear-gradient(90deg,#22e6a2,#62e7ff)' : 'linear-gradient(90deg,#8c98ff,#62e7ff)'}"></div>
           </div>
           <div class="muted">平均信号 ${fmtMoney(row.avg_signal)}</div>
+          <div class="regime-note">核心股票：${(row.core_holdings || []).join("、") || "暂无"}</div>
         </div>
       `).join("");
     }
@@ -1211,20 +1793,64 @@
           <td>${row.category_name}<br><span class="muted">${row.style_label}</span></td>
           <td class="number">HK$${fmtMoney(row.statement_value_hkd)}</td>
           <td class="number">${fmtShare(row.weight_pct)}</td>
-          <td class="number">${row.current_price == null ? `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.statement_price)}` : `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.current_price)}`}<br><span class="muted">${row.price_source || 'statement'}</span></td>
+          <td class="number">${row.current_price == null ? `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.statement_price)}` : `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.current_price)}`}<br><span class="muted">${row.price_source || "statement"}</span></td>
           <td class="${toneClass(row.change_pct)}">${fmtPct(row.change_pct)} / <span class="${toneClass(row.change_pct_5d)}">${fmtPct(row.change_pct_5d)}</span></td>
           <td>${row.position_label || "--"}</td>
-          <td>${pill(`${row.signal_score || 0} · ${row.signal_zone || '跟踪'}`, signalTone(row.signal_score || 50))}<br><span class="muted">${row.fundamental_label || "--"} · ${row.trend_state || "--"}</span></td>
+          <td>${pill(`${row.signal_score || 0} · ${row.signal_zone || "跟踪"}`, signalTone(row.signal_score || 50))}<br><span class="muted">${row.fundamental_label || "--"} · ${row.trend_state || "--"}</span></td>
           <td>${pill(row.macro_signal || "中性", stanceTone(row.macro_signal === "逆风" ? "减仓" : row.macro_signal === "顺风" ? "核心" : "观察"))}</td>
           <td class="${toneClass(row.statement_pnl_hkd)}">HK$${fmtMoney(row.statement_pnl_hkd)}<br><span class="muted">${fmtPct(row.statement_pnl_pct)}</span></td>
         </tr>
       `).join("");
     }
 
+    function renderFundamentalDeepDive(rows) {
+      byId("fundamentalDeepDive").innerHTML = (rows || []).map(row => `
+        <section class="fundamental-card">
+          <div class="fundamental-head">
+            <div>
+              <h3>${row.symbol} ${row.name}</h3>
+              <div class="summary">${row.category_name} · ${row.style_label} · 权重 ${fmtShare(row.weight_pct)}</div>
+            </div>
+            <div>${pill(`${row.fundamental_label} · ${row.stance}`, signalTone(row.signal_score || 50))}</div>
+          </div>
+          <div class="fact-list">
+            <div class="fact">
+              <span class="label">商业定位</span>
+              <div class="text">${row.business_model}</div>
+            </div>
+            <div class="fact">
+              <span class="label">盈利驱动</span>
+              <div class="text">${row.earnings_driver}</div>
+            </div>
+            <div class="fact">
+              <span class="label">质量判断</span>
+              <div class="text">${row.quality_line}</div>
+            </div>
+            <div class="fact">
+              <span class="label">估值锚</span>
+              <div class="text">${row.valuation_anchor}</div>
+            </div>
+            <div class="fact">
+              <span class="label">近期催化</span>
+              <div class="text">${row.catalyst}</div>
+            </div>
+            <div class="fact">
+              <span class="label">资产负债表 / 风控</span>
+              <div class="text">${row.balance_sheet}</div>
+            </div>
+            <div class="fact">
+              <span class="label">主要风险</span>
+              <div class="text">${row.red_flags}</div>
+            </div>
+          </div>
+        </section>
+      `).join("");
+    }
+
     function renderStrategyViews(rows) {
       byId("strategyViews").innerHTML = (rows || []).map(row => `
         <section class="view-card">
-          <div class="view-tag">${pill(row.tag || "View", row.tone || "warn")}</div>
+          <div class="view-tag">${pill(row.tag || "视角", row.tone || "warn")}</div>
           <h3>${row.title}</h3>
           <div class="summary">${row.summary}</div>
         </section>
@@ -1294,6 +1920,23 @@
       `).join("");
     }
 
+    function renderStatementSources(rows) {
+      byId("statementSourcesBody").innerHTML = (rows || []).map(row => `
+        <tr>
+          <td>${row.broker}</td>
+          <td class="mono">${row.account_id}</td>
+          <td>${row.statement_date || "--"}</td>
+          <td>${row.statement_type}</td>
+          <td>
+            ${row.file_exists ? pill(row.source_mode === "upload" ? "上传替代" : "默认来源", row.source_mode === "upload" ? "up" : "warn") : pill("文件缺失", "down")}
+            ${row.load_status === "cache" ? pill("缓存回退", "warn") : row.load_status === "parsed" ? pill("直接解析", "up") : pill("解析失败", "down")}
+            <br><span class="muted">${row.issue || (row.uploaded_at ? row.uploaded_at.slice(0, 10) : "原始路径")}</span>
+          </td>
+          <td>${row.file_name}</td>
+        </tr>
+      `).join("");
+    }
+
     function renderSimpleTable(hostId, rows, columns) {
       byId(hostId).innerHTML = (rows || []).map(row => `
         <tr>${columns.map(col => `<td>${row[col] ?? "--"}</td>`).join("")}</tr>
@@ -1308,16 +1951,18 @@
       const summary = data.summary || {};
       const charts = data.charts || {};
       const macro = data.macro || {};
-      const live = data.live || {};
+      const sourceHealth = data.source_health || {};
       byId("headline").textContent = data.headline || "";
       byId("overview").textContent = data.overview || "";
       byId("snapshotMeta").textContent = summary.statement_start_date && summary.statement_end_date
-        ? `结单覆盖 ${summary.statement_start_date} 至 ${summary.statement_end_date}；页面分析生成于 ${data.analysis_date_cn || '--'}`
+        ? `结单覆盖 ${summary.statement_start_date} 至 ${summary.statement_end_date}；页面分析生成于 ${data.analysis_date_cn || "--"}${sourceHealth.cached_count ? `；其中 ${sourceHealth.cached_count} 个账户使用缓存快照` : ""}`
         : "等待加载结单范围";
-      byId("analysisMeta").textContent = `当前策略同时参考宏观驱动、基本面质量、趋势动量、风险预算与多风格组合。`;
+      byId("analysisMeta").textContent = "当前策略同时参考宏观驱动、基本面质量、趋势动量、风险预算与多风格组合。";
       const macroMode = {network: "在线宏观", mixed: "在线宏观 + 本地快照", cache: "本地研究快照", empty: "静态框架"}[macro.source_mode || "empty"];
       byId("macroMeta").textContent = macro.updated_at ? `${macroMode} · 最近刷新：${macro.updated_at}` : "宏观抓取不可用时自动回退到静态框架";
       byId("disclaimer").textContent = (data.brief || {}).disclaimer || "";
+      renderHeroAsset(summary);
+      renderHeroSummaryBoard(summary, data);
       renderMetrics(summary);
       renderKeyDrivers(data.key_drivers || []);
       renderRiskFlags(data.risk_flags || []);
@@ -1333,40 +1978,90 @@
       renderMacroTopics(macro.topics || []);
       renderAccounts(data.accounts || []);
       renderTopHoldings(data.top_holdings || []);
+      renderFundamentalDeepDive(data.fundamental_deep_dive || []);
       renderActions((data.brief || {}).priority_actions || []);
       renderBrief((data.brief || {}).holding_notes || []);
       renderTrades(data.trades || []);
       renderDerivatives(data.derivatives || []);
       renderList("framework", (data.brief || {}).framework || []);
       renderList("updateGuide", data.update_guide || []);
-      renderSimpleTable("statementSourcesBody", data.statement_sources || [], ["broker", "account_id", "statement_date", "statement_type", "file_name"]);
+      renderStatementSources(data.statement_sources || []);
       renderSimpleTable("referenceSourcesBody", data.reference_sources || [], ["label", "type", "file_name"]);
+      populateUploadTargets(data.statement_sources || []);
+    }
+
+    function updateStatusFromPayload(data) {
+      const liveBits = [];
+      const live = data.live || {};
+      const macro = data.macro || {};
+      const sourceHealth = data.source_health || {};
+      if (live.tracked_count) liveBits.push(`行情跟踪 ${live.tracked_count} 只`);
+      if (live.source_mode === "cache") liveBits.push("价格使用本地日更快照");
+      if (live.fallback_symbols?.length) liveBits.push(`离线回退 ${live.fallback_symbols.length} 只`);
+      if (live.errors?.length) liveBits.push(`行情缺失 ${live.errors.length}`);
+      if (macro.source_mode === "cache") liveBits.push("宏观使用本地研究快照");
+      if (macro.errors?.length) liveBits.push(`宏观抓取异常 ${macro.errors.length}`);
+      if (sourceHealth.cached_count) liveBits.push(`结单缓存回退 ${sourceHealth.cached_count} 个账户`);
+      if (sourceHealth.error_count) liveBits.push(`结单失败 ${sourceHealth.error_count} 个账户`);
+      byId("status").textContent = liveBits.length ? liveBits.join(" · ") : "已加载最新数据";
     }
 
     async function refreshData(force = false) {
-      byId("status").textContent = force ? "正在刷新结单、行情和宏观主题..." : "正在加载...";
+      byId("status").textContent = force ? "正在刷新行情、走势和宏观摘要..." : "正在加载...";
       try {
         const suffix = force ? "?refresh=1" : "";
         const resp = await fetch(`/api/market-data${suffix}`, {cache: "no-store"});
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        state.data = await resp.json();
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload.error || `HTTP ${resp.status}`);
+        state.data = payload;
         renderAll(state.data);
-        const liveBits = [];
-        const live = state.data.live || {};
-        const macro = state.data.macro || {};
-        if (live.tracked_count) liveBits.push(`行情跟踪 ${live.tracked_count} 只`);
-        if (live.source_mode === "cache") liveBits.push("价格使用本地日更快照");
-        if (live.fallback_symbols?.length) liveBits.push(`离线回退 ${live.fallback_symbols.length} 只`);
-        if (live.errors?.length) liveBits.push(`行情缺失 ${live.errors.length}`);
-        if (macro.source_mode === "cache") liveBits.push("宏观使用本地研究快照");
-        if (macro.errors?.length) liveBits.push(`宏观抓取异常 ${macro.errors.length}`);
-        byId("status").textContent = liveBits.length ? liveBits.join(" · ") : "已加载最新数据";
+        updateStatusFromPayload(state.data);
       } catch (error) {
         byId("status").textContent = `刷新失败：${error.message}`;
       }
     }
 
+    async function uploadStatement(event) {
+      event.preventDefault();
+      const accountId = byId("uploadAccount").value;
+      const fileInput = byId("uploadFile");
+      const file = fileInput.files && fileInput.files[0];
+      if (!accountId) {
+        byId("uploadStatus").textContent = "请选择要替换的账户。";
+        return;
+      }
+      if (!file) {
+        byId("uploadStatus").textContent = "请选择要上传的结单文件。";
+        return;
+      }
+      byId("uploadStatus").textContent = "正在上传并重建结单缓存...";
+      const formData = new FormData();
+      formData.append("account_id", accountId);
+      formData.append("statement_file", file);
+      try {
+        const resp = await fetch("/api/upload-statement", {
+          method: "POST",
+          body: formData,
+        });
+        const payload = await resp.json();
+        if (!resp.ok) {
+          throw new Error(payload.error || `HTTP ${resp.status}`);
+        }
+        state.data = payload.payload;
+        renderAll(state.data);
+        updateStatusFromPayload(state.data);
+        byId("uploadStatus").textContent = payload.message || "上传成功，已刷新。";
+        byId("status").textContent = payload.message || "结单上传成功，已刷新。";
+        fileInput.value = "";
+        toggleUploadPanel(false);
+      } catch (error) {
+        byId("uploadStatus").textContent = `上传失败：${error.message}`;
+      }
+    }
+
     byId("refreshBtn").addEventListener("click", () => refreshData(true));
+    byId("uploadToggleBtn").addEventListener("click", () => toggleUploadPanel());
+    byId("uploadForm").addEventListener("submit", uploadStatement);
     refreshData();
   </script>
 </body>
