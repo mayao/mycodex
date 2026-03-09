@@ -18,6 +18,12 @@ import {
 import { getCoverageSummary } from "../repositories/health-repository";
 import { getLatestSampleTime, getUnifiedTrendSeries } from "../repositories/unified-health-repository";
 import { resolveAnalysisAsOf } from "../utils/app-time";
+import {
+  getAnnualExamEducationalCopy,
+  getGeneticEducationalCopy,
+  getInsightEducationalCopy,
+  getMetricEducationalCopy
+} from "./health-communication";
 import { generateHolisticStructuredInsights } from "./holistic-insight-service";
 import { getCurrentDailySummary, getReportsIndexData } from "./report-service";
 
@@ -102,7 +108,8 @@ function buildOverviewCard(summary: {
     value: formatValue(summary.latest_value, summary.unit),
     trend,
     status,
-    abnormal_flag: summary.abnormal_flag
+    abnormal_flag: summary.abnormal_flag,
+    meaning: getMetricEducationalCopy(summary.metric_code)?.meaning
   };
 }
 
@@ -126,15 +133,27 @@ function buildReminderItem(insight: {
   id: string;
   title: string;
   severity: HealthReminderItem["severity"];
-  evidence: { summary: string };
+  evidence: {
+    summary: string;
+    metrics?: Array<{ metric_code?: string }>;
+  };
   suggested_action: string;
 }): HealthReminderItem {
+  const primaryMetricCode = insight.evidence.metrics?.[0]?.metric_code;
+  const educationalCopy = getInsightEducationalCopy({
+    id: insight.id,
+    title: insight.title,
+    metricCode: primaryMetricCode
+  });
+
   return {
     id: insight.id,
     title: insight.title,
     severity: insight.severity,
     summary: insight.evidence.summary,
-    suggested_action: insight.suggested_action
+    suggested_action: insight.suggested_action,
+    indicatorMeaning: educationalCopy?.meaning,
+    practicalAdvice: educationalCopy?.practicalAdvice
   };
 }
 
@@ -253,15 +272,12 @@ function buildOverviewHeadline(
   const annualLdl = annualExam?.metrics.find((item) => item.metricCode === "lipid.ldl_c");
   const geneSummary = summarizeGeneticFindings(geneticFindings);
   const improvementText =
-    ldl && annualLdl
-      ? `近期 LDL-C 已从年度体检的 ${formatCompactValue(annualLdl.latestValue, annualLdl.unit)} 回到 ${formatCompactValue(ldl.latest_value, ldl.unit)}`
-      : "近期专项血液结果更适合用于观察短期干预成效";
+    ldl && annualLdl ? `LDL-C 已较年度体检明显回落` : "近期专项血液结果更适合观察短期干预成效";
   const annualText =
     annualExam?.abnormalMetricLabels.length
-      ? `${annualExam.latestTitle} 仍提示 ${annualExam.abnormalMetricLabels.join("、")} 需要持续管理`
+      ? `当前主线：${annualExam.abnormalMetricLabels.join("、")} 仍需持续管理`
       : `${annualExam?.latestTitle ?? "年度体检"} 可作为长期基线`;
-  const geneText =
-    geneSummary.dimensionCount > 0 ? `已纳入 ${geneSummary.dimensionCount} 个基因背景维度` : undefined;
+  const geneText = geneSummary.dimensionCount > 0 ? `并已纳入基因背景解释` : undefined;
 
   return [annualText, improvementText, geneText].filter(Boolean).join("，");
 }
@@ -353,6 +369,8 @@ function mapAnnualExamView(
     return undefined;
   }
 
+  const annualExamCopy = getAnnualExamEducationalCopy();
+
   return {
     latestTitle: annualExam.latestTitle,
     latestRecordedAt: annualExam.latestRecordedAt,
@@ -366,7 +384,10 @@ function mapAnnualExamView(
       previousValue: metric.previousValue,
       delta: metric.delta,
       abnormalFlag: metric.abnormalFlag,
-      referenceRange: metric.referenceRange
+      referenceRange: metric.referenceRange,
+      meaning: getMetricEducationalCopy(metric.metricCode)?.meaning ?? annualExamCopy.meaning,
+      practicalAdvice:
+        getMetricEducationalCopy(metric.metricCode)?.practicalAdvice ?? annualExamCopy.practicalAdvice
     })),
     abnormalMetricLabels: annualExam.abnormalMetricLabels,
     improvedMetricLabels: annualExam.improvedMetricLabels,
@@ -392,7 +413,9 @@ function mapGeneticFindingView(
     linkedMetricValue: finding.linkedMetric
       ? formatCompactValue(finding.linkedMetric.value, finding.linkedMetric.unit)
       : undefined,
-    linkedMetricFlag: finding.linkedMetric?.abnormalFlag
+    linkedMetricFlag: finding.linkedMetric?.abnormalFlag,
+    plainMeaning: getGeneticEducationalCopy(finding.traitLabel)?.meaning,
+    practicalAdvice: getGeneticEducationalCopy(finding.traitLabel)?.practicalAdvice
   }));
 }
 

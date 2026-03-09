@@ -86,8 +86,20 @@ export function AnnualExamPanel({ exam }: { exam?: AnnualExamView }) {
               </div>
             </div>
             <p className="exam-delta">同比 {formatDelta(metric.delta, metric.unit)}</p>
+            {metric.meaning ? (
+              <p className="exam-note">
+                <strong>含义：</strong>
+                {metric.meaning}
+              </p>
+            ) : null}
             {metric.referenceRange ? (
               <p className="exam-reference">参考范围 {metric.referenceRange}</p>
+            ) : null}
+            {metric.practicalAdvice ? (
+              <p className="exam-guidance">
+                <strong>建议：</strong>
+                {metric.practicalAdvice}
+              </p>
             ) : null}
           </article>
         ))}

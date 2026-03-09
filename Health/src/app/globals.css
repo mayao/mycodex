@@ -909,6 +909,14 @@ body::after {
   letter-spacing: -0.045em;
 }
 
+.hero-overview-title {
+  max-width: 26ch;
+  font-size: clamp(1.45rem, 2.1vw, 2.35rem);
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+  text-wrap: pretty;
+}
+
 .hero-narrative {
   max-width: 62ch;
   color: var(--muted);
@@ -1143,6 +1151,13 @@ body::after {
   font-size: clamp(1.42rem, 2vw, 2rem);
 }
 
+.overview-meaning {
+  margin-top: 10px;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--muted);
+}
+
 .spotlight-grid {
   gap: 16px;
 }
@@ -1362,6 +1377,30 @@ body::after {
   padding: 20px;
 }
 
+.reminder-explainer,
+.reminder-next-step,
+.exam-note,
+.exam-guidance,
+.genetic-meaning,
+.genetic-guidance {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(12, 34, 43, 0.04);
+  border: 1px solid rgba(12, 34, 43, 0.06);
+}
+
+.reminder-explainer strong,
+.reminder-next-step strong,
+.exam-note strong,
+.exam-guidance strong,
+.genetic-meaning strong,
+.genetic-guidance strong {
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--brand-deep);
+}
+
 .genetic-linked {
   background: rgba(12, 34, 43, 0.035);
   border: 1px solid rgba(12, 34, 43, 0.06);
@@ -1471,6 +1510,11 @@ body::after {
 
   .hero-banner {
     padding: 22px;
+  }
+
+  .hero-overview-title {
+    font-size: clamp(1.32rem, 6vw, 1.7rem);
+    line-height: 1.24;
   }
 
   .hero-summary-top,

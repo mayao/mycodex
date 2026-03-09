@@ -53,6 +53,7 @@ export interface HealthOverviewCard {
   trend: string;
   status: "improving" | "watch" | "stable";
   abnormal_flag: string;
+  meaning?: string;
 }
 
 export interface HealthReminderItem {
@@ -61,6 +62,8 @@ export interface HealthReminderItem {
   severity: StructuredInsightSeverity;
   summary: string;
   suggested_action: string;
+  indicatorMeaning?: string;
+  practicalAdvice?: string;
 }
 
 export interface HealthSourceDimensionCard {
@@ -89,6 +92,8 @@ export interface AnnualExamMetricView {
   delta?: number;
   abnormalFlag: string;
   referenceRange?: string;
+  meaning?: string;
+  practicalAdvice?: string;
 }
 
 export interface AnnualExamView {
@@ -115,6 +120,8 @@ export interface GeneticFindingView {
   linkedMetricLabel?: string;
   linkedMetricValue?: string;
   linkedMetricFlag?: string;
+  plainMeaning?: string;
+  practicalAdvice?: string;
 }
 
 export interface HealthTrendLine {

@@ -133,9 +133,15 @@ LLM 输入只来自结构化 insights。当前支持：
 
 ### 环境要求
 
-- Node.js 22+
+- Node.js 22.x LTS
 - npm 10+
 - 运行环境支持 `node:sqlite`
+
+说明：
+
+- 当前项目已验证 `Node 22`。
+- 在 macOS 上直接使用 `Node 25` 启动 `Next.js` / `ESLint`，可能会因为读取 `/proc/self/cgroup` 出现 `EPERM`，导致服务无法启动。
+- 仓库根目录提供了 `.nvmrc`，可直接切到 22 版本。
 
 ### 安装
 
@@ -143,10 +149,22 @@ LLM 输入只来自结构化 insights。当前支持：
 npm install
 ```
 
+如果本机通过 Homebrew 安装了 `node@22`，也可以直接这样运行：
+
+```bash
+PATH="/opt/homebrew/opt/node@22/bin:$PATH" npm install
+```
+
 ### 启动开发环境
 
 ```bash
 npm run dev
+```
+
+如果当前默认 `node` 不是 22.x，请显式指定：
+
+```bash
+PATH="/opt/homebrew/opt/node@22/bin:$PATH" npm run dev
 ```
 
 打开 [http://localhost:3000](http://localhost:3000)。

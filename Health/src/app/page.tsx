@@ -8,6 +8,7 @@ import { SiteHeader } from "../components/site-header";
 import { SourceDimensionStrip } from "../components/source-dimension-strip";
 import { SummaryCard } from "../components/summary-card";
 import { TrendPanel } from "../components/trend-panel";
+import type { HealthReminderItem } from "../server/domain/health-hub";
 import { getHealthHomePageData } from "../server/services/health-home-service";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,31 @@ function severityLabel(severity: "high" | "medium" | "low" | "positive"): string
   return "继续观察";
 }
 
+function renderReminderCard(item: HealthReminderItem) {
+  return (
+    <article key={item.id} className={`reminder-card severity-${item.severity}`}>
+      <div className="reminder-head">
+        <h3>{item.title}</h3>
+        <span className="mini-pill">{severityLabel(item.severity)}</span>
+      </div>
+      <p>{item.summary}</p>
+      {item.indicatorMeaning ? (
+        <p className="reminder-explainer">
+          <strong>这通常表示：</strong>
+          {item.indicatorMeaning}
+        </p>
+      ) : null}
+      <p className="reminder-action">建议：{item.suggested_action}</p>
+      {item.practicalAdvice ? (
+        <p className="reminder-next-step">
+          <strong>具体做法：</strong>
+          {item.practicalAdvice}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
 export default async function HomePage() {
   const dashboard = await getHealthHomePageData();
 
@@ -38,7 +64,7 @@ export default async function HomePage() {
       <section className="hero-banner hero-banner-upgraded">
         <div className="hero-copy">
           <p className="panel-kicker">Health Overview</p>
-          <h2>{dashboard.overviewHeadline}</h2>
+          <h2 className="hero-overview-title">{dashboard.overviewHeadline}</h2>
           <p className="hero-narrative">{dashboard.overviewNarrative}</p>
           <div className="focus-chip-row">
             {dashboard.overviewFocusAreas.map((item) => (
@@ -73,6 +99,7 @@ export default async function HomePage() {
             </div>
             <h3>{card.value}</h3>
             <p>{card.trend}</p>
+            {card.meaning ? <p className="overview-meaning">{card.meaning}</p> : null}
           </article>
         ))}
       </section>
@@ -94,16 +121,7 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="stack-list">
-            {dashboard.keyReminders.map((item) => (
-              <article key={item.id} className={`reminder-card severity-${item.severity}`}>
-                <div className="reminder-head">
-                  <h3>{item.title}</h3>
-                  <span className="mini-pill">{severityLabel(item.severity)}</span>
-                </div>
-                <p>{item.summary}</p>
-                <p className="reminder-action">建议：{item.suggested_action}</p>
-              </article>
-            ))}
+            {dashboard.keyReminders.map((item) => renderReminderCard(item))}
           </div>
         </section>
 
@@ -132,15 +150,7 @@ export default async function HomePage() {
             </div>
           </div>
           <div className="stack-list">
-            {dashboard.watchItems.map((item) => (
-              <article key={item.id} className={`reminder-card severity-${item.severity}`}>
-                <div className="reminder-head">
-                  <h3>{item.title}</h3>
-                  <span className="mini-pill">{severityLabel(item.severity)}</span>
-                </div>
-                <p>{item.summary}</p>
-              </article>
-            ))}
+            {dashboard.watchItems.map((item) => renderReminderCard(item))}
           </div>
         </section>
 

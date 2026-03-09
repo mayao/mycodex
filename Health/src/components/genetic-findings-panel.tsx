@@ -42,22 +42,31 @@ export function GeneticFindingsPanel({
     medium: findings.filter((item) => item.riskLevel === "medium").length,
     low: findings.filter((item) => item.riskLevel === "low").length
   };
-  const dimensionGroups = [...new Map(
-    findings.map((finding) => [finding.dimension, finding]).map(([dimension]) => {
-      const items = findings.filter((finding) => finding.dimension === dimension);
-      return [
-        dimension,
-        {
-          dimension,
-          findings: items,
-          highestRisk: items.reduce<GeneticFindingView["riskLevel"]>(
-            (current, item) => (riskWeight(item.riskLevel) > riskWeight(current) ? item.riskLevel : current),
-            "low"
-          )
-        }
-      ];
-    })
-  ).values()].sort((left, right) => {
+  const dimensionMap = new Map<
+    string,
+    { dimension: string; findings: GeneticFindingView[]; highestRisk: GeneticFindingView["riskLevel"] }
+  >();
+
+  for (const finding of findings) {
+    const current = dimensionMap.get(finding.dimension);
+
+    if (!current) {
+      dimensionMap.set(finding.dimension, {
+        dimension: finding.dimension,
+        findings: [finding],
+        highestRisk: finding.riskLevel
+      });
+      continue;
+    }
+
+    current.findings.push(finding);
+
+    if (riskWeight(finding.riskLevel) > riskWeight(current.highestRisk)) {
+      current.highestRisk = finding.riskLevel;
+    }
+  }
+
+  const dimensionGroups = [...dimensionMap.values()].sort((left, right) => {
     const riskGap = riskWeight(right.highestRisk) - riskWeight(left.highestRisk);
 
     if (riskGap !== 0) {
@@ -173,6 +182,12 @@ export function GeneticFindingsPanel({
             </div>
             <p className="genetic-dimension">{finding.dimension}</p>
             <p>{finding.summary}</p>
+            {finding.plainMeaning ? (
+              <p className="genetic-meaning">
+                <strong>这通常表示：</strong>
+                {finding.plainMeaning}
+              </p>
+            ) : null}
             {finding.linkedMetricLabel ? (
               <div className="genetic-linked">
                 <span>当前关联指标</span>
@@ -185,6 +200,12 @@ export function GeneticFindingsPanel({
               </div>
             ) : null}
             <p className="genetic-action">建议：{finding.suggestion}</p>
+            {finding.practicalAdvice ? (
+              <p className="genetic-guidance">
+                <strong>落地做法：</strong>
+                {finding.practicalAdvice}
+              </p>
+            ) : null}
           </article>
         ))}
       </div>

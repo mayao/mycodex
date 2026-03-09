@@ -88,6 +88,7 @@ export function HeroSummaryPanel({
         <section className="hero-summary-banner">
           <span className="hero-summary-banner-label">当前主线</span>
           <strong>{leadReminder.title}</strong>
+          {leadReminder.indicatorMeaning ? <p>{leadReminder.indicatorMeaning}</p> : null}
           <p>{leadReminder.suggested_action}</p>
         </section>
       ) : null}
