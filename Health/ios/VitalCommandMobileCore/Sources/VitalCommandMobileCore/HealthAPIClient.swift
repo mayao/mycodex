@@ -182,6 +182,16 @@ public final class HealthAPIClient: @unchecked Sendable {
         try await sendEmpty(path: "api/health-plans/check")
     }
 
+    // MARK: - Sync
+
+    public func fetchSyncStatus() async throws -> SyncStatusResponse {
+        try await send(path: "api/sync/status")
+    }
+
+    public func triggerSync() async throws -> SyncTriggerResponse {
+        try await sendEmpty(path: "api/sync/trigger")
+    }
+
     // MARK: - Privacy
 
     public func requestPrivacyExport(_ input: PrivacyExportRequest) async throws -> PrivacyPlaceholderResponse {

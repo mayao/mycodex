@@ -243,8 +243,8 @@ export function deviceLogin(
 
     if (unboundUser && unboundCount === 1) {
       // Bind existing user to this device
-      database.prepare("UPDATE users SET device_id = ? WHERE id = ?")
-        .run(deviceId, unboundUser.id);
+      database.prepare("UPDATE users SET device_id = ?, updated_at = ? WHERE id = ?")
+        .run(deviceId, new Date().toISOString(), unboundUser.id);
       user = unboundUser;
       console.log(`[AUTH] Bound existing user ${user.id} to device ${deviceId.slice(0, 8)}...`);
     } else {

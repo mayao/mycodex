@@ -1,4 +1,4 @@
-import { createSocket } from "node:dgram";
+import { createSocket, type Socket } from "node:dgram";
 import os from "node:os";
 
 const BROADCAST_PORT = 41234;
@@ -15,7 +15,6 @@ function getLocalNetwork(): LocalNet {
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name] ?? []) {
       if (iface.family === "IPv4" && !iface.internal) {
-        // Calculate subnet broadcast address from IP + netmask
         const ipParts = iface.address.split(".").map(Number);
         const maskParts = iface.netmask.split(".").map(Number);
         const broadcastParts = ipParts.map(
@@ -33,14 +32,32 @@ function getLocalNetwork(): LocalNet {
 }
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let listenerSocket: Socket | null = null;
 
-export function startUDPBroadcast(httpPort: number = 3000): void {
+// Injected dependencies — set by startUDPBroadcast caller
+let _getServerId: (() => string) | null = null;
+let _onPeerDiscovered: ((serverId: string, name: string, ip: string, port: number) => void) | null = null;
+
+export interface UDPBroadcastOptions {
+  httpPort?: number;
+  getServerId?: () => string;
+  onPeerDiscovered?: (serverId: string, name: string, ip: string, port: number) => void;
+}
+
+export function startUDPBroadcast(options: UDPBroadcastOptions = {}): void {
   if (intervalId) return;
 
-  const socket = createSocket({ type: "udp4", reuseAddr: true });
+  const httpPort = options.httpPort ?? 3000;
+  _getServerId = options.getServerId ?? null;
+  _onPeerDiscovered = options.onPeerDiscovered ?? null;
 
-  socket.bind(() => {
-    socket.setBroadcast(true);
+  const localServerId = _getServerId?.() ?? "unknown";
+
+  // --- Sender socket ---
+  const senderSocket = createSocket({ type: "udp4", reuseAddr: true });
+
+  senderSocket.bind(() => {
+    senderSocket.setBroadcast(true);
 
     const net = getLocalNetwork();
 
@@ -51,11 +68,11 @@ export function startUDPBroadcast(httpPort: number = 3000): void {
         ip: net.address,
         port: httpPort,
         version: "1.0.0",
+        server_id: _getServerId?.() ?? localServerId,
       });
 
       const buf = Buffer.from(message);
-      // Broadcast to subnet broadcast address (e.g. 10.8.143.255)
-      socket.send(
+      senderSocket.send(
         buf,
         0,
         buf.length,
@@ -79,8 +96,40 @@ export function startUDPBroadcast(httpPort: number = 3000): void {
     );
   });
 
-  socket.on("error", (err) => {
-    console.error("[UDP Broadcast] Socket error:", err.message);
+  senderSocket.on("error", (err) => {
+    console.error("[UDP Broadcast] Sender socket error:", err.message);
+  });
+
+  // --- Listener socket (for peer discovery) ---
+  listenerSocket = createSocket({ type: "udp4", reuseAddr: true });
+
+  listenerSocket.on("message", (msg, rinfo) => {
+    try {
+      const data = JSON.parse(msg.toString());
+      const currentServerId = _getServerId?.() ?? localServerId;
+      if (
+        data.service === "vital-command" &&
+        data.server_id &&
+        data.server_id !== currentServerId
+      ) {
+        _onPeerDiscovered?.(
+          data.server_id,
+          data.name ?? rinfo.address,
+          data.ip ?? rinfo.address,
+          data.port ?? 3000
+        );
+      }
+    } catch {
+      // Ignore malformed messages
+    }
+  });
+
+  listenerSocket.on("error", (err) => {
+    console.error("[UDP Listener] Error:", err.message);
+  });
+
+  listenerSocket.bind(BROADCAST_PORT, () => {
+    console.log(`[UDP Listener] Listening for peer broadcasts on port ${BROADCAST_PORT}`);
   });
 }
 
@@ -88,5 +137,9 @@ export function stopUDPBroadcast(): void {
   if (intervalId) {
     clearInterval(intervalId);
     intervalId = null;
+  }
+  if (listenerSocket) {
+    listenerSocket.close();
+    listenerSocket = null;
   }
 }

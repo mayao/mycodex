@@ -10,6 +10,7 @@ final class ServerDiscoveryService: ObservableObject {
         let ip: String
         let port: Int
         let version: String
+        let serverId: String?
         var lastSeen: Date
 
         var urlString: String { "http://\(ip):\(port)/" }
@@ -93,6 +94,7 @@ final class ServerDiscoveryService: ObservableObject {
         let ip: String
         let port: Int
         let version: String
+        let serverId: String?
     }
 
     private func addOrUpdateServer(from msg: BroadcastMessage) {
@@ -104,6 +106,7 @@ final class ServerDiscoveryService: ObservableObject {
             ip: msg.ip,
             port: msg.port,
             version: msg.version,
+            serverId: msg.serverId,
             lastSeen: Date()
         )
 
@@ -138,7 +141,8 @@ final class ServerDiscoveryService: ObservableObject {
                         name: server.name,
                         ip: server.ip,
                         port: server.port,
-                        version: server.version
+                        version: server.version,
+                        serverId: server.serverId
                     ))
                 }
             }
@@ -158,7 +162,7 @@ final class ServerDiscoveryService: ObservableObject {
             let msg = try JSONDecoder().decode(BroadcastMessage.self, from: data)
             guard msg.service == "vital-command" else { return nil }
             return DiscoveredServer(
-                service: msg.service, name: msg.name, ip: msg.ip, port: msg.port, version: msg.version, lastSeen: Date()
+                service: msg.service, name: msg.name, ip: msg.ip, port: msg.port, version: msg.version, serverId: msg.serverId, lastSeen: Date()
             )
         } catch {
             return nil

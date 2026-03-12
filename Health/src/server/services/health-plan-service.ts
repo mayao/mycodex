@@ -596,9 +596,9 @@ export function checkPlanCompletion(
     if (existingCheck) {
       database
         .prepare(
-          `UPDATE health_plan_check SET actual_value = ?, is_completed = ?, source = 'auto' WHERE id = ?`
+          `UPDATE health_plan_check SET actual_value = ?, is_completed = ?, source = 'auto', updated_at = ? WHERE id = ?`
         )
-        .run(actualValue, isCompleted ? 1 : 0, existingCheck.id);
+        .run(actualValue, isCompleted ? 1 : 0, new Date().toISOString(), existingCheck.id);
       results.push(
         database.prepare(`SELECT * FROM health_plan_check WHERE id = ?`).get(existingCheck.id) as unknown as PlanCheckRow
       );
@@ -644,8 +644,8 @@ export function manualCheckIn(
 
   if (existingCheck) {
     database
-      .prepare(`UPDATE health_plan_check SET is_completed = 1, source = 'manual' WHERE id = ?`)
-      .run(existingCheck.id);
+      .prepare(`UPDATE health_plan_check SET is_completed = 1, source = 'manual', updated_at = ? WHERE id = ?`)
+      .run(new Date().toISOString(), existingCheck.id);
     return database.prepare(`SELECT * FROM health_plan_check WHERE id = ?`).get(existingCheck.id) as unknown as PlanCheckRow;
   }
 

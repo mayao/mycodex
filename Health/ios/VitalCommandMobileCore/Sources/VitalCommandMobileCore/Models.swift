@@ -959,3 +959,41 @@ public struct UpdatePlanItemResponse: Codable, Sendable {
 public struct PlanCompletionCheckResponse: Codable, Sendable {
     public let checks: [HealthPlanCheck]
 }
+
+// MARK: - Sync
+
+public struct SyncPeer: Codable, Sendable, Identifiable {
+    public var id: String { serverId }
+    public let serverId: String
+    public let name: String
+    public let url: String
+    public let lastSeenAt: String
+    public let lastSyncAt: String?
+    public let lastSyncCursor: String?
+}
+
+public struct SyncLogEntry: Codable, Sendable, Identifiable {
+    public let id: String
+    public let peerServerId: String
+    public let direction: String
+    public let tablesSynced: String
+    public let rowsReceived: Int
+    public let rowsSent: Int
+    public let status: String
+    public let errorMessage: String?
+    public let startedAt: String
+    public let finishedAt: String
+}
+
+public struct SyncStatusResponse: Codable, Sendable {
+    public let serverId: String
+    public let peers: [SyncPeer]
+    public let recentLogs: [SyncLogEntry]
+}
+
+public struct SyncTriggerResponse: Codable, Sendable {
+    public let triggered: Bool
+    public let serverId: String
+    public let peers: [SyncPeer]
+    public let recentLogs: [SyncLogEntry]
+}

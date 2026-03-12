@@ -1,10 +1,14 @@
 import SwiftUI
+import VitalCommandMobileCore
 
 struct SettingsScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
     @EnvironmentObject private var authManager: AuthManager
     @StateObject private var discovery = ServerDiscoveryService()
     @State private var showLogoutConfirmation = false
+    @State private var syncStatus: SyncStatusResponse?
+    @State private var isSyncing = false
+    @State private var syncError: String?
 
     var body: some View {
         Form {
@@ -164,6 +168,78 @@ struct SettingsScreen: View {
                 }
             }
 
+            Section("数据同步") {
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(syncStatusColor)
+                        .frame(width: 10, height: 10)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(syncStatusText)
+                            .font(.subheadline.weight(.medium))
+                        if let status = syncStatus {
+                            Text("服务器 ID: \(String(status.serverId.prefix(8)))...")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    Spacer()
+                    if let status = syncStatus {
+                        Text("\(status.peers.count) 节点")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
+                    }
+                }
+
+                if let status = syncStatus, !status.peers.isEmpty {
+                    ForEach(status.peers) { peer in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(peer.name)
+                                    .font(.caption.weight(.medium))
+                                Text(peer.url)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if let lastSync = peer.lastSyncAt {
+                                Text(formatRelativeTime(lastSync))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Text("未同步")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                    }
+                }
+
+                if let error = syncError {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                Button {
+                    Task { await triggerManualSync() }
+                } label: {
+                    HStack {
+                        if isSyncing {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                        Label(
+                            isSyncing ? "同步中..." : "立即同步",
+                            systemImage: "arrow.triangle.2.circlepath"
+                        )
+                    }
+                }
+                .disabled(isSyncing)
+            }
+
             Section("使用说明") {
                 Text("首页用于快速查看核心结论和行动提示。")
                 Text("趋势页可以查看完整图表。")
@@ -184,7 +260,10 @@ struct SettingsScreen: View {
                 }
             }
         }
-        .onAppear { discovery.startScanning() }
+        .onAppear {
+            discovery.startScanning()
+            Task { await loadSyncStatus() }
+        }
         .onDisappear { discovery.stopScanning() }
         .navigationTitle("设置")
         .alert("确认退出？", isPresented: $showLogoutConfirmation) {
@@ -202,5 +281,62 @@ struct SettingsScreen: View {
         let start = phone.prefix(3)
         let end = phone.suffix(4)
         return "\(start)****\(end)"
+    }
+
+    // MARK: - Sync helpers
+
+    private var syncStatusColor: Color {
+        guard let status = syncStatus else { return .gray }
+        if status.peers.isEmpty { return .gray }
+        let recentSync = status.recentLogs.first { $0.status == "success" }
+        if recentSync != nil { return .green }
+        return .orange
+    }
+
+    private var syncStatusText: String {
+        guard let status = syncStatus else { return "加载中..." }
+        if status.peers.isEmpty { return "无已知节点" }
+        let successLogs = status.recentLogs.filter { $0.status == "success" }
+        if let latest = successLogs.first {
+            return "已同步 · \(formatRelativeTime(latest.finishedAt))"
+        }
+        return "\(status.peers.count) 个节点待同步"
+    }
+
+    private func loadSyncStatus() async {
+        do {
+            let client = try settings.makeClient(token: authManager.token)
+            syncStatus = try await client.fetchSyncStatus()
+            syncError = nil
+        } catch {
+            // Silently fail — sync status is informational
+        }
+    }
+
+    private func triggerManualSync() async {
+        isSyncing = true
+        syncError = nil
+        do {
+            let client = try settings.makeClient(token: authManager.token)
+            let _ = try await client.triggerSync()
+            // Reload full sync status after trigger completes
+            await loadSyncStatus()
+        } catch {
+            syncError = error.localizedDescription
+        }
+        isSyncing = false
+    }
+
+    private func formatRelativeTime(_ isoString: String) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = formatter.date(from: isoString) ?? ISO8601DateFormatter().date(from: isoString) else {
+            return isoString
+        }
+        let interval = Date().timeIntervalSince(date)
+        if interval < 60 { return "刚刚" }
+        if interval < 3600 { return "\(Int(interval / 60))分钟前" }
+        if interval < 86400 { return "\(Int(interval / 3600))小时前" }
+        return "\(Int(interval / 86400))天前"
     }
 }
