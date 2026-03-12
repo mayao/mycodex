@@ -15,6 +15,22 @@ final class AppSettingsStore: ObservableObject {
     var authToken: String?
 
     static let serverURLKey = "vital-command.server-url"
+    static let savedServersKey = "vital-command.saved-servers"
+
+    struct SavedServer: Codable, Identifiable, Equatable {
+        var id: String { url }
+        let url: String
+        let name: String
+        let addedAt: Date
+    }
+
+    @Published var savedServers: [SavedServer] {
+        didSet {
+            if let data = try? JSONEncoder().encode(savedServers) {
+                UserDefaults.standard.set(data, forKey: Self.savedServersKey)
+            }
+        }
+    }
 
     init() {
         let storedValue = UserDefaults.standard.string(forKey: Self.serverURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -28,6 +44,13 @@ final class AppSettingsStore: ObservableObject {
             self.serverURLString = Self.defaultLANServerURL
         }
 #endif
+
+        if let data = UserDefaults.standard.data(forKey: Self.savedServersKey),
+           let servers = try? JSONDecoder().decode([SavedServer].self, from: data) {
+            self.savedServers = servers
+        } else {
+            self.savedServers = []
+        }
     }
 
     var trimmedServerURLString: String {
@@ -49,5 +72,17 @@ final class AppSettingsStore: ObservableObject {
 
     func markHealthDataChanged() {
         dataRefreshVersion += 1
+    }
+
+    func saveCurrentServer(name: String? = nil) {
+        let url = trimmedServerURLString
+        guard !url.isEmpty else { return }
+        if !savedServers.contains(where: { $0.url == url }) {
+            savedServers.append(SavedServer(url: url, name: name ?? url, addedAt: Date()))
+        }
+    }
+
+    func removeSavedServer(_ server: SavedServer) {
+        savedServers.removeAll { $0.id == server.id }
     }
 }

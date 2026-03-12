@@ -39,6 +39,7 @@
 		AA2B3C4D5E6F7A8B9C0D0005 /* SuggestionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0005 /* SuggestionCard.swift */; };
 		AA2B3C4D5E6F7A8B9C0D0007 /* CalendarIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0007 /* CalendarIntegration.swift */; };
 		AA2B3C4D5E6F7A8B9C0D0011 /* PlanCustomizeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1B2C3D4E5F6A7B8C9D0010 /* PlanCustomizeSheet.swift */; };
+		CC1A2B3C4D5E6F7A8B9C0D01 /* ServerDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0A1B2C3D4E5F6A7B8C9D01 /* ServerDiscoveryService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -76,6 +77,7 @@
 		AA1B2C3D4E5F6A7B8C9D0005 /* SuggestionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionCard.swift; sourceTree = "<group>"; };
 		AA1B2C3D4E5F6A7B8C9D0007 /* CalendarIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarIntegration.swift; sourceTree = "<group>"; };
 		AA1B2C3D4E5F6A7B8C9D0010 /* PlanCustomizeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanCustomizeSheet.swift; sourceTree = "<group>"; };
+		CC0A1B2C3D4E5F6A7B8C9D01 /* ServerDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDiscoveryService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -103,6 +105,7 @@
 		4575C84C372F1C89860AFD0A /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				CC0A1B2C3D4E5F6A7B8C9D01 /* ServerDiscoveryService.swift */,
 				A3BD030B66EC2B3B467B95AA /* SettingsScreen.swift */,
 			);
 			path = Settings;
@@ -334,6 +337,7 @@
 				EC5F9FFEB96DD6BF76F1D04C /* ReportDetailViewModel.swift in Sources */,
 				8C23DFBFF56AF9726E8AB9A4 /* ReportsScreen.swift in Sources */,
 				BBC5794847B0DCF72EA64F86 /* ReportsViewModel.swift in Sources */,
+				CC1A2B3C4D5E6F7A8B9C0D01 /* ServerDiscoveryService.swift in Sources */,
 				A71FC6D666C277499C0735D9 /* SettingsScreen.swift in Sources */,
 				44BCA45F9163D6A8A8F80D6E /* TrendDetailScreen.swift in Sources */,
 				DCC06E9159400E9A8C46B013 /* TrendsScreen.swift in Sources */,

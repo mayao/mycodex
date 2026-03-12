@@ -6,10 +6,32 @@
       "phone_number": null,
       "auth_provider": "owner",
       "is_owner": true,
-      "created_at": "2026-03-12T10:07:35.378243+00:00",
+      "created_at": "2026-03-12T10:32:27.639668+00:00",
       "last_login_at": null
+    },
+    {
+      "user_id": "usr_dev_72c1c3b054",
+      "display_name": "iPhone 的账户",
+      "phone_number": null,
+      "auth_provider": "device",
+      "is_owner": false,
+      "created_at": "2026-03-12T11:00:53.223195+00:00",
+      "last_login_at": "2026-03-12T11:00:53.223206+00:00",
+      "linked_device_ids": [
+        "dev_41588e4465074d4795ce192af7d087db"
+      ],
+      "device_name": "iPhone",
+      "device_password": "MIA-08D9044515",
+      "portfolio_user_id": "usr_owner_local"
     }
   ],
-  "sessions": [],
+  "sessions": [
+    {
+      "token": "8fd4faa9a4224a549782a488fe06bfbb",
+      "user_id": "usr_dev_72c1c3b054",
+      "created_at": "2026-03-12T11:00:53.223227+00:00",
+      "last_seen_at": "2026-03-12T11:01:04.280085+00:00"
+    }
+  ],
   "pending_codes": []
 }

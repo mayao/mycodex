@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
     @EnvironmentObject private var authManager: AuthManager
+    @StateObject private var discovery = ServerDiscoveryService()
     @State private var showLogoutConfirmation = false
 
     var body: some View {
@@ -61,9 +62,106 @@ struct SettingsScreen: View {
                     settings.serverURLString = "http://127.0.0.1:3000/"
                 }
 
+                Button("保存当前服务器") {
+                    settings.saveCurrentServer()
+                }
+
                 Text("iPhone 连接开发机时，请使用电脑的局域网 IP；不要填 localhost。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            if !settings.savedServers.isEmpty {
+                Section("已保存的服务器") {
+                    ForEach(settings.savedServers) { server in
+                        Button {
+                            settings.serverURLString = server.url
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(server.name)
+                                        .font(.subheadline.weight(.medium))
+                                    Text(server.url)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if settings.trimmedServerURLString == server.url {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            settings.removeSavedServer(settings.savedServers[index])
+                        }
+                    }
+                }
+            }
+
+            Section("局域网服务发现") {
+                if discovery.isScanning {
+                    HStack {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                        Text("正在扫描局域网...")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                ForEach(discovery.discoveredServers) { server in
+                    Button {
+                        settings.serverURLString = server.urlString
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Circle()
+                                        .fill(server.isRecentlyActive ? .green : .orange)
+                                        .frame(width: 8, height: 8)
+                                    Text(server.name)
+                                        .font(.subheadline.weight(.medium))
+                                }
+                                Text(server.urlString)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if settings.serverURLString == server.urlString {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.green)
+                            } else {
+                                Image(systemName: "arrow.right.circle")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                if discovery.discoveredServers.isEmpty && !discovery.isScanning {
+                    Text("未发现局域网服务")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button {
+                    if discovery.isScanning {
+                        discovery.stopScanning()
+                    } else {
+                        discovery.startScanning()
+                        Task { await discovery.scanSubnet() }
+                    }
+                } label: {
+                    Label(
+                        discovery.isScanning ? "停止扫描" : "扫描局域网",
+                        systemImage: discovery.isScanning ? "stop.circle" : "antenna.radiowaves.left.and.right"
+                    )
+                }
             }
 
             Section("使用说明") {
@@ -86,6 +184,8 @@ struct SettingsScreen: View {
                 }
             }
         }
+        .onAppear { discovery.startScanning() }
+        .onDisappear { discovery.stopScanning() }
         .navigationTitle("设置")
         .alert("确认退出？", isPresented: $showLogoutConfirmation) {
             Button("取消", role: .cancel) {}
