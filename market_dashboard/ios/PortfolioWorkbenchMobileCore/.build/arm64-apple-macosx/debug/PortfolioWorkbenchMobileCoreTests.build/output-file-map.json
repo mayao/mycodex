@@ -1,0 +1,12 @@
+{
+  "": {
+    "swift-dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/master.swiftdeps"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Tests/PortfolioWorkbenchMobileCoreTests/PortfolioWorkbenchAPIClientTests.swift": {
+    "dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.d",
+    "object": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.swift.o",
+    "swiftmodule": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests~partial.swiftmodule",
+    "swift-dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.swiftdeps",
+    "diagnostics": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.dia"
+  }
+}

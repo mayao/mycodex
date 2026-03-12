@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MyInvAI App Icon</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 1024px;
+      height: 1024px;
+      background: #081528;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif;
+    }
+
+    svg {
+      width: 1024px;
+      height: 1024px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MyInvAI icon">
+    <defs>
+      <linearGradient id="bg" x1="0.18" y1="0.12" x2="0.82" y2="0.92">
+        <stop offset="0%" stop-color="#173b72"/>
+        <stop offset="45%" stop-color="#10305f"/>
+        <stop offset="100%" stop-color="#0a2347"/>
+      </linearGradient>
+      <radialGradient id="glowTop" cx="0.5" cy="0.18" r="0.78">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.14)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+      <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#f7f8f8"/>
+        <stop offset="20%" stop-color="#d6d9da"/>
+        <stop offset="52%" stop-color="#ffffff"/>
+        <stop offset="74%" stop-color="#c7cbcc"/>
+        <stop offset="100%" stop-color="#eef1f2"/>
+      </linearGradient>
+      <linearGradient id="metalShade" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.55)"/>
+        <stop offset="35%" stop-color="rgba(255,255,255,0.05)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,0.18)"/>
+      </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#041327" flood-opacity="0.5"/>
+      </filter>
+    </defs>
+
+    <rect x="0" y="0" width="1024" height="1024" fill="#081528"/>
+    <rect x="132" y="132" width="760" height="760" rx="170" fill="url(#bg)"/>
+    <rect x="132" y="132" width="760" height="760" rx="170" fill="url(#glowTop)" opacity="0.65"/>
+
+    <g filter="url(#shadow)">
+      <path
+        d="M330 704 L330 336 L428 336 L522 472 L456 532 L410 470 L410 704 Z"
+        fill="url(#metal)"
+      />
+      <path
+        d="M364 694 L468 590 L520 642 L742 420"
+        fill="none"
+        stroke="url(#metal)"
+        stroke-width="78"
+        stroke-linecap="square"
+        stroke-linejoin="miter"
+      />
+      <path
+        d="M722 704 L722 474 L802 396 L802 704 Z"
+        fill="url(#metal)"
+      />
+      <polygon points="740,414 860,312 838,432 740,414" fill="url(#metal)"/>
+
+      <path d="M330 376 L430 376" stroke="rgba(255,255,255,0.34)" stroke-width="12"/>
+      <path d="M386 666 L476 576 L519 621 L732 408" stroke="rgba(255,255,255,0.24)" stroke-width="10" fill="none"/>
+      <path d="M738 676 L738 454" stroke="rgba(255,255,255,0.24)" stroke-width="10"/>
+
+      <path d="M328 598 C468 560, 646 580, 804 690 L804 734 L328 734 Z" fill="rgba(0,0,0,0.09)"/>
+      <path d="M328 338 C406 326, 562 326, 802 430 L802 470 C630 388, 496 364, 328 384 Z" fill="url(#metalShade)" opacity="0.7"/>
+    </g>
+  </svg>
+</body>
+</html>

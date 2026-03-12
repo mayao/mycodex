@@ -14,12 +14,14 @@ if str(DEPS_DIR) not in sys.path:
 import pdfplumber  # type: ignore
 
 try:
-    from statement_sources import get_statement_sources
+    from statement_sources import OWNER_USER_ID, get_statement_sources
 except ModuleNotFoundError:
-    from market_dashboard.statement_sources import get_statement_sources
+    from market_dashboard.statement_sources import OWNER_USER_ID, get_statement_sources
 
 
-CACHE_PATH = Path(__file__).resolve().parent / "statement_cache.json"
+BASE_DIR = Path(__file__).resolve().parent
+CACHE_DIR = BASE_DIR / "cache"
+LEGACY_CACHE_PATH = BASE_DIR / "statement_cache.json"
 USD_HKD_RATE = 7.818
 SYMBOL_ALIASES = {
     "45769.HK": "06606.HK",
@@ -29,19 +31,50 @@ NAME_TO_SYMBOL = {
 }
 
 
-def load_portfolio_cache() -> dict[str, Any] | None:
-    if not CACHE_PATH.exists():
-        return None
-    try:
-        payload = json.loads(CACHE_PATH.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return None
-    if not isinstance(payload, dict):
-        return None
-    cached_payload = payload.get("payload")
-    if not isinstance(cached_payload, dict):
-        return None
-    return payload
+def _cache_path_for_user(user_id: str | None = None) -> Path:
+    normalized = _cache_namespace(user_id)
+    return CACHE_DIR / f"statement_cache.{normalized}.json"
+
+
+def _cache_namespace(user_id: str | None = None) -> str:
+    raw_user_id = (user_id or "").strip()
+    if raw_user_id in {"", "owner", OWNER_USER_ID}:
+        return "owner"
+    return re.sub(r"[^a-zA-Z0-9_.-]+", "_", raw_user_id)
+
+
+def _legacy_cache_candidates(user_id: str | None = None) -> list[Path]:
+    candidates: list[Path] = []
+    cache_path = _cache_path_for_user(user_id)
+    if cache_path not in candidates:
+        candidates.append(cache_path)
+
+    normalized = _cache_namespace(user_id)
+    legacy_named = BASE_DIR / f"statement_cache.{normalized}.json"
+    if legacy_named not in candidates:
+        candidates.append(legacy_named)
+
+    if normalized == "owner" and LEGACY_CACHE_PATH not in candidates:
+        candidates.append(LEGACY_CACHE_PATH)
+
+    return candidates
+
+
+def load_portfolio_cache(user_id: str | None = None) -> dict[str, Any] | None:
+    for cache_path in _legacy_cache_candidates(user_id):
+        if not cache_path.exists():
+            continue
+        try:
+            payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        cached_payload = payload.get("payload")
+        if not isinstance(cached_payload, dict):
+            continue
+        return payload
+    return None
 
 
 def to_float(value: str | None) -> float | None:
@@ -75,9 +108,9 @@ def normalize_symbol(raw: str) -> str:
     return SYMBOL_ALIASES.get(symbol, symbol)
 
 
-def file_signature() -> list[dict[str, Any]]:
+def file_signature(user_id: str | None = None) -> list[dict[str, Any]]:
     signature = []
-    for source in get_statement_sources():
+    for source in get_statement_sources(user_id=user_id):
         path = Path(source["path"])
         signature.append(
             {
@@ -482,6 +515,7 @@ def summarize_source_issue(exc: Exception) -> str:
 def parse_accounts(
     cached_accounts_by_id: dict[str, dict[str, Any]] | None = None,
     strict_account_ids: set[str] | None = None,
+    user_id: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     parsers = {
         "tiger_activity": parse_tiger,
@@ -494,8 +528,8 @@ def parse_accounts(
     cached_by_id = cached_accounts_by_id or {}
     accounts = []
     source_states = []
-    failures = []
-    for source in get_statement_sources():
+    failures: list[dict[str, Any]] = []
+    for source in get_statement_sources(user_id=user_id):
         account_id = source["account_id"]
         path = Path(source["path"])
         parser = parsers[source["type"]]
@@ -533,10 +567,22 @@ def parse_accounts(
             else:
                 state["load_status"] = "error"
                 state["issue"] = issue
-                failures.append(f"{source['broker']} / {account_id}: {issue}")
+                failures.append(
+                    {
+                        "message": f"{source['broker']} / {account_id}: {issue}",
+                        "source_mode": source.get("source_mode", "default"),
+                        "issue": issue,
+                    }
+                )
         source_states.append(state)
     if failures:
-        raise RuntimeError("; ".join(failures))
+        if all(
+            failure.get("source_mode") == "default"
+            and failure.get("issue") == "源文件不存在"
+            for failure in failures
+        ):
+            return accounts, source_states
+        raise RuntimeError("; ".join(str(failure.get("message") or "") for failure in failures))
     return accounts, source_states
 
 
@@ -657,9 +703,10 @@ def load_real_portfolio(
     force_refresh: bool = False,
     allow_cached_fallback: bool = True,
     strict_account_ids: set[str] | None = None,
+    user_id: str | None = None,
 ) -> dict[str, Any]:
-    signature = file_signature()
-    cache = load_portfolio_cache()
+    signature = file_signature(user_id=user_id)
+    cache = load_portfolio_cache(user_id=user_id)
     if cache and not force_refresh and cache.get("signature") == signature:
         return cache["payload"]
 
@@ -674,6 +721,7 @@ def load_real_portfolio(
         accounts, source_states = parse_accounts(
             cached_accounts_by_id=cached_accounts_by_id,
             strict_account_ids=strict_account_ids,
+            user_id=user_id,
         )
         payload = aggregate_portfolio(accounts, source_states=source_states)
     except Exception:  # noqa: BLE001
@@ -681,7 +729,11 @@ def load_real_portfolio(
             return cache["payload"]
         raise
     try:
-        CACHE_PATH.write_text(json.dumps({"signature": signature, "payload": payload}, ensure_ascii=False), encoding="utf-8")
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        _cache_path_for_user(user_id).write_text(
+            json.dumps({"signature": signature, "payload": payload}, ensure_ascii=False),
+            encoding="utf-8",
+        )
     except OSError:
         pass
     return payload

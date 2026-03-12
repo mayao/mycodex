@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>MyInvAI App Icon</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 1024px;
+      height: 1024px;
+      background: #0a1830;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+
+    svg {
+      width: 1024px;
+      height: 1024px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MyInvAI icon">
+    <defs>
+      <linearGradient id="bg" x1="0.14" y1="0.12" x2="0.88" y2="0.92">
+        <stop offset="0%" stop-color="#183b72"/>
+        <stop offset="55%" stop-color="#102d58"/>
+        <stop offset="100%" stop-color="#0b2348"/>
+      </linearGradient>
+      <radialGradient id="surfaceGlow" cx="0.34" cy="0.18" r="0.92">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.16)"/>
+        <stop offset="38%" stop-color="rgba(255,255,255,0.04)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+      <linearGradient id="metal" x1="0.08" y1="0.18" x2="0.88" y2="0.82">
+        <stop offset="0%" stop-color="#fbfcfc"/>
+        <stop offset="22%" stop-color="#dfe3e6"/>
+        <stop offset="52%" stop-color="#ffffff"/>
+        <stop offset="78%" stop-color="#c6ccd1"/>
+        <stop offset="100%" stop-color="#f1f3f4"/>
+      </linearGradient>
+      <linearGradient id="brushed" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.60)"/>
+        <stop offset="30%" stop-color="rgba(255,255,255,0.12)"/>
+        <stop offset="72%" stop-color="rgba(0,0,0,0.04)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,0.16)"/>
+      </linearGradient>
+      <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#08162c" flood-opacity="0.42"/>
+      </filter>
+    </defs>
+
+    <rect x="0" y="0" width="1024" height="1024" fill="#0a1830"/>
+    <rect x="164" y="164" width="696" height="696" rx="156" fill="url(#bg)"/>
+    <rect x="164" y="164" width="696" height="696" rx="156" fill="url(#surfaceGlow)"/>
+
+    <g filter="url(#shadow)">
+      <path d="M392 704 L392 348 L480 348 L545 444 L488 494 L448 438 L448 704 Z" fill="url(#metal)"/>
+      <path d="M448 680 L556 566 L630 644 L792 470" fill="none" stroke="url(#metal)" stroke-width="70" stroke-linecap="square" stroke-linejoin="miter"/>
+      <path d="M744 704 L744 518 L818 444 L818 704 Z" fill="url(#metal)"/>
+      <polygon points="774,438 888,336 870,454 774,438" fill="url(#metal)"/>
+
+      <path d="M392 348 L480 348 L545 444 L488 494 L448 438 L448 704 L392 704 Z" fill="url(#brushed)" opacity="0.72"/>
+      <path d="M448 680 L556 566 L630 644 L792 470" fill="none" stroke="url(#brushed)" stroke-width="16" stroke-linecap="square" stroke-linejoin="miter" opacity="0.52"/>
+      <path d="M744 518 L818 444 L818 704 L744 704 Z" fill="url(#brushed)" opacity="0.72"/>
+      <polygon points="774,438 888,336 870,454 774,438" fill="url(#brushed)" opacity="0.52"/>
+    </g>
+  </svg>
+</body>
+</html>

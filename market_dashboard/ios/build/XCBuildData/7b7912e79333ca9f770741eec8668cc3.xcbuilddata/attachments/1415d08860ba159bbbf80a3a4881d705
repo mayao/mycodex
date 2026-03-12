@@ -1,0 +1,4 @@
+module PortfolioWorkbenchMobileCore {
+header "PortfolioWorkbenchMobileCore-Swift.h"
+export *
+}

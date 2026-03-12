@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MyInvAI App Icon</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 1024px;
+      height: 1024px;
+      overflow: hidden;
+      background: #07152f;
+    }
+    body {
+      display: grid;
+      place-items: center;
+    }
+    svg {
+      width: 1024px;
+      height: 1024px;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <svg viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="bg" x1="88" y1="68" x2="938" y2="962" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#16356A"/>
+        <stop offset="0.45" stop-color="#0D2550"/>
+        <stop offset="1" stop-color="#071730"/>
+      </linearGradient>
+      <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(658 300) rotate(124) scale(520 440)">
+        <stop stop-color="#4D78C6" stop-opacity="0.48"/>
+        <stop offset="1" stop-color="#4D78C6" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="steel" x1="266" y1="214" x2="760" y2="808" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#FBFCFE"/>
+        <stop offset="0.25" stop-color="#D7DBE1"/>
+        <stop offset="0.55" stop-color="#F3F4F7"/>
+        <stop offset="0.8" stop-color="#BCC2C9"/>
+        <stop offset="1" stop-color="#E8EBEF"/>
+      </linearGradient>
+      <linearGradient id="steelDark" x1="258" y1="178" x2="774" y2="820" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#9FA6AF"/>
+        <stop offset="0.5" stop-color="#717A85"/>
+        <stop offset="1" stop-color="#B7BEC6"/>
+      </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#020814" flood-opacity="0.42"/>
+      </filter>
+      <filter id="innerGlow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#ffffff" flood-opacity="0.18"/>
+      </filter>
+    </defs>
+
+    <rect width="1024" height="1024" rx="220" fill="url(#bg)"/>
+    <rect x="58" y="58" width="908" height="908" rx="198" stroke="#5B7CB3" stroke-opacity="0.28" stroke-width="6"/>
+    <rect x="88" y="88" width="848" height="848" rx="184" fill="url(#glow)"/>
+    <rect x="112" y="112" width="800" height="800" rx="172" stroke="#D7E2F5" stroke-opacity="0.12" stroke-width="4"/>
+
+    <g filter="url(#shadow)">
+      <path d="M304 740V328H416L528 474L454 544L390 456V740H304Z" fill="url(#steelDark)"/>
+      <path d="M294 724V312H406L518 458L444 528L380 440V724H294Z" fill="url(#steel)"/>
+
+      <path d="M320 748L320 678L484 514L592 620L768 352L820 404L594 680L484 574L370 688V748H320Z" fill="url(#steelDark)"/>
+      <path d="M308 732L308 662L472 498L580 604L756 336L808 388L582 664L472 558L358 672V732H308Z" fill="url(#steel)"/>
+
+      <path d="M690 748V502H770V748H690Z" fill="url(#steelDark)"/>
+      <path d="M678 732V490H758V732H678Z" fill="url(#steel)"/>
+
+      <path d="M730 294L852 320L790 432L730 390L764 338L708 326L730 294Z" fill="url(#steelDark)"/>
+      <path d="M720 282L842 308L780 420L720 378L754 326L698 314L720 282Z" fill="url(#steel)"/>
+    </g>
+
+    <path d="M294 312H406L518 458" stroke="white" stroke-opacity="0.3" stroke-width="8" stroke-linecap="round"/>
+    <path d="M308 662L472 498L580 604L756 336" stroke="white" stroke-opacity="0.28" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M678 490V732" stroke="white" stroke-opacity="0.22" stroke-width="8" stroke-linecap="round"/>
+    <ellipse cx="512" cy="816" rx="228" ry="74" fill="#07142C" opacity="0.24"/>
+    <ellipse cx="512" cy="798" rx="202" ry="54" fill="#0D2145" opacity="0.22"/>
+  </svg>
+</body>
+</html>

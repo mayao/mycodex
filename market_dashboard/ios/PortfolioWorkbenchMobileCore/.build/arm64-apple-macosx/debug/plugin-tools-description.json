@@ -1,0 +1,695 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.xctest/Contents/MacOS/PortfolioWorkbenchMobileCorePackageTests",
+      "packagePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore",
+      "productName" : "PortfolioWorkbenchMobileCorePackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.PortfolioWorkbenchMobileCore-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/sources",
+      "importPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/LocalMockAPI.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/MultipartFormData.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/PortfolioWorkbenchAPIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "PortfolioWorkbenchMobileCore",
+      "moduleOutputPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCore.swiftmodule",
+      "objects" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/LocalMockAPI.swift.o",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/Models.swift.o",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/MultipartFormData.swift.o",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/PortfolioWorkbenchAPIClient.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/include/PortfolioWorkbenchMobileCore-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "portfolioworkbenchmobilecore"
+      ],
+      "outputFileMapPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/LocalMockAPI.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/MultipartFormData.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/PortfolioWorkbenchAPIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCore.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/LocalMockAPI.swift",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/Models.swift",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/MultipartFormData.swift",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/PortfolioWorkbenchAPIClient.swift"
+      ],
+      "tempsPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.PortfolioWorkbenchMobileCorePackageTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/sources",
+      "importPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCoreTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "PortfolioWorkbenchMobileCorePackageTests",
+      "moduleOutputPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCorePackageTests.swiftmodule",
+      "objects" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/include/PortfolioWorkbenchMobileCorePackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "portfolioworkbenchmobilecore"
+      ],
+      "outputFileMapPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCorePackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.PortfolioWorkbenchMobileCoreTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/sources",
+      "importPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Tests/PortfolioWorkbenchMobileCoreTests/PortfolioWorkbenchAPIClientTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCore.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "PortfolioWorkbenchMobileCoreTests",
+      "moduleOutputPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCoreTests.swiftmodule",
+      "objects" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "portfolioworkbenchmobilecore"
+      ],
+      "outputFileMapPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules/PortfolioWorkbenchMobileCoreTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Tests/PortfolioWorkbenchMobileCoreTests/PortfolioWorkbenchAPIClientTests.swift"
+      ],
+      "tempsPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "PortfolioWorkbenchMobileCore" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "PortfolioWorkbenchMobileCore",
+      "-package-name",
+      "portfolioworkbenchmobilecore",
+      "-c",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/LocalMockAPI.swift",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/Models.swift",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/MultipartFormData.swift",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/PortfolioWorkbenchAPIClient.swift",
+      "-I",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/include/PortfolioWorkbenchMobileCore-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "portfolioworkbenchmobilecore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "PortfolioWorkbenchMobileCorePackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "PortfolioWorkbenchMobileCorePackageTests",
+      "-package-name",
+      "portfolioworkbenchmobilecore",
+      "-c",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.derived/runner.swift",
+      "-I",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/include/PortfolioWorkbenchMobileCorePackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "portfolioworkbenchmobilecore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "PortfolioWorkbenchMobileCoreTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "PortfolioWorkbenchMobileCoreTests",
+      "-package-name",
+      "portfolioworkbenchmobilecore",
+      "-c",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Tests/PortfolioWorkbenchMobileCoreTests/PortfolioWorkbenchAPIClientTests.swift",
+      "-I",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "portfolioworkbenchmobilecore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "PortfolioWorkbenchMobileCore" : [
+
+    ],
+    "PortfolioWorkbenchMobileCorePackageTests" : [
+      "PortfolioWorkbenchMobileCoreTests",
+      "PortfolioWorkbenchMobileCore"
+    ],
+    "PortfolioWorkbenchMobileCoreTests" : [
+      "PortfolioWorkbenchMobileCore"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/LocalMockAPI.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/MultipartFormData.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/PortfolioWorkbenchAPIClient.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/sources"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/sources"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/LocalMockAPI.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/MultipartFormData.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCore.build/PortfolioWorkbenchAPIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/PortfolioWorkbenchAPIClientTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCorePackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Tests/PortfolioWorkbenchMobileCoreTests/PortfolioWorkbenchAPIClientTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/PortfolioWorkbenchMobileCoreTests.build/sources"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

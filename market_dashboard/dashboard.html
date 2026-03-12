@@ -114,6 +114,20 @@
       border: 1px solid rgba(98, 231, 255, 0.16);
       box-shadow: none;
     }
+    a.button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      cursor: pointer;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
     .status {
       font-size: 13px;
       color: var(--muted);
@@ -225,6 +239,9 @@
       align-items: flex-end;
       margin: 26px 0 14px;
     }
+    .section-title .title-copy {
+      min-width: 0;
+    }
     .section-title h2 {
       margin: 0;
       font-size: 1.4rem;
@@ -234,8 +251,96 @@
       color: var(--muted);
       font-size: 13px;
     }
+    .ai-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ai-state-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.08);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .ai-state-pill::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: currentColor;
+      box-shadow: 0 0 14px currentColor;
+    }
+    .ai-state-pill.pending {
+      color: var(--gold);
+      border-color: rgba(255, 215, 130, 0.22);
+      background: rgba(255, 215, 130, 0.08);
+    }
+    .ai-state-pill.ready {
+      color: var(--green);
+      border-color: rgba(34, 230, 162, 0.22);
+      background: rgba(34, 230, 162, 0.08);
+    }
+    .ai-state-pill.failed {
+      color: var(--red);
+      border-color: rgba(255, 115, 115, 0.22);
+      background: rgba(255, 115, 115, 0.08);
+    }
+    button.ghost {
+      padding: 9px 14px;
+      font-size: 12px;
+      box-shadow: none;
+    }
+    button:disabled {
+      cursor: default;
+      opacity: 0.6;
+    }
+    .skeleton-card {
+      position: relative;
+      overflow: hidden;
+    }
+    .skeleton-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      transform: translateX(-100%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+      animation: shimmer 1.6s infinite;
+      pointer-events: none;
+    }
+    .skeleton-line {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      margin-bottom: 10px;
+    }
+    .skeleton-line:last-child {
+      margin-bottom: 0;
+    }
+    .skeleton-line.short { width: 38%; }
+    .skeleton-line.medium { width: 64%; }
+    .skeleton-line.long { width: 88%; }
+    @keyframes shimmer {
+      100% { transform: translateX(100%); }
+    }
     .chart-grid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+    .chart-pair-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
     }
     .panel {
       padding: 20px;
@@ -310,6 +415,15 @@
       color: var(--muted);
       font-size: 14px;
       line-height: 1.65;
+    }
+    .stock-link {
+      color: var(--text);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(98, 231, 255, 0.22);
+    }
+    .stock-link:hover {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
     }
     .hero-summary-board {
       display: grid;
@@ -575,7 +689,7 @@
       height: 250px;
     }
     .chart-host.scatter-host {
-      height: 360px;
+      height: 460px;
     }
     .chart-empty {
       display: grid;
@@ -586,16 +700,19 @@
     }
     .scatter-layout {
       display: grid;
-      grid-template-columns: minmax(0, 1.45fr) minmax(230px, 0.55fr);
-      gap: 14px;
+      grid-template-columns: minmax(0, 1.62fr) minmax(280px, 0.48fr);
+      gap: 18px;
       align-items: start;
     }
     .scatter-legend {
       display: grid;
       gap: 10px;
-      max-height: 360px;
+      max-height: 460px;
       overflow-y: auto;
       padding-right: 4px;
+    }
+    .scatter-panel {
+      margin-top: 0;
     }
     .scatter-item {
       padding: 12px 14px;
@@ -822,7 +939,7 @@
       .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .driver-grid, .fundamental-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
-      .hero-grid, .chart-grid, .split-grid, .trade-grid, .scatter-layout, .form-grid, .hero-summary-grid {
+      .hero-grid, .chart-grid, .chart-pair-grid, .split-grid, .trade-grid, .scatter-layout, .form-grid, .hero-summary-grid {
         grid-template-columns: 1fr;
       }
       .panel.span-2 {
@@ -834,7 +951,7 @@
         padding-left: 12px;
         padding-right: 12px;
       }
-      .topbar, .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .chart-grid, .hero-grid, .split-grid, .driver-grid, .fundamental-grid, .scatter-layout, .form-grid, .trade-grid, .asset-main, .asset-sub, .hero-summary-grid {
+      .topbar, .metric-grid, .view-grid, .macro-grid, .account-grid, .action-grid, .chart-grid, .chart-pair-grid, .hero-grid, .split-grid, .driver-grid, .fundamental-grid, .scatter-layout, .form-grid, .trade-grid, .asset-main, .asset-sub, .hero-summary-grid {
         grid-template-columns: 1fr;
         display: grid;
       }
@@ -847,6 +964,12 @@
       }
       .toolbar-row {
         justify-content: stretch;
+      }
+      .section-title {
+        align-items: flex-start;
+      }
+      .ai-toolbar {
+        justify-content: flex-start;
       }
       .hero, .panel, .metric-card, .driver-card, .account-card, .action-card, .view-card, .macro-card {
         padding: 16px;
@@ -867,6 +990,7 @@
       </div>
       <div class="toolbar">
         <div class="toolbar-row">
+          <a class="button-link" href="/share">打开分享版</a>
           <button class="secondary" id="uploadToggleBtn">上传新结单</button>
           <button id="refreshBtn">刷新行情与宏观</button>
         </div>
@@ -908,6 +1032,43 @@
     </section>
 
     <div class="section-title">
+      <div class="title-copy">
+        <h2>AI 综合洞察</h2>
+        <div class="meta" id="aiMeta">先看组合最重要的仓位压力、近期交易倾向和下一步资金落点</div>
+      </div>
+      <div class="ai-toolbar">
+        <div class="ai-state-pill pending" id="aiStatePill">AI 待启动</div>
+        <button class="secondary ghost" id="retryAiBtn" type="button">重试 AI 洞察</button>
+      </div>
+    </div>
+    <div class="view-grid" id="aiInsights"></div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>AI 执行框架</h3>
+        <span class="muted">把观点真正落到持仓分层、交易节奏和风险预算上</span>
+      </div>
+      <ul class="source-list" id="aiPlaybook"></ul>
+    </section>
+    <div class="section-title">
+      <h2>AI 深度拆解</h2>
+      <div class="meta">把组合判断拆成结构、宏观、交易和个股四层</div>
+    </div>
+    <div class="view-grid" id="aiDeepSections"></div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>重点持仓逐一建议</h3>
+        <span class="muted">围绕 thesis / trigger / risk / action 给出逐只处理框架</span>
+      </div>
+      <div class="fundamental-grid" id="aiPositionActions"></div>
+    </section>
+
+    <div class="section-title">
+      <h2>重点动作</h2>
+      <div class="meta">直接对应当前持仓和最近交易，不再只给原则性建议</div>
+    </div>
+    <div class="action-grid" id="priorityActions"></div>
+
+    <div class="section-title">
       <h2>首页图表总览</h2>
       <div class="meta" id="snapshotMeta"></div>
     </div>
@@ -935,38 +1096,14 @@
         </div>
         <div class="broker-bars" id="brokerRisk"></div>
       </section>
+    </div>
+    <div class="chart-pair-grid">
       <section class="panel">
         <div class="panel-head">
           <h3>风格暴露结构</h3>
           <span class="muted">不同投资风格在组合中的占比</span>
         </div>
         <div class="mix-list" id="styleMix"></div>
-      </section>
-      <section class="panel span-2">
-        <div class="panel-head">
-          <h3>持仓权重 vs 浮盈亏</h3>
-          <span class="muted">气泡越大，市值越高</span>
-        </div>
-        <div class="scatter-layout">
-          <div class="chart-host scatter-host" id="holdingScatter"></div>
-          <div class="scatter-legend" id="holdingScatterLegend"></div>
-        </div>
-      </section>
-      <section class="panel">
-        <div class="panel-head">
-          <h3>持仓信号热力矩阵</h3>
-          <span class="muted">基本面 / 趋势 / 新闻 / 宏观 / 风控</span>
-        </div>
-        <div class="heatmap-wrap" id="signalHeatmap"></div>
-      </section>
-      <section class="panel span-2">
-        <div class="panel-head">
-          <h3>核心持仓 60 日走势</h3>
-          <span class="muted">归一化起点 = 100</span>
-        </div>
-        <div class="chart-host" id="performanceChart"></div>
-        <div class="selector-bar" id="performanceSelector"></div>
-        <div class="legend-list" id="performanceLegend"></div>
       </section>
       <section class="panel">
         <div class="panel-head">
@@ -976,6 +1113,16 @@
         <div class="regime-list" id="priceRegime"></div>
       </section>
     </div>
+    <section class="panel scatter-panel">
+      <div class="panel-head">
+        <h3>持仓权重 vs 浮盈亏</h3>
+        <span class="muted">单独放大展示，气泡越大代表市值越高</span>
+      </div>
+      <div class="scatter-layout">
+        <div class="chart-host scatter-host" id="holdingScatter"></div>
+        <div class="scatter-legend" id="holdingScatterLegend"></div>
+      </div>
+    </section>
 
     <div class="section-title">
       <h2>宏观与多风格框架</h2>
@@ -1019,12 +1166,6 @@
         <tbody id="topHoldingsBody"></tbody>
       </table>
     </div>
-
-    <div class="section-title">
-      <h2>重点动作</h2>
-      <div class="meta">综合宏观、趋势、基本面与风险预算</div>
-    </div>
-    <div class="action-grid" id="priorityActions"></div>
 
     <div class="section-title">
       <h2>核心个股基本面拆解</h2>
@@ -1159,11 +1300,29 @@
   </div>
 
   <script>
-    const state = { data: null, uploadOpen: false, performanceSelection: [] };
+    const state = { data: null, uploadOpen: false, performanceSelection: [], requestToken: 0 };
     const COLORS = ["#53d7ff", "#3fd0b2", "#ffcb6b", "#7d87ff", "#ff8c66", "#66e4a5", "#c991ff"];
 
     function byId(id) {
       return document.getElementById(id);
+    }
+
+    async function requestJSON(url, options = {}, timeoutMs = 45000) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const resp = await fetch(url, {...options, cache: "no-store", signal: controller.signal});
+        const payload = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(payload.error || `HTTP ${resp.status}`);
+        return payload;
+      } catch (error) {
+        if (error.name === "AbortError") {
+          throw new Error(`请求超时（>${Math.round(timeoutMs / 1000)}s）`);
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(timer);
+      }
     }
 
     function fmtMoney(value) {
@@ -1226,6 +1385,14 @@
 
     function pill(text, tone) {
       return `<span class="pill ${tone}">${text}</span>`;
+    }
+
+    function stockHref(symbol) {
+      return `/stock/${encodeURIComponent(symbol)}`;
+    }
+
+    function stockLink(symbol, label) {
+      return `<a class="stock-link" href="${stockHref(symbol)}">${label}</a>`;
     }
 
     function arcPath(cx, cy, r, startAngle, endAngle) {
@@ -1492,9 +1659,9 @@
         byId("holdingScatterLegend").innerHTML = "";
         return;
       }
-      const width = 640;
-      const height = 360;
-      const pad = {top: 20, right: 28, bottom: 38, left: 52};
+      const width = 760;
+      const height = 460;
+      const pad = {top: 22, right: 30, bottom: 42, left: 58};
       const {nodes, minY, maxY, plotW, plotH, yScale} = buildScatterNodes(points, pad, width, height);
       const zeroY = yScale(0);
       const grid = [0.25, 0.5, 0.75, 1].map(fraction => {
@@ -1788,12 +1955,12 @@
     function renderTopHoldings(rows) {
       byId("topHoldingsBody").innerHTML = (rows || []).map(row => `
         <tr>
-          <td class="mono">${row.symbol}</td>
+          <td class="mono">${stockLink(row.symbol, row.symbol)}</td>
           <td>${row.name}</td>
           <td>${row.category_name}<br><span class="muted">${row.style_label}</span></td>
           <td class="number">HK$${fmtMoney(row.statement_value_hkd)}</td>
           <td class="number">${fmtShare(row.weight_pct)}</td>
-          <td class="number">${row.current_price == null ? `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.statement_price)}` : `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.current_price)}`}<br><span class="muted">${row.price_source || "statement"}</span></td>
+          <td class="number">${row.current_price == null ? `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.statement_price)}` : `${row.currency === "HKD" ? "HK$" : "$"}${fmtMoney(row.current_price)}`}<br><span class="muted">${row.market_source_label || row.price_source || "statement"}${row.trade_date ? ` · ${row.trade_date}` : ""}</span></td>
           <td class="${toneClass(row.change_pct)}">${fmtPct(row.change_pct)} / <span class="${toneClass(row.change_pct_5d)}">${fmtPct(row.change_pct_5d)}</span></td>
           <td>${row.position_label || "--"}</td>
           <td>${pill(`${row.signal_score || 0} · ${row.signal_zone || "跟踪"}`, signalTone(row.signal_score || 50))}<br><span class="muted">${row.fundamental_label || "--"} · ${row.trend_state || "--"}</span></td>
@@ -1808,7 +1975,7 @@
         <section class="fundamental-card">
           <div class="fundamental-head">
             <div>
-              <h3>${row.symbol} ${row.name}</h3>
+              <h3>${stockLink(row.symbol, `${row.symbol} ${row.name}`)}</h3>
               <div class="summary">${row.category_name} · ${row.style_label} · 权重 ${fmtShare(row.weight_pct)}</div>
             </div>
             <div>${pill(`${row.fundamental_label} · ${row.stance}`, signalTone(row.signal_score || 50))}</div>
@@ -1880,10 +2047,147 @@
       `).join("");
     }
 
+    function renderAiInsights(data) {
+      const insights = data.ai_insights || {};
+      byId("aiInsights").innerHTML = (insights.cards || []).map(card => `
+        <section class="view-card">
+          <div class="view-tag">${pill(card.title, card.tone || "warn")}</div>
+          <div class="summary">${card.detail}</div>
+        </section>
+      `).join("");
+      renderList("aiPlaybook", insights.playbook || []);
+      renderAiSections(insights.sections || []);
+      renderAiPositionActions(insights.position_actions || []);
+    }
+
+    function renderAiSections(rows) {
+      byId("aiDeepSections").innerHTML = (rows || []).map(row => `
+        <section class="view-card">
+          <div class="view-tag">${pill(row.title || "深度拆解", "warn")}</div>
+          <div class="summary">${row.summary || ""}</div>
+          ${(row.bullets || []).length ? `
+            <ul class="source-list">
+              ${(row.bullets || []).map(item => `<li>${item}</li>`).join("")}
+            </ul>
+          ` : ""}
+        </section>
+      `).join("");
+    }
+
+    function updateAiControls(mode, label) {
+      const pillNode = byId("aiStatePill");
+      const retryButton = byId("retryAiBtn");
+      const nextMode = ["pending", "ready", "failed"].includes(mode) ? mode : "pending";
+      pillNode.className = `ai-state-pill ${nextMode}`;
+      pillNode.textContent = label || (nextMode === "ready" ? "AI 已完成" : nextMode === "failed" ? "AI 异常" : "AI 分析中");
+      retryButton.disabled = nextMode === "pending" || !state.data;
+      retryButton.textContent = nextMode === "pending" ? "AI 分析中..." : "重试 AI 洞察";
+    }
+
+    function aiSkeletonCard(title = "AI 洞察生成中") {
+      return `
+        <section class="view-card skeleton-card">
+          <div class="view-tag">${pill(title, "warn")}</div>
+          <div class="skeleton-line medium"></div>
+          <div class="skeleton-line long"></div>
+          <div class="skeleton-line short"></div>
+        </section>
+      `;
+    }
+
+    function renderAiLoading(message) {
+      updateAiControls("pending", "AI 分析中");
+      byId("aiMeta").textContent = message || "AI 正在分析组合结构、近期交易和风险传导。";
+      byId("aiInsights").innerHTML = `${aiSkeletonCard("分析中")}${aiSkeletonCard("结构诊断中")}`;
+      byId("aiPlaybook").innerHTML = `
+        <li>正在生成执行框架，请稍候。</li>
+        <li>资产和常规信息已优先展示，AI 会在当前快照上补充组合洞察。</li>
+      `;
+      byId("aiDeepSections").innerHTML = `${aiSkeletonCard("洞察生成中")}${aiSkeletonCard("宏观联动中")}${aiSkeletonCard("执行节奏中")}`;
+      byId("aiPositionActions").innerHTML = `${aiSkeletonCard("重点持仓处理中")}${aiSkeletonCard("逐仓动作生成中")}`;
+    }
+
+    function renderAiError(message) {
+      updateAiControls("failed", "AI 需要重试");
+      byId("aiMeta").textContent = `AI 洞察暂不可用 · ${message || "请稍后重试"}`;
+      byId("aiInsights").innerHTML = `
+        <section class="view-card">
+          <div class="view-tag">${pill("加载失败", "down")}</div>
+          <div class="summary">基础资产数据已加载完成，但 AI 洞察本次未能返回。</div>
+        </section>
+      `;
+      byId("aiPlaybook").innerHTML = "<li>请稍后点击“刷新行情与宏观”重新触发 AI 分析。</li>";
+      byId("aiDeepSections").innerHTML = "";
+      byId("aiPositionActions").innerHTML = "";
+    }
+
+    function renderAiState(data) {
+      const aiStatus = data.ai_status || {};
+      const aiState = aiStatus.state || "pending";
+      if (aiState === "ready") {
+        const aiEngine = ((data.methodology || {}).ai_engine) || (data.ai_insights || {}).engine || {};
+        updateAiControls("ready", "AI 已完成");
+        byId("aiMeta").textContent = `${aiEngine.label || "本地规则引擎"} · ${(data.ai_insights || {}).deep_summary || aiEngine.note || "结合持仓、交易、宏观与风险预算做组合级诊断。"}`;
+        renderAiInsights(data);
+        return;
+      }
+      if (aiState === "failed") {
+        renderAiError(aiStatus.message);
+        return;
+      }
+      renderAiLoading(aiStatus.message);
+    }
+
+    function mergeAiPayload(aiPayload) {
+      state.data = {
+        ...(state.data || {}),
+        analysis_date_cn: aiPayload.analysis_date_cn || state.data?.analysis_date_cn,
+        generated_at: aiPayload.generated_at || state.data?.generated_at,
+        snapshot_date: aiPayload.snapshot_date || state.data?.snapshot_date,
+        methodology: {
+          ...((state.data || {}).methodology || {}),
+          ...(aiPayload.methodology || {}),
+        },
+        ai_insights: aiPayload.ai_insights || {},
+        ai_status: aiPayload.ai_status || {state: "ready"},
+      };
+      return state.data;
+    }
+
+    function renderAiPositionActions(rows) {
+      byId("aiPositionActions").innerHTML = (rows || []).map(row => `
+        <section class="view-card">
+          <div class="macro-meta">
+            <span class="mono">${stockLink(row.symbol, row.symbol)}</span>
+            ${pill(row.stance || "继续跟踪", stanceTone(row.stance || ""))}
+          </div>
+          <h3>${row.name || row.symbol}</h3>
+          <div class="fact-grid">
+            <div class="fact">
+              <span class="label">核心逻辑</span>
+              <div class="text">${row.thesis || "--"}</div>
+            </div>
+            <div class="fact">
+              <span class="label">验证触发</span>
+              <div class="text">${row.trigger || "--"}</div>
+            </div>
+            <div class="fact">
+              <span class="label">主要风险</span>
+              <div class="text">${row.risk || "--"}</div>
+            </div>
+            <div class="fact">
+              <span class="label">建议动作</span>
+              <div class="text">${row.action || "--"}</div>
+            </div>
+          </div>
+        </section>
+      `).join("");
+    }
+
     function renderBrief(rows) {
       byId("briefBody").innerHTML = (rows || []).map(row => `
         <tr>
-          <td class="mono">${row.symbol}</td>
+          <td class="mono">${stockLink(row.symbol, row.symbol)}</td>
           <td>${row.name}<br><span class="muted">${row.category_name} · ${fmtShare(row.weight_pct)}</span></td>
           <td>${row.role}</td>
           <td>${pill(row.stance, stanceTone(row.stance))}</td>
@@ -1955,7 +2259,7 @@
       byId("headline").textContent = data.headline || "";
       byId("overview").textContent = data.overview || "";
       byId("snapshotMeta").textContent = summary.statement_start_date && summary.statement_end_date
-        ? `结单覆盖 ${summary.statement_start_date} 至 ${summary.statement_end_date}；页面分析生成于 ${data.analysis_date_cn || "--"}${sourceHealth.cached_count ? `；其中 ${sourceHealth.cached_count} 个账户使用缓存快照` : ""}`
+        ? `结单覆盖 ${summary.statement_start_date} 至 ${summary.statement_end_date}；页面分析生成于 ${data.analysis_date_cn || "--"}${(data.live || {}).provider_summary ? `；行情源 ${data.live.provider_summary}` : ""}${sourceHealth.cached_count ? `；其中 ${sourceHealth.cached_count} 个账户使用缓存快照` : ""}`
         : "等待加载结单范围";
       byId("analysisMeta").textContent = "当前策略同时参考宏观驱动、基本面质量、趋势动量、风险预算与多风格组合。";
       const macroMode = {network: "在线宏观", mixed: "在线宏观 + 本地快照", cache: "本地研究快照", empty: "静态框架"}[macro.source_mode || "empty"];
@@ -1971,13 +2275,12 @@
       renderBrokerRisk(charts.broker_risk || []);
       renderStyleMix(charts.style_mix || []);
       renderScatter(charts.holding_scatter || []);
-      renderSignalHeatmap(charts.signal_heatmap || {});
-      renderLineChart(charts.performance || []);
       renderPriceRegime(charts.price_regime || []);
       renderStrategyViews(data.strategy_views || []);
       renderMacroTopics(macro.topics || []);
       renderAccounts(data.accounts || []);
       renderTopHoldings(data.top_holdings || []);
+      renderAiState(data);
       renderFundamentalDeepDive(data.fundamental_deep_dive || []);
       renderActions((data.brief || {}).priority_actions || []);
       renderBrief((data.brief || {}).holding_notes || []);
@@ -1990,12 +2293,13 @@
       populateUploadTargets(data.statement_sources || []);
     }
 
-    function updateStatusFromPayload(data) {
+    function updateStatusFromPayload(data, aiHint = "") {
       const liveBits = [];
       const live = data.live || {};
       const macro = data.macro || {};
       const sourceHealth = data.source_health || {};
       if (live.tracked_count) liveBits.push(`行情跟踪 ${live.tracked_count} 只`);
+      if (live.provider_summary) liveBits.push(`源 ${live.provider_summary}`);
       if (live.source_mode === "cache") liveBits.push("价格使用本地日更快照");
       if (live.fallback_symbols?.length) liveBits.push(`离线回退 ${live.fallback_symbols.length} 只`);
       if (live.errors?.length) liveBits.push(`行情缺失 ${live.errors.length}`);
@@ -2003,22 +2307,68 @@
       if (macro.errors?.length) liveBits.push(`宏观抓取异常 ${macro.errors.length}`);
       if (sourceHealth.cached_count) liveBits.push(`结单缓存回退 ${sourceHealth.cached_count} 个账户`);
       if (sourceHealth.error_count) liveBits.push(`结单失败 ${sourceHealth.error_count} 个账户`);
+      if (aiHint) liveBits.push(aiHint);
       byId("status").textContent = liveBits.length ? liveBits.join(" · ") : "已加载最新数据";
     }
 
-    async function refreshData(force = false) {
-      byId("status").textContent = force ? "正在刷新行情、走势和宏观摘要..." : "正在加载...";
+    async function loadAiInsights(requestToken) {
+      const contextId = state.data?.ai_context_id;
+      if (!contextId) {
+        renderAiError("AI 分析上下文缺失，请重新刷新。");
+        updateStatusFromPayload(state.data || {}, "AI 上下文缺失");
+        return;
+      }
+
       try {
-        const suffix = force ? "?refresh=1" : "";
-        const resp = await fetch(`/api/market-data${suffix}`, {cache: "no-store"});
-        const payload = await resp.json().catch(() => ({}));
-        if (!resp.ok) throw new Error(payload.error || `HTTP ${resp.status}`);
+        const payload = await requestJSON(`/api/market-data-ai?context_id=${encodeURIComponent(contextId)}`, {}, 45000);
+        if (requestToken !== state.requestToken) return;
+        mergeAiPayload(payload);
+        renderAiState(state.data);
+        updateStatusFromPayload(state.data, "AI 洞察已更新");
+      } catch (error) {
+        if (requestToken !== state.requestToken) return;
+        renderAiError(error.message);
+        updateStatusFromPayload(state.data || {}, "AI 暂不可用");
+      }
+    }
+
+    async function refreshData(force = false) {
+      const requestToken = ++state.requestToken;
+      byId("status").textContent = force ? "正在刷新资产、行情和宏观快照..." : "正在加载资产与常规信息...";
+      try {
+        const params = new URLSearchParams();
+        if (force) params.set("refresh", "1");
+        params.set("defer_ai", "1");
+        const suffix = `?${params.toString()}`;
+        const payload = await requestJSON(`/api/market-data${suffix}`, {}, 60000);
+        if (requestToken !== state.requestToken) return;
         state.data = payload;
         renderAll(state.data);
-        updateStatusFromPayload(state.data);
+        updateStatusFromPayload(state.data, "AI 分析中");
+        void loadAiInsights(requestToken);
       } catch (error) {
+        if (requestToken !== state.requestToken) return;
         byId("status").textContent = `刷新失败：${error.message}`;
+        renderAiError(error.message);
       }
+    }
+
+    async function retryAiInsights() {
+      if (!state.data) {
+        await refreshData(true);
+        return;
+      }
+      const requestToken = ++state.requestToken;
+      state.data = {
+        ...state.data,
+        ai_status: {
+          state: "pending",
+          message: "正在重新触发 AI 洞察，请稍候。",
+        },
+      };
+      renderAiState(state.data);
+      updateStatusFromPayload(state.data, "AI 分析中");
+      void loadAiInsights(requestToken);
     }
 
     async function uploadStatement(event) {
@@ -2039,27 +2389,25 @@
       formData.append("account_id", accountId);
       formData.append("statement_file", file);
       try {
-        const resp = await fetch("/api/upload-statement", {
+        const payload = await requestJSON("/api/upload-statement", {
           method: "POST",
           body: formData,
-        });
-        const payload = await resp.json();
-        if (!resp.ok) {
-          throw new Error(payload.error || `HTTP ${resp.status}`);
-        }
+        }, 60000);
+        const requestToken = ++state.requestToken;
         state.data = payload.payload;
         renderAll(state.data);
-        updateStatusFromPayload(state.data);
+        updateStatusFromPayload(state.data, "AI 分析中");
         byId("uploadStatus").textContent = payload.message || "上传成功，已刷新。";
-        byId("status").textContent = payload.message || "结单上传成功，已刷新。";
         fileInput.value = "";
         toggleUploadPanel(false);
+        void loadAiInsights(requestToken);
       } catch (error) {
         byId("uploadStatus").textContent = `上传失败：${error.message}`;
       }
     }
 
     byId("refreshBtn").addEventListener("click", () => refreshData(true));
+    byId("retryAiBtn").addEventListener("click", () => retryAiInsights());
     byId("uploadToggleBtn").addEventListener("click", () => toggleUploadPanel());
     byId("uploadForm").addEventListener("submit", uploadStatement);
     refreshData();

@@ -1,0 +1,1058 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>投资工作台分享版</title>
+  <style>
+    :root {
+      --bg: #06111b;
+      --bg-2: #0b1a29;
+      --panel: rgba(12, 28, 46, 0.92);
+      --panel-2: rgba(16, 36, 58, 0.96);
+      --text: #edf5ff;
+      --muted: #8ea7c8;
+      --line: rgba(255, 255, 255, 0.08);
+      --cyan: #67e4ff;
+      --teal: #39e0bc;
+      --gold: #ffd782;
+      --red: #ff7c6b;
+      --green: #21de9a;
+      --purple: #8e99ff;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
+      --radius: 24px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Avenir Next", "SF Pro Display", "IBM Plex Sans", "PingFang SC", sans-serif;
+      background:
+        radial-gradient(circle at top right, rgba(103, 228, 255, 0.16), transparent 22%),
+        radial-gradient(circle at 14% 8%, rgba(142, 153, 255, 0.12), transparent 20%),
+        radial-gradient(circle at 85% 82%, rgba(57, 224, 188, 0.12), transparent 22%),
+        linear-gradient(180deg, #040911 0%, #08121e 48%, #0b1827 100%);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+    }
+    .topbar, .hero-grid, .view-grid, .action-grid, .chart-grid, .chart-pair-grid, .macro-grid, .holding-grid, .split-grid, .scatter-layout {
+      display: grid;
+      gap: 16px;
+    }
+    .topbar {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+    .eyebrow {
+      color: var(--cyan);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    h1, h2, h3 { margin: 0; letter-spacing: -0.03em; }
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 0.96;
+      margin-bottom: 10px;
+    }
+    .lead, .summary, .muted, .footnote {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    a.button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: none;
+    }
+    .hero, .panel, .view-card, .action-card, .macro-card, .holding-card {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 22px;
+    }
+    .hero {
+      margin-bottom: 18px;
+    }
+    .hero-grid {
+      grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+      align-items: start;
+    }
+    .meta-board {
+      display: grid;
+      gap: 12px;
+    }
+    .notice {
+      padding: 16px 18px;
+      border-radius: 18px;
+      line-height: 1.7;
+      font-size: 14px;
+      border: 1px solid rgba(255, 215, 130, 0.22);
+      background: rgba(255, 215, 130, 0.1);
+      color: #ffe7b3;
+    }
+    .notice.secondary {
+      border-color: rgba(103, 228, 255, 0.18);
+      background: rgba(103, 228, 255, 0.08);
+      color: #c9f8ff;
+    }
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-end;
+      margin: 28px 0 14px;
+    }
+    .view-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+    .action-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .chart-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+    .chart-pair-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+    .macro-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .holding-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .split-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .chart-host {
+      height: 320px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid rgba(255,255,255,0.04);
+      overflow: hidden;
+      position: relative;
+    }
+    .chart-host svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .chart-host.scatter-host {
+      height: 440px;
+    }
+    .chart-empty {
+      display: grid;
+      place-items: center;
+      height: 100%;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .legend-list, .mix-list, .regime-list, .scatter-legend {
+      display: grid;
+      gap: 10px;
+    }
+    .legend-row, .mix-row, .regime-row {
+      display: grid;
+      gap: 8px;
+    }
+    .legend-meta, .mix-meta, .regime-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .legend-note, .regime-note {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+    .mix-bar, .regime-bar {
+      height: 12px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.06);
+    }
+    .mix-fill, .regime-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--teal));
+    }
+    .scatter-layout {
+      grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.48fr);
+      align-items: start;
+      gap: 18px;
+    }
+    .scatter-legend {
+      max-height: 440px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .scatter-item {
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(103, 228, 255, 0.1);
+      background: rgba(255,255,255,0.03);
+    }
+    .scatter-item strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      max-width: 100%;
+      border-radius: 20px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.02);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 920px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: rgba(8, 20, 38, 0.96);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    tbody tr:hover { background: rgba(103, 228, 255, 0.05); }
+    .mono {
+      font-family: "JetBrains Mono", "SFMono-Regular", monospace;
+      font-size: 12px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(103, 228, 255, 0.12);
+      color: var(--cyan);
+    }
+    .pill.up { background: rgba(33, 222, 154, 0.14); color: var(--green); }
+    .pill.warn { background: rgba(255, 215, 130, 0.14); color: var(--gold); }
+    .pill.down { background: rgba(255, 124, 107, 0.14); color: var(--red); }
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+    .holding-card a, .stock-link {
+      color: var(--text);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(103, 228, 255, 0.22);
+    }
+    .stock-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: start;
+      margin-bottom: 10px;
+    }
+    .stock-meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+    .stock-price {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .stock-price strong {
+      font-size: 1.45rem;
+      letter-spacing: -0.04em;
+    }
+    .view-card .summary, .action-card .summary {
+      margin-top: 10px;
+    }
+    .summary-card {
+      min-height: 152px;
+    }
+    .metric-value {
+      margin-top: 14px;
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: -0.05em;
+    }
+    .breakdown-list {
+      display: grid;
+      gap: 12px;
+    }
+    .breakdown-row {
+      display: grid;
+      gap: 8px;
+    }
+    .breakdown-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+    }
+    .mini-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+    .mini-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--teal));
+    }
+    .account-detail {
+      color: var(--muted);
+      line-height: 1.7;
+      font-size: 13px;
+    }
+    @media (max-width: 1220px) {
+      .view-grid, .macro-grid, .holding-grid, .action-grid, .chart-grid, .chart-pair-grid, .split-grid, .scatter-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+    @media (max-width: 900px) {
+      .topbar, .hero-grid {
+        grid-template-columns: 1fr;
+      }
+      .toolbar {
+        justify-content: flex-start;
+      }
+      table {
+        min-width: 820px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <div class="eyebrow">Sanitized Share View</div>
+        <h1>投资工作台分享版</h1>
+        <p class="lead" id="headline">正在加载分享摘要...</p>
+      </div>
+      <div class="toolbar">
+        <a class="button" href="/">返回原始工作台</a>
+      </div>
+    </div>
+
+    <section class="hero">
+      <div class="hero-grid">
+        <div class="meta-board">
+          <div class="notice" id="shareNotice"></div>
+          <div class="notice secondary" id="demoNotice"></div>
+          <div class="summary" id="overview"></div>
+        </div>
+        <div class="panel" style="padding:18px;">
+          <div class="eyebrow" style="margin-bottom:10px;">AI / Market Pipeline</div>
+          <h2 id="aiHeadline" style="font-size:1.5rem; line-height:1.2; margin-bottom:10px;">正在生成…</h2>
+          <div class="summary" id="shareMeta"></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <h2>演示资产总览</h2>
+      <div class="muted">保留个人资产模块，但资金规模已替换为更小的 mock 数据</div>
+    </div>
+    <div class="view-grid" id="summaryGrid"></div>
+
+    <div class="section-title">
+      <h2>资产维度分布</h2>
+      <div class="muted">券商与市场维度均展示演示金额与演示权重</div>
+    </div>
+    <div class="split-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h3>券商维度</h3>
+          <span class="muted">演示净资产</span>
+        </div>
+        <div class="breakdown-list" id="brokerBreakdown"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>市场维度</h3>
+          <span class="muted">演示持仓市值</span>
+        </div>
+        <div class="breakdown-list" id="marketBreakdown"></div>
+      </section>
+    </div>
+
+    <div class="section-title">
+      <h2>账户视角</h2>
+      <div class="muted">保留账户模块结构，但账户号与金额已替换为演示数据</div>
+    </div>
+    <div class="holding-grid" id="accountGrid"></div>
+
+    <div class="section-title">
+      <h2>AI 综合洞察</h2>
+      <div class="muted" id="aiMeta">基于组合结构、近期交易和宏观环境</div>
+    </div>
+    <div class="view-grid" id="insightGrid"></div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>AI 执行框架</h3>
+        <span class="muted">保留原工作台的执行清单结构</span>
+      </div>
+      <div class="legend-list" id="playbook"></div>
+    </section>
+
+    <div class="section-title">
+      <h2>重点动作</h2>
+      <div class="muted">保留动作优先级，但不暴露真实仓位规模</div>
+    </div>
+    <div class="action-grid" id="actionGrid"></div>
+
+    <div class="section-title">
+      <h2>首页图表总览</h2>
+      <div class="muted">图表权重、收益、热度指数均为虚拟演示值</div>
+    </div>
+    <div class="chart-grid">
+      <section class="panel">
+        <div class="panel-head">
+          <h3>主题暴露环形图</h3>
+          <span class="muted">演示权重</span>
+        </div>
+        <div class="chart-host" id="themeDonut"></div>
+        <div class="legend-list" id="themeLegend"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>风格暴露结构</h3>
+          <span class="muted">演示权重 / 演示收益</span>
+        </div>
+        <div class="mix-list" id="styleMix"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <h3>价格阶段分布</h3>
+          <span class="muted">按趋势状态展示演示权重</span>
+        </div>
+        <div class="regime-list" id="priceRegime"></div>
+      </section>
+    </div>
+    <section class="panel">
+      <div class="panel-head">
+        <h3>持仓权重 vs 演示收益</h3>
+        <span class="muted">当前价与趋势为公开行情，气泡大小为演示热度指数</span>
+      </div>
+      <div class="scatter-layout">
+        <div class="chart-host scatter-host" id="holdingScatter"></div>
+        <div class="scatter-legend" id="holdingScatterLegend"></div>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <h2>宏观与多风格框架</h2>
+      <div class="muted">保留原框架的多视角判断</div>
+    </div>
+    <div class="view-grid" id="strategyViews"></div>
+
+    <div class="section-title">
+      <h2>国际政治与经济环境</h2>
+      <div class="muted">仅展示公共宏观与主题判断</div>
+    </div>
+    <div class="macro-grid" id="macroGrid"></div>
+
+    <div class="section-title">
+      <h2>关键个股洞察</h2>
+      <div class="muted">点击进入单只个股的详细页</div>
+    </div>
+    <div class="holding-grid" id="holdingGrid"></div>
+
+    <div class="section-title">
+      <h2>头部持仓与价格状态</h2>
+      <div class="muted">当前价、涨跌幅、趋势为公开行情；演示权重和演示收益为虚拟数据</div>
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>代码</th>
+              <th>股票</th>
+              <th>主题 / 风格</th>
+              <th>当前价</th>
+              <th>1日 / 5日</th>
+              <th>趋势</th>
+              <th>演示权重</th>
+              <th>演示收益</th>
+            </tr>
+          </thead>
+          <tbody id="topHoldingsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <h2>个股定位与策略矩阵</h2>
+      <div class="muted">保留逻辑、风险与动作，不展示真实仓位</div>
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>代码</th>
+              <th>股票</th>
+              <th>定位</th>
+              <th>建议</th>
+              <th>价格状态</th>
+              <th>核心逻辑</th>
+              <th>跟踪点</th>
+              <th>主要风险</th>
+              <th>执行动作</th>
+            </tr>
+          </thead>
+          <tbody id="briefBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <h2>近期交易方向</h2>
+      <div class="muted">仅展示方向与标的，不展示数量与价格</div>
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>代码</th>
+              <th>方向</th>
+              <th>账户</th>
+            </tr>
+          </thead>
+          <tbody id="tradeBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="section-title">
+      <h2>衍生品与结构化敞口</h2>
+      <div class="muted">保留标的与账户维度，名义本金已替换为演示数据</div>
+    </div>
+    <section class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>账户</th>
+              <th>标的</th>
+              <th>说明</th>
+              <th>演示名义本金</th>
+            </tr>
+          </thead>
+          <tbody id="derivativeBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const COLORS = ["#53d7ff", "#3fd0b2", "#ffcb6b", "#7d87ff", "#ff8c66", "#66e4a5", "#c991ff"];
+
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function fmtPct(value) {
+      if (value == null || Number.isNaN(Number(value))) return "--";
+      return `${value >= 0 ? "+" : ""}${Number(value).toFixed(2)}%`;
+    }
+
+    function fmtShare(value) {
+      if (value == null || Number.isNaN(Number(value))) return "--";
+      return `${Number(value).toFixed(2)}%`;
+    }
+
+    function fmtPrice(value, currency) {
+      if (value == null || Number.isNaN(Number(value))) return "--";
+      return `${currency === "HKD" ? "HK$" : "$"}${Number(value).toFixed(2)}`;
+    }
+
+    function fmtMoney(value, currency = "HKD") {
+      if (value == null || Number.isNaN(Number(value))) return "--";
+      return `${currency === "HKD" ? "HK$" : "$"}${Math.round(Number(value)).toLocaleString("en-US")}`;
+    }
+
+    function toneClass(tone) {
+      if (tone === "up") return "up";
+      if (tone === "down") return "down";
+      return "warn";
+    }
+
+    function signalTone(score = 50) {
+      if (score >= 68) return "up";
+      if (score >= 52) return "warn";
+      return "down";
+    }
+
+    function pill(text, tone) {
+      return `<span class="pill ${tone}">${text}</span>`;
+    }
+
+    function stockHref(symbol) {
+      return `/share/stock/${encodeURIComponent(symbol)}`;
+    }
+
+    function stockLink(symbol, label) {
+      return `<a class="stock-link" href="${stockHref(symbol)}">${label}</a>`;
+    }
+
+    function polar(cx, cy, r, angle) {
+      const rad = (angle - 90) * Math.PI / 180;
+      return {x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad)};
+    }
+
+    function arcPath(cx, cy, r, startAngle, endAngle) {
+      const start = polar(cx, cy, r, endAngle);
+      const end = polar(cx, cy, r, startAngle);
+      const largeArc = endAngle - startAngle <= 180 ? "0" : "1";
+      return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`;
+    }
+
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
+    function renderDonut(rows) {
+      if (!rows || !rows.length) {
+        byId("themeDonut").innerHTML = '<div class="chart-empty">暂无数据</div>';
+        byId("themeLegend").innerHTML = "";
+        return;
+      }
+      let angle = 0;
+      const cx = 160;
+      const cy = 160;
+      const r = 96;
+      const total = rows.reduce((sum, row) => sum + Number(row.weight_pct || 0), 0) || 100;
+      const arcs = rows.map((row, index) => {
+        const sweep = Number(row.weight_pct || 0) / total * 360;
+        const path = arcPath(cx, cy, r, angle, angle + sweep);
+        const color = COLORS[index % COLORS.length];
+        angle += sweep;
+        return `<path d="${path}" stroke="${color}" stroke-width="28" fill="none"></path>`;
+      }).join("");
+      const top = rows[0];
+      byId("themeDonut").innerHTML = `
+        <svg viewBox="0 0 320 320" aria-label="share theme donut">
+          <circle cx="${cx}" cy="${cy}" r="${r}" stroke="rgba(255,255,255,0.06)" stroke-width="28" fill="none"></circle>
+          ${arcs}
+          <circle cx="${cx}" cy="${cy}" r="66" fill="#081323"></circle>
+          <text x="${cx}" y="${cy - 6}" text-anchor="middle" fill="#ecf3ff" font-size="20" font-weight="700">${top.label}</text>
+          <text x="${cx}" y="${cy + 20}" text-anchor="middle" fill="#8ca2c4" font-size="13">${fmtShare(top.weight_pct)}</text>
+        </svg>
+      `;
+      byId("themeLegend").innerHTML = rows.map((row, index) => `
+        <div class="legend-row">
+          <div class="legend-meta">
+            <span><span class="dot" style="background:${COLORS[index % COLORS.length]};margin-right:8px;"></span>${row.label}</span>
+            <span>${fmtShare(row.weight_pct)}</span>
+          </div>
+          <div class="legend-note">核心股票：${(row.core_holdings || []).join("、") || "暂无"}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderStyleMix(rows) {
+      const maxWeight = Math.max(...(rows || []).map(row => Number(row.weight_pct || 0)), 1);
+      byId("styleMix").innerHTML = (rows || []).map(row => `
+        <div class="mix-row">
+          <div class="mix-meta">
+            <strong>${row.label}</strong>
+            <span>${fmtShare(row.weight_pct)} · 演示收益 ${fmtPct(row.avg_pnl_pct)}</span>
+          </div>
+          <div class="mix-bar">
+            <div class="mix-fill" style="width:${Math.min(Number(row.weight_pct || 0) / maxWeight * 100, 100)}%"></div>
+          </div>
+          <div class="legend-note">代表标的：${(row.core_holdings || []).join("、") || "暂无"}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderPriceRegime(rows) {
+      const maxWeight = Math.max(...(rows || []).map(row => Number(row.weight_pct || 0)), 1);
+      byId("priceRegime").innerHTML = (rows || []).map(row => `
+        <div class="regime-row">
+          <div class="regime-meta">
+            <strong>${row.label}</strong>
+            <span>${row.count} 只 · ${fmtShare(row.weight_pct)}</span>
+          </div>
+          <div class="regime-bar">
+            <div class="regime-fill" style="width:${Math.min(Number(row.weight_pct || 0) / maxWeight * 100, 100)}%;background:${row.label === '弱势下行' ? 'linear-gradient(90deg,#ff7c6b,#ffcb6b)' : row.label === '强势上行' ? 'linear-gradient(90deg,#21de9a,#67e4ff)' : 'linear-gradient(90deg,#8e99ff,#67e4ff)'}"></div>
+          </div>
+          <div class="regime-note">核心股票：${(row.core_holdings || []).join("、") || "暂无"}</div>
+        </div>
+      `).join("");
+    }
+
+    function buildScatterNodes(points, pad, width, height) {
+      const maxX = Math.max(...points.map(point => Number(point.x || 0)), 20);
+      const yVals = points.map(point => Number(point.y || 0));
+      const minY = Math.min(...yVals, -30);
+      const maxY = Math.max(...yVals, 25);
+      const plotW = width - pad.left - pad.right;
+      const plotH = height - pad.top - pad.bottom;
+      const xScale = value => pad.left + (value / maxX) * plotW;
+      const yScale = value => pad.top + ((maxY - value) / (maxY - minY || 1)) * plotH;
+      const sizeMax = Math.max(...points.map(point => Number(point.size || 0)), 1);
+      const radius = value => 8 + Math.sqrt(value / sizeMax) * 15;
+      const nodes = points.map((point, index) => ({
+        ...point,
+        weightPct: Number(point.x || 0),
+        pnlPct: Number(point.y || 0),
+        color: point.macro_signal === "逆风" ? "#ff7c6b" : point.macro_signal === "顺风" ? "#21de9a" : COLORS[index % COLORS.length],
+        anchorX: xScale(Number(point.x || 0)),
+        anchorY: yScale(Number(point.y || 0)),
+        x: xScale(Number(point.x || 0)),
+        y: yScale(Number(point.y || 0)),
+        r: radius(Number(point.size || 0)),
+      }));
+      for (let iteration = 0; iteration < 80; iteration += 1) {
+        nodes.forEach(node => {
+          node.x += (node.anchorX - node.x) * 0.08;
+          node.y += (node.anchorY - node.y) * 0.08;
+        });
+        for (let i = 0; i < nodes.length; i += 1) {
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const a = nodes[i];
+            const b = nodes[j];
+            const dx = b.x - a.x;
+            const dy = b.y - a.y;
+            const distance = Math.hypot(dx, dy) || 0.01;
+            const minDistance = a.r + b.r + 8;
+            if (distance < minDistance) {
+              const push = (minDistance - distance) / 2;
+              const ux = dx / distance;
+              const uy = dy / distance;
+              a.x -= ux * push;
+              a.y -= uy * push;
+              b.x += ux * push;
+              b.y += uy * push;
+            }
+          }
+        }
+        nodes.forEach(node => {
+          node.x = clamp(node.x, pad.left + node.r, width - pad.right - node.r);
+          node.y = clamp(node.y, pad.top + node.r, height - pad.bottom - node.r);
+        });
+      }
+      return {nodes, minY, maxY, plotW, plotH, yScale};
+    }
+
+    function renderScatter(points) {
+      if (!points || !points.length) {
+        byId("holdingScatter").innerHTML = '<div class="chart-empty">暂无数据</div>';
+        byId("holdingScatterLegend").innerHTML = "";
+        return;
+      }
+      const width = 760;
+      const height = 440;
+      const pad = {top: 22, right: 30, bottom: 42, left: 58};
+      const {nodes, minY, maxY, plotW, plotH, yScale} = buildScatterNodes(points, pad, width, height);
+      const zeroY = yScale(0);
+      const grid = [0.25, 0.5, 0.75, 1].map(fraction => {
+        const xx = pad.left + plotW * fraction;
+        return `<line x1="${xx}" y1="${pad.top}" x2="${xx}" y2="${pad.top + plotH}" stroke="rgba(255,255,255,0.05)"></line>`;
+      }).join("") + [minY, 0, maxY].map(value => `
+        <line x1="${pad.left}" y1="${yScale(value)}" x2="${pad.left + plotW}" y2="${yScale(value)}" stroke="${value === 0 ? 'rgba(255,124,107,0.24)' : 'rgba(255,255,255,0.05)'}"></line>
+      `).join("");
+      const bubbles = nodes.map(node => `
+        <circle cx="${node.x}" cy="${node.y}" r="${node.r}" fill="${node.color}" fill-opacity="0.58" stroke="${node.color}" stroke-width="1.5"></circle>
+      `).join("");
+      byId("holdingScatter").innerHTML = `
+        <svg viewBox="0 0 ${width} ${height}" aria-label="share holding scatter">
+          <rect x="${pad.left}" y="${pad.top}" width="${plotW}" height="${plotH}" fill="rgba(255,255,255,0.015)" rx="18"></rect>
+          ${grid}
+          <line x1="${pad.left}" y1="${zeroY}" x2="${pad.left + plotW}" y2="${zeroY}" stroke="rgba(255,124,107,0.3)"></line>
+          ${bubbles}
+          <text x="${pad.left}" y="${height - 10}" fill="#8ca2c4" font-size="12">演示权重 →</text>
+          <text x="10" y="${pad.top + 10}" fill="#8ca2c4" font-size="12">演示收益%</text>
+        </svg>
+      `;
+      byId("holdingScatterLegend").innerHTML = nodes.map(node => `
+        <div class="scatter-item">
+          <strong><span class="dot" style="background:${node.color};margin-right:8px;"></span>${node.name}</strong>
+          <div class="legend-note">${node.category_name || "--"} · 演示权重 ${fmtShare(node.weightPct)}</div>
+          <div class="legend-note">演示收益 ${fmtPct(node.pnlPct)} · 演示热度 ${Number(node.size_index || 0).toFixed(1)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderSummary(summary) {
+      const cards = [
+        {
+          title: "演示净资产",
+          value: fmtMoney(summary?.total_nav_hkd),
+          detail: `${summary?.account_count || 0} 个账户模块`,
+        },
+        {
+          title: "演示股票市值",
+          value: fmtMoney(summary?.total_statement_value_hkd),
+          detail: `${summary?.holding_count || 0} 个持仓模块`,
+        },
+        {
+          title: "演示融资规模",
+          value: fmtMoney(summary?.total_financing_hkd),
+          detail: `${summary?.trade_count || 0} 笔交易上下文`,
+        },
+        {
+          title: "演示衍生品名义本金",
+          value: fmtMoney(summary?.total_derivative_notional_hkd),
+          detail: `${summary?.derivative_count || 0} 个衍生品模块`,
+        },
+      ];
+      byId("summaryGrid").innerHTML = cards.map(card => `
+        <section class="view-card summary-card">
+          <div class="eyebrow">${card.title}</div>
+          <div class="metric-value">${card.value}</div>
+          <div class="summary">${card.detail}</div>
+        </section>
+      `).join("");
+    }
+
+    function renderBreakdown(hostId, rows) {
+      const maxWeight = Math.max(...(rows || []).map(row => Number(row.weight_pct || 0)), 1);
+      byId(hostId).innerHTML = (rows || []).map(row => `
+        <div class="breakdown-row">
+          <div class="breakdown-meta">
+            <strong>${row.label}</strong>
+            <span>${fmtShare(row.weight_pct)} · ${fmtMoney(row.demo_value_hkd)}</span>
+          </div>
+          <div class="mini-bar">
+            <div class="mini-fill" style="width:${Math.min(Number(row.weight_pct || 0) / maxWeight * 100, 100)}%"></div>
+          </div>
+          <div class="legend-note">${row.count || 0} 个模块${row.core_holdings?.length ? ` · 核心资产：${row.core_holdings.join("、")}` : ""}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderAccounts(rows) {
+      byId("accountGrid").innerHTML = (rows || []).map(row => `
+        <section class="holding-card">
+          <div class="stock-head">
+            <div>
+              <div class="eyebrow">${row.broker}</div>
+              <h3>${row.label}</h3>
+            </div>
+            <div>${pill(`演示权重 ${fmtShare(row.demo_weight_pct)}`, "warn")}</div>
+          </div>
+          <div class="stock-meta">${row.statement_date || "--"} · ${row.holding_count || 0} 个持仓 · ${row.derivative_count || 0} 个衍生品</div>
+          <div class="account-detail">演示净资产：${fmtMoney(row.demo_nav_hkd)}</div>
+          <div class="account-detail">演示融资：${fmtMoney(row.demo_financing_hkd)}</div>
+          <div class="account-detail">演示衍生品名义本金：${fmtMoney(row.demo_derivative_hkd)}</div>
+          <div class="account-detail">头部资产：${row.top_names || "暂无"}</div>
+          <div class="account-detail">${(row.risk_notes || []).join("；") || "当前未生成额外风险提示。"}</div>
+        </section>
+      `).join("");
+    }
+
+    function renderDerivatives(rows) {
+      byId("derivativeBody").innerHTML = (rows || []).map(row => `
+        <tr>
+          <td>${row.account_label || "--"}</td>
+          <td class="mono">${row.symbol}</td>
+          <td>${row.description}</td>
+          <td>${fmtMoney(row.demo_notional_hkd)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderInsights(data) {
+      byId("insightGrid").innerHTML = (data.ai_insights?.cards || []).map(card => `
+        <section class="view-card">
+          <div class="eyebrow" style="margin-bottom:10px;">${card.title}</div>
+          <div>${pill(card.tone === "up" ? "顺势" : card.tone === "down" ? "防守" : "平衡", toneClass(card.tone))}</div>
+          <div class="summary">${card.detail}</div>
+        </section>
+      `).join("");
+      byId("playbook").innerHTML = (data.ai_insights?.playbook || []).map(item => `<div class="scatter-item"><div class="legend-note">${item}</div></div>`).join("");
+      byId("aiHeadline").textContent = data.ai_insights?.headline || "暂无 AI 洞察";
+    }
+
+    function renderActions(rows) {
+      byId("actionGrid").innerHTML = (rows || []).map(row => `
+        <section class="action-card">
+          <h3>${row.title}</h3>
+          <div class="summary">${row.detail}</div>
+        </section>
+      `).join("");
+    }
+
+    function renderStrategyViews(rows) {
+      byId("strategyViews").innerHTML = (rows || []).map(row => `
+        <section class="view-card">
+          <div>${pill(row.tag || "视角", row.tone || "warn")}</div>
+          <h3 style="margin-top:10px;">${row.title}</h3>
+          <div class="summary">${row.summary}</div>
+        </section>
+      `).join("");
+    }
+
+    function renderMacro(data) {
+      byId("macroGrid").innerHTML = (data.macro?.topics || []).map(item => `
+        <section class="macro-card">
+          <div class="panel-head">
+            <span>${item.name}</span>
+            ${pill(`影响强度 ${item.severity}`, item.score >= 1 ? "up" : item.score <= -1 ? "down" : "warn")}
+          </div>
+          <h3 style="font-size:1rem; line-height:1.5; margin-bottom:10px;">${item.headline}</h3>
+          <div class="summary">${item.summary}</div>
+          <div class="footnote">主要影响主题：${item.impact_labels} · 组合敏感度 ${fmtShare(item.impact_weight_pct)}</div>
+        </section>
+      `).join("");
+    }
+
+    function renderHoldingCards(rows) {
+      byId("holdingGrid").innerHTML = (rows || []).map(item => `
+        <section class="holding-card">
+          <div class="stock-head">
+            <div>
+              <a href="${stockHref(item.symbol)}"><h3>${item.symbol} ${item.name}</h3></a>
+              <div class="stock-meta">${item.category_name} · ${item.style_label} · ${item.fundamental_label}</div>
+            </div>
+            <div>${pill(item.signal_zone, signalTone(item.signal_score))}</div>
+          </div>
+          <div class="stock-price">
+            <strong>${fmtPrice(item.current_price, item.currency)}</strong>
+            <span class="${(item.change_pct || 0) >= 0 ? "positive" : "negative"}">${fmtPct(item.change_pct)}</span>
+          </div>
+          <div class="summary">${item.summary}</div>
+          <div class="stock-meta">趋势 ${item.trend_state || "--"} · 宏观 ${item.macro_signal || "中性"} · 新闻 ${item.news_signal || "中性"}</div>
+          <div class="stock-meta">建议：${item.action}</div>
+          <div class="stock-meta">演示权重 ${fmtShare(item.demo_weight_pct)} · 演示收益 ${fmtPct(item.demo_pnl_pct)}</div>
+        </section>
+      `).join("");
+    }
+
+    function renderTopHoldings(rows) {
+      byId("topHoldingsBody").innerHTML = (rows || []).map(row => `
+        <tr>
+          <td class="mono">${stockLink(row.symbol, row.symbol)}</td>
+          <td>${row.name}</td>
+          <td>${row.category_name}<br><span class="muted">${row.style_label}</span></td>
+          <td>${fmtPrice(row.current_price, row.currency)}<br><span class="muted">${row.market_source_label || "--"}${row.trade_date ? ` · ${row.trade_date}` : ""}</span></td>
+          <td class="${(row.change_pct || 0) >= 0 ? "positive" : "negative"}">${fmtPct(row.change_pct)} / <span class="${(row.change_pct_5d || 0) >= 0 ? "positive" : "negative"}">${fmtPct(row.change_pct_5d)}</span></td>
+          <td>${pill(row.trend_state || "无数据", signalTone(row.signal_score || 50))}<br><span class="muted">${row.signal_zone || "--"} · ${row.macro_signal || "中性"}</span></td>
+          <td>${fmtShare(row.demo_weight_pct)}</td>
+          <td class="${(row.demo_pnl_pct || 0) >= 0 ? "positive" : "negative"}">${fmtPct(row.demo_pnl_pct)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderBrief(rows) {
+      byId("briefBody").innerHTML = (rows || []).map(row => `
+        <tr>
+          <td class="mono">${stockLink(row.symbol, row.symbol)}</td>
+          <td>${row.name}<br><span class="muted">${row.category_name} · 演示权重 ${fmtShare(row.demo_weight_pct)}</span></td>
+          <td>${row.role}</td>
+          <td>${pill(row.stance, row.stance.includes("减仓") || row.stance.includes("清理") ? "down" : row.stance.includes("观察") ? "warn" : "up")}</td>
+          <td>${fmtPrice(row.current_price, row.currency)}<br><span class="muted">${fmtPct(row.change_pct)} · ${row.trend_state || "--"} · ${row.signal_zone || "--"}</span></td>
+          <td>${row.thesis}</td>
+          <td>${row.watch_items}</td>
+          <td>${row.risk}</td>
+          <td>${row.action}</td>
+        </tr>
+      `).join("");
+    }
+
+    function renderTrades(data) {
+      byId("tradeBody").innerHTML = (data.recent_trades || []).map(item => `
+        <tr>
+          <td>${item.date}</td>
+          <td class="mono">${item.symbol}</td>
+          <td>${pill(item.side, item.side === "卖出" ? "down" : "up")}</td>
+          <td>${item.broker}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function init() {
+      const resp = await fetch("/api/share-data", {cache: "no-store"});
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+      byId("headline").textContent = data.headline || "";
+      byId("overview").textContent = data.overview || "";
+      byId("shareNotice").textContent = data.share_notice || "";
+      byId("demoNotice").textContent = data.demo_notice || "";
+      byId("shareMeta").textContent = `更新于 ${data.analysis_date_cn || "--"} · AI ${data.share_meta?.ai_label || "--"} · 行情 ${data.share_meta?.market_summary || "--"} · ${data.share_meta?.trade_window_days || 60} 日走势窗口`;
+      byId("aiMeta").textContent = `${data.share_meta?.ai_label || "--"} · ${(data.ai_insights || {}).deep_summary || data.share_meta?.ai_note || ""}`;
+      renderSummary(data.demo_summary || {});
+      renderBreakdown("brokerBreakdown", data.breakdowns?.brokers || []);
+      renderBreakdown("marketBreakdown", data.breakdowns?.markets || []);
+      renderAccounts(data.accounts || []);
+      renderInsights(data);
+      renderActions(data.brief?.priority_actions || []);
+      renderDonut(data.demo_charts?.theme_donut || []);
+      renderStyleMix(data.demo_charts?.style_mix || []);
+      renderPriceRegime(data.demo_charts?.price_regime || []);
+      renderScatter(data.demo_charts?.holding_scatter || []);
+      renderStrategyViews(data.strategy_views || []);
+      renderMacro(data);
+      renderHoldingCards(data.holdings || []);
+      renderTopHoldings(data.top_holdings || []);
+      renderBrief(data.brief?.holding_notes || []);
+      renderTrades(data);
+      renderDerivatives(data.derivatives || []);
+    }
+
+    init().catch(error => {
+      byId("headline").textContent = `加载失败：${error.message}`;
+    });
+  </script>
+</body>
+</html>

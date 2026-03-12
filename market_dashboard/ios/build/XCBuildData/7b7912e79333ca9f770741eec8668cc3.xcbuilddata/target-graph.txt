@@ -1,0 +1,6 @@
+Target dependency graph (3 targets)
+Target 'PortfolioWorkbenchIOS' in project 'PortfolioWorkbenchIOS'
+➜ Explicit dependency on target 'PortfolioWorkbenchMobileCore' in project 'PortfolioWorkbenchMobileCore'
+Target 'PortfolioWorkbenchMobileCore' in project 'PortfolioWorkbenchMobileCore'
+➜ Explicit dependency on target 'PortfolioWorkbenchMobileCore' in project 'PortfolioWorkbenchMobileCore'
+Target 'PortfolioWorkbenchMobileCore' in project 'PortfolioWorkbenchMobileCore' (no dependencies)

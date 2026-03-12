@@ -5,9 +5,10 @@ import json
 import threading
 import time
 import xml.etree.ElementTree as ET
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from copy import deepcopy
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
@@ -20,7 +21,7 @@ CN_TZ = timezone(timedelta(hours=8))
 BASE_DIR = Path(__file__).resolve().parent
 ANALYSIS_CACHE_PATH = BASE_DIR / "daily_analysis_cache.json"
 HISTORY_POINTS = 60
-LIVE_HOLDING_LIMIT = 10
+LIVE_HOLDING_LIMIT = 40
 LIVE_CACHE_TTL_SECONDS = 600
 MACRO_CACHE_TTL_SECONDS = 900
 REQUEST_TIMEOUT_SECONDS = 3.0
@@ -29,6 +30,7 @@ NASDAQ_HISTORY_URL = (
     "?assetclass={assetclass}&fromdate={fromdate}&todate={todate}&limit=120"
 )
 TENCENT_KLINE_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={code},day,,,60,qfq"
+YAHOO_CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=6mo&includePrePost=false&events=div%2Csplits"
 GOOGLE_NEWS_URL = "https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
 POSITIVE_KEYWORDS = {
     "beat",
@@ -44,17 +46,25 @@ POSITIVE_KEYWORDS = {
     "upgrade",
 }
 NEGATIVE_KEYWORDS = {
+    "attack",
+    "attacks",
     "cut",
     "cuts",
     "down",
     "downgrade",
     "export control",
+    "hormuz",
     "inflation",
+    "missile",
+    "mine",
+    "oil spike",
     "probe",
     "risk",
+    "shipping",
     "slump",
     "tariff",
     "warning",
+    "war",
 }
 MACRO_TOPICS = [
     {
@@ -86,6 +96,12 @@ MACRO_TOPICS = [
         "name": "Crypto 与监管",
         "query": "Bitcoin stablecoin regulation crypto when:7d",
         "impact_categories": ["crypto_beta", "growth_platform"],
+    },
+    {
+        "id": "geopolitics_energy",
+        "name": "地缘冲突与油运",
+        "query": "Iran US conflict Strait of Hormuz oil shipping energy infrastructure when:7d",
+        "impact_categories": ["ai_compute", "growth_platform", "crypto_beta", "hk_internet", "ev_beta"],
     },
 ]
 LIVE_CACHE: dict[str, Any] = {"timestamp": 0.0, "key": "", "payload": None}
@@ -180,6 +196,22 @@ MACRO_FALLBACK_TOPICS = [
         "severity": "中",
         "summary": "对合规交易所与稳定币龙头偏中性偏多，但监管边界越清晰，经营与合规能力差异也会被放大。",
     },
+    {
+        "id": "geopolitics_energy",
+        "name": "地缘冲突与油运",
+        "impact_categories": ["ai_compute", "growth_platform", "crypto_beta", "hk_internet", "ev_beta"],
+        "headlines": [
+            {
+                "title": "IEA 3 月 11 日宣布史上最大紧急释储，因 2026 年 2 月 28 日开始的中东冲突已使霍尔木兹海峡油品出口量降到战前 10% 以下。",
+                "source": "IEA",
+                "published_at": "2026-03-11T00:00:00+00:00",
+                "source_url": "https://www.iea.org/news/iea-member-countries-to-carry-out-largest-ever-oil-stock-release-amid-market-disruptions-from-middle-east-conflict",
+            }
+        ],
+        "score": -4,
+        "severity": "高",
+        "summary": "伊朗相关冲突已从新闻噪声变成油价、航运保险和通胀预期的定价变量，成长股与高 Beta 主题都会受压。",
+    },
 ]
 
 
@@ -202,7 +234,7 @@ def fetch_json(url: str, timeout: float = REQUEST_TIMEOUT_SECONDS) -> Any:
 def load_local_analysis_cache() -> dict[str, Any]:
     try:
         return json.loads(ANALYSIS_CACHE_PATH.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, PermissionError, OSError, json.JSONDecodeError):
         return {}
 
 
@@ -242,6 +274,7 @@ def fallback_quote_from_cache(analysis_cache: dict[str, Any], symbol: str) -> di
         "ma60": None,
         "range_position_60d": None,
         "position_label": row.get("position_label", "无数据"),
+        "market_data_source": "cache",
     }
 
 
@@ -263,6 +296,7 @@ def build_cached_live_payload(holdings: list[dict[str, Any]]) -> dict[str, Any]:
         "errors": errors,
         "fallback_symbols": fallback_symbols,
         "source_mode": "cache" if by_symbol else "empty",
+        "provider_counts": {"cache": len(by_symbol)} if by_symbol else {},
     }
 
 
@@ -276,7 +310,12 @@ def build_macro_category_scores(topics: list[dict[str, Any]]) -> dict[str, int]:
 
 def build_fallback_macro_payload(errors: list[str] | None = None, source_mode: str = "cache") -> dict[str, Any]:
     topics = deepcopy(MACRO_FALLBACK_TOPICS)
-    topics.sort(key=lambda item: {"高": 0, "中": 1, "低": 2}.get(item["severity"], 3))
+    topics.sort(
+        key=lambda item: (
+            {"高": 0, "中": 1, "低": 2}.get(item["severity"], 3),
+            -abs(int(item.get("score") or 0)),
+        )
+    )
     latest_published = max(
         (headline.get("published_at") for topic in topics for headline in topic.get("headlines", []) if headline.get("published_at")),
         default=None,
@@ -360,71 +399,65 @@ def tencent_symbol(row: dict[str, Any]) -> str:
     return f"hk{row['symbol'].split('.')[0].lstrip('0') or row['symbol'].split('.')[0]}"
 
 
+def yahoo_symbol(row: dict[str, Any]) -> str:
+    if row["market"] == "US":
+        return row["symbol"]
+    digits = int(row["symbol"].split(".")[0])
+    return f"{digits:04d}.HK"
+
+
 def clean_numeric_text(value: str | None) -> float | None:
     if value in (None, "", "N/A", "--"):
         return None
-    cleaned = str(value).replace("$", "").replace(",", "").strip()
+    cleaned = (
+        str(value)
+        .replace("$", "")
+        .replace(",", "")
+        .replace("%", "")
+        .strip()
+    )
+    if not cleaned:
+        return None
     try:
         return float(cleaned)
     except ValueError:
         return None
 
 
-def fetch_one_quote(row: dict[str, Any]) -> dict[str, Any]:
-    if row["market"] == "US":
-        today = datetime.now(CN_TZ).date()
-        fromdate = (today - timedelta(days=190)).isoformat()
-        url = NASDAQ_HISTORY_URL.format(
-            symbol=row["symbol"],
-            assetclass=row.get("assetclass", "stocks"),
-            fromdate=fromdate,
-            todate=today.isoformat(),
-        )
-        request = Request(
-            url,
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json",
-                "Origin": "https://www.nasdaq.com",
-                "Referer": "https://www.nasdaq.com/",
-            },
-        )
-        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-        rows = payload.get("data", {}).get("tradesTable", {}).get("rows", [])
-        valid_rows = list(reversed(rows))
-        if not valid_rows:
-            raise ValueError("no quote data")
-        latest = valid_rows[-1]
-        previous = valid_rows[-2] if len(valid_rows) > 1 else None
-        close_price = clean_numeric_text(latest.get("close"))
-        prev_close = clean_numeric_text(previous.get("close")) if previous else None
-        history = [
-            {
-                "date": datetime.strptime(item["date"], "%m/%d/%Y").date().isoformat(),
-                "price": round(clean_numeric_text(item.get("close")) or 0.0, 2),
-            }
-            for item in valid_rows[-HISTORY_POINTS:]
-        ]
-        trade_date = datetime.strptime(latest["date"], "%m/%d/%Y").date().isoformat()
-    else:
-        code = tencent_symbol(row)
-        payload = fetch_json(TENCENT_KLINE_URL.format(code=code), timeout=REQUEST_TIMEOUT_SECONDS)
-        node = payload.get("data", {}).get(code, {})
-        day_rows = node.get("qfqday") or node.get("day") or []
-        valid_rows = [item for item in day_rows if isinstance(item, list) and len(item) >= 6]
-        if not valid_rows:
-            raise ValueError("no quote data")
-        latest = valid_rows[-1]
-        previous = valid_rows[-2] if len(valid_rows) > 1 else None
-        close_price = to_float(latest[2])
-        prev_close = to_float(previous[2]) if previous else None
-        history = [
-            {"date": item[0], "price": round(to_float(item[2]) or 0.0, 2)}
-            for item in valid_rows[-HISTORY_POINTS:]
-        ]
-        trade_date = latest[0]
+def parse_trade_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    raw_value = str(value).strip()
+    if not raw_value:
+        return None
+    try:
+        return datetime.fromisoformat(raw_value.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(raw_value, fmt).date()
+        except ValueError:
+            continue
+    return None
 
+
+def is_stale_trade_date(value: str | None, max_age_days: int = 10) -> bool:
+    trade_date = parse_trade_date(value)
+    if trade_date is None:
+        return False
+    today = datetime.now(CN_TZ).date()
+    return (today - trade_date).days > max_age_days
+
+
+def build_quote_result(
+    row: dict[str, Any],
+    provider: str,
+    close_price: float | None,
+    prev_close: float | None,
+    history: list[dict[str, Any]],
+    trade_date: str | None,
+) -> dict[str, Any]:
     change = (close_price - prev_close) if close_price is not None and prev_close not in (None, 0.0) else None
     change_pct = (change / prev_close * 100.0) if change is not None and prev_close not in (None, 0.0) else None
     close_5d = history[-6]["price"] if len(history) > 5 else None
@@ -442,8 +475,153 @@ def fetch_one_quote(row: dict[str, Any]) -> dict[str, Any]:
         "change_pct_5d": round(change_pct_5d, 2) if change_pct_5d is not None else None,
         "history": history,
         "normalized_history": normalize_series(history),
+        "market_data_source": provider,
         **position,
     }
+
+
+def fetch_quote_from_nasdaq(row: dict[str, Any]) -> dict[str, Any]:
+    today = datetime.now(CN_TZ).date()
+    fromdate = (today - timedelta(days=190)).isoformat()
+    url = NASDAQ_HISTORY_URL.format(
+        symbol=row["symbol"],
+        assetclass=row.get("assetclass", "stocks"),
+        fromdate=fromdate,
+        todate=today.isoformat(),
+    )
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Origin": "https://www.nasdaq.com",
+            "Referer": "https://www.nasdaq.com/",
+        },
+    )
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    rows = payload.get("data", {}).get("tradesTable", {}).get("rows", [])
+    valid_rows = list(reversed(rows))
+    if not valid_rows:
+        raise ValueError("no quote data")
+    history = []
+    for item in valid_rows:
+        close_price = clean_numeric_text(item.get("close"))
+        if close_price is None:
+            continue
+        history.append(
+            {
+                "date": datetime.strptime(item["date"], "%m/%d/%Y").date().isoformat(),
+                "price": round(close_price, 2),
+            }
+        )
+    history = history[-HISTORY_POINTS:]
+    if not history:
+        raise ValueError("no valid close price")
+    latest = history[-1]
+    previous = history[-2] if len(history) > 1 else None
+    return build_quote_result(
+        row,
+        "nasdaq",
+        latest["price"],
+        previous["price"] if previous else None,
+        history,
+        latest["date"],
+    )
+
+
+def fetch_quote_from_tencent(row: dict[str, Any]) -> dict[str, Any]:
+    code = tencent_symbol(row)
+    payload = fetch_json(TENCENT_KLINE_URL.format(code=code), timeout=REQUEST_TIMEOUT_SECONDS)
+    node = payload.get("data", {}).get(code, {})
+    day_rows = node.get("qfqday") or node.get("day") or []
+    valid_rows = [item for item in day_rows if isinstance(item, list) and len(item) >= 6]
+    if not valid_rows:
+        raise ValueError("no quote data")
+    latest = valid_rows[-1]
+    previous = valid_rows[-2] if len(valid_rows) > 1 else None
+    close_price = to_float(latest[2])
+    prev_close = to_float(previous[2]) if previous else None
+    history = [
+        {"date": item[0], "price": round(to_float(item[2]) or 0.0, 2)}
+        for item in valid_rows[-HISTORY_POINTS:]
+    ]
+    return build_quote_result(row, "tencent", close_price, prev_close, history, latest[0])
+
+
+def fetch_quote_from_yahoo(row: dict[str, Any]) -> dict[str, Any]:
+    symbol = yahoo_symbol(row)
+    request = Request(
+        YAHOO_CHART_URL.format(symbol=symbol),
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Referer": "https://finance.yahoo.com/",
+        },
+    )
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    result = (payload.get("chart", {}).get("result") or [None])[0]
+    if not result:
+        raise ValueError("no chart result")
+    timestamps = result.get("timestamp") or []
+    indicators = result.get("indicators", {})
+    adjclose_rows = (indicators.get("adjclose") or [{}])[0].get("adjclose") or []
+    close_rows = (indicators.get("quote") or [{}])[0].get("close") or []
+    prices = adjclose_rows or close_rows
+    if not timestamps or not prices:
+        raise ValueError("no time series")
+    history = []
+    for ts, price in zip(timestamps, prices):
+        if price is None:
+            continue
+        history.append(
+            {
+                "date": datetime.fromtimestamp(ts, timezone.utc).date().isoformat(),
+                "price": round(float(price), 2),
+            }
+        )
+    if not history:
+        raise ValueError("no valid closes")
+    meta = result.get("meta", {})
+    close_price = meta.get("regularMarketPrice")
+    if close_price is None:
+        close_price = history[-1]["price"]
+    prev_close = meta.get("previousClose")
+    if prev_close is None and len(history) > 1:
+        prev_close = history[-2]["price"]
+    trade_timestamp = meta.get("regularMarketTime")
+    trade_date = (
+        datetime.fromtimestamp(trade_timestamp, timezone.utc).date().isoformat()
+        if trade_timestamp
+        else history[-1]["date"]
+    )
+    return build_quote_result(
+        row,
+        "yahoo",
+        float(close_price) if close_price is not None else None,
+        float(prev_close) if prev_close is not None else None,
+        history[-HISTORY_POINTS:],
+        trade_date,
+    )
+
+
+def fetch_one_quote(row: dict[str, Any]) -> dict[str, Any]:
+    errors: list[str] = []
+    sources = (
+        [fetch_quote_from_yahoo, fetch_quote_from_nasdaq]
+        if row["market"] == "US"
+        else [fetch_quote_from_yahoo, fetch_quote_from_tencent]
+    )
+    for fetcher in sources:
+        try:
+            result = fetcher(row)
+            if is_stale_trade_date(result.get("trade_date")):
+                raise ValueError(f"stale quote date {result.get('trade_date')}")
+            return result
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{fetcher.__name__}: {exc}")
+    raise ValueError("; ".join(errors) or "no quote data")
 
 
 def fetch_live_bundle(
@@ -473,7 +651,8 @@ def fetch_live_bundle(
     errors: list[str] = []
     fallback_symbols: list[str] = []
     network_symbols: list[str] = []
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    max_workers = max(1, min(4, len(selected)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {executor.submit(fetch_one_quote, row): row for row in selected}
         for future in as_completed(future_map):
             row = future_map[future]
@@ -495,12 +674,14 @@ def fetch_live_bundle(
         source_mode = "network"
     elif fallback_symbols:
         source_mode = "cache"
+    provider_counts = Counter(item.get("market_data_source", "unknown") for item in by_symbol.values())
     payload = {
         "updated_at": analysis_cache.get("analysis_generated_at") if source_mode == "cache" else datetime.now(timezone.utc).isoformat(),
         "rows_by_symbol": by_symbol,
         "errors": errors,
         "fallback_symbols": fallback_symbols,
         "source_mode": source_mode,
+        "provider_counts": dict(provider_counts),
     }
     with LIVE_LOCK:
         LIVE_CACHE["timestamp"] = time.time()
@@ -526,7 +707,21 @@ def headline_score(title: str) -> int:
 
 
 def severity_label(score: int, title_blob: str) -> str:
-    critical_terms = ("tariff", "export control", "rate", "inflation", "sanction", "probe")
+    critical_terms = (
+        "tariff",
+        "export control",
+        "rate",
+        "inflation",
+        "sanction",
+        "probe",
+        "war",
+        "hormuz",
+        "shipping",
+        "oil",
+        "missile",
+        "attack",
+        "energy",
+    )
     if any(term in title_blob.lower() for term in critical_terms):
         return "高"
     if abs(score) >= 2:
@@ -571,6 +766,14 @@ def headline_digest_cn(topic: dict[str, Any], title: str) -> str:
         if "regulation" in lower or "sec" in lower:
             return "监管边界越清晰，行业内部质量分化会越明显。"
         return "Crypto 仍由监管进展与风险偏好共同驱动。"
+    if topic_id == "geopolitics_energy":
+        if "hormuz" in lower or "strait" in lower or "shipping" in lower:
+            return "霍尔木兹航运受扰，油运与保险成本会迅速传导到全球市场。"
+        if "oil" in lower or "energy" in lower or "stock release" in lower:
+            return "油价与应急释储重新成为通胀和风险偏好的关键变量。"
+        if "iran" in lower or "missile" in lower or "attack" in lower:
+            return "伊朗相关冲突升级，地缘风险开始直接进入资产定价。"
+        return "地缘冲突正在通过油价、航运与风险偏好影响全球市场。"
     return "相关新闻已纳入中文摘要。"
 
 
@@ -593,6 +796,9 @@ def topic_summary_cn_core(topic: dict[str, Any], headlines: list[dict[str, Any]]
     elif topic["id"] == "crypto":
         detail = "监管框架、稳定币立法和 BTC 资金流仍是三条主线。"
         impact = "合规平台受益更明显，但高杠杆高 Beta 标的波动仍会放大。"
+    elif topic["id"] == "geopolitics_energy":
+        detail = "核心变量是霍尔木兹航运、油价、运费和保险成本是否继续恶化。"
+        impact = "这会同步影响通胀预期、长久期成长股估值和高 Beta 主题仓位。"
     else:
         detail = "近期新闻正在改变该主题的预期路径。"
         impact = "需要结合持仓敞口和交易节奏持续跟踪。"
@@ -663,7 +869,7 @@ def fetch_macro_bundle(force_refresh: bool = False, allow_network: bool = True) 
     topics: list[dict[str, Any]] = []
     errors: list[str] = []
     fallback_used = False
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(6, len(MACRO_TOPICS)))) as executor:
         future_map = {executor.submit(fetch_macro_topic, topic): topic for topic in MACRO_TOPICS}
         for future in as_completed(future_map):
             topic = future_map[future]
@@ -678,7 +884,12 @@ def fetch_macro_bundle(force_refresh: bool = False, allow_network: bool = True) 
         if item["id"] not in existing_ids:
             topics.append(deepcopy(item))
             fallback_used = True
-    topics.sort(key=lambda item: {"高": 0, "中": 1, "低": 2}.get(item["severity"], 3))
+    topics.sort(
+        key=lambda item: (
+            {"高": 0, "中": 1, "低": 2}.get(item["severity"], 3),
+            -abs(int(item.get("score") or 0)),
+        )
+    )
     category_scores = build_macro_category_scores(topics)
     source_mode = "mixed" if fallback_used and existing_ids else "cache" if fallback_used else "network"
     payload = {

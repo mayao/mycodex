@@ -1,0 +1,4 @@
+framework module PortfolioWorkbenchMobileCore {
+  header "PortfolioWorkbenchMobileCore-Swift.h"
+  requires objc
+}

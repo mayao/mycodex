@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from hashlib import sha256
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 try:
-    from market_context import fetch_live_bundle, fetch_macro_bundle, load_local_analysis_cache
+    from ai_insight_model import generate_ai_overlay, generate_stock_detail_overlay
+    from market_context import HISTORY_POINTS, fetch_live_bundle, fetch_macro_bundle, load_local_analysis_cache
     from statement_parser import USD_HKD_RATE, load_real_portfolio
-    from statement_sources import REFERENCE_ANALYSIS_SOURCES, get_statement_sources
+    from statement_sources import get_reference_analysis_sources, get_statement_sources
     from universe import ASSETS, CATEGORIES
 except ModuleNotFoundError:
-    from market_dashboard.market_context import fetch_live_bundle, fetch_macro_bundle, load_local_analysis_cache
+    from market_dashboard.ai_insight_model import generate_ai_overlay, generate_stock_detail_overlay
+    from market_dashboard.market_context import HISTORY_POINTS, fetch_live_bundle, fetch_macro_bundle, load_local_analysis_cache
     from market_dashboard.statement_parser import USD_HKD_RATE, load_real_portfolio
-    from market_dashboard.statement_sources import REFERENCE_ANALYSIS_SOURCES, get_statement_sources
+    from market_dashboard.statement_sources import get_reference_analysis_sources, get_statement_sources
     from market_dashboard.universe import ASSETS, CATEGORIES
 
 
@@ -61,6 +64,18 @@ STYLE_LABELS = {
     "defensive_growth": "防守成长",
     "crypto_beta": "Crypto Beta",
     "unclassified": "其他",
+}
+PRICE_SOURCE_LABELS = {
+    "network": "在线行情",
+    "cache": "最近同步价格",
+    "statement": "结单价格",
+}
+MARKET_DATA_SOURCE_LABELS = {
+    "nasdaq": "Nasdaq Historical",
+    "tencent": "腾讯港股日 K",
+    "yahoo": "Yahoo Finance Chart",
+    "cache": "最近同步价格",
+    "statement": "结单价格",
 }
 FUNDAMENTAL_LABELS = {
     1: "工具属性",
@@ -474,6 +489,48 @@ def signal_zone(score: int) -> str:
     return "防守处理"
 
 
+def unique_strings(values: list[str], limit: int | None = None) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+        if limit is not None and len(result) >= limit:
+            break
+    return result
+
+
+def price_source_label(source: str | None) -> str:
+    return PRICE_SOURCE_LABELS.get(source or "statement", "结单价格")
+
+
+def market_data_source_label(source: str | None) -> str:
+    return MARKET_DATA_SOURCE_LABELS.get(source or "statement", "结单价格")
+
+
+def display_price_source_label(price_source: str | None, market_data_source: str | None) -> str:
+    if price_source == "network":
+        return f"在线行情 · {market_data_source_label(market_data_source)}"
+    if price_source == "cache":
+        return market_data_source_label("cache")
+    return market_data_source_label("statement")
+
+
+def provider_summary_text(provider_counts: dict[str, int] | None) -> str:
+    ordered = []
+    for provider in ["nasdaq", "tencent", "yahoo", "cache", "statement"]:
+        count = int((provider_counts or {}).get(provider, 0) or 0)
+        if count > 0:
+            ordered.append(f"{market_data_source_label(provider)} {count} 只")
+    for provider, count in sorted((provider_counts or {}).items()):
+        if provider in {"nasdaq", "tencent", "yahoo", "cache", "statement"} or int(count or 0) <= 0:
+            continue
+        ordered.append(f"{market_data_source_label(provider)} {count} 只")
+    return " / ".join(ordered)
+
+
 def now_cn_date() -> str:
     return datetime.now(CN_TZ).date().isoformat()
 
@@ -488,6 +545,62 @@ def safe_pct(numerator: float, denominator: float) -> float | None:
     if denominator == 0:
         return None
     return numerator / denominator * 100.0
+
+
+def stable_unit(seed: str) -> float:
+    digest = sha256(seed.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big") / float(2**64 - 1)
+
+
+def share_demo_scale(seed: str, minimum: float = 0.032, maximum: float = 0.078) -> float:
+    return minimum + stable_unit(seed) * (maximum - minimum)
+
+
+def share_demo_hkd(amount: float | None, seed: str, minimum_non_zero: float = 1200.0) -> float | None:
+    if amount is None:
+        return None
+    base = abs(float(amount))
+    if base <= 0:
+        return 0.0
+    scaled = base * share_demo_scale(seed)
+    jitter = 0.92 + stable_unit(f"{seed}:hkd") * 0.18
+    return round(max(minimum_non_zero, scaled * jitter), 2)
+
+
+def share_demo_signed_hkd(amount: float | None, seed: str, minimum_non_zero: float = 900.0) -> float | None:
+    if amount is None:
+        return None
+    scaled = share_demo_hkd(abs(float(amount)), seed, minimum_non_zero=minimum_non_zero)
+    if scaled is None:
+        return None
+    return round(-scaled if float(amount) < 0 else scaled, 2)
+
+
+def share_demo_quantity(quantity: float | None, seed: str) -> float | int | None:
+    if quantity is None:
+        return None
+    base = abs(float(quantity))
+    if base <= 0:
+        return 0
+    scaled = base * share_demo_scale(f"{seed}:qty", minimum=0.036, maximum=0.082)
+    if float(quantity).is_integer():
+        return max(1, int(round(scaled)))
+    return round(max(0.1, scaled), 2)
+
+
+def share_demo_price(price: float | None, seed: str) -> float | None:
+    if price is None:
+        return None
+    unit = stable_unit(f"{seed}:price")
+    return round(max(0.01, float(price) * (0.84 + unit * 0.22)), 2)
+
+
+def share_demo_pct(value: float | None, seed: str, floor: float = -22.0, ceil: float = 24.0) -> float | None:
+    if value is None:
+        return None
+    unit = stable_unit(f"{seed}:pct")
+    adjusted = float(value) * 0.45 + (unit - 0.5) * 9.5
+    return round(max(floor, min(ceil, adjusted)), 2)
 
 
 def asset_meta(symbol: str, fallback_name: str, market: str, currency: str) -> dict[str, Any]:
@@ -789,10 +902,17 @@ def enrich_holdings_with_live_and_macro(
         price_source = "statement"
         if live_row.get("history"):
             price_source = "network"
+        elif live_row.get("current_price") is not None:
+            price_source = "cache"
         elif cached_reco.get("price") is not None:
             price_source = "cache"
         elif current_price is None:
             current_price = item.get("statement_price")
+        market_data_source = live_row.get("market_data_source")
+        if market_data_source is None and price_source == "cache":
+            market_data_source = "cache"
+        if market_data_source is None and price_source == "statement":
+            market_data_source = "statement"
 
         position_label = live_row.get("position_label") or cached_reco.get("position_label") or "无数据"
         trend_state = infer_trend_state(
@@ -831,6 +951,8 @@ def enrich_holdings_with_live_and_macro(
             "cached_summary": cached_reco.get("summary"),
             "cached_reasons": cached_reco.get("reasons") or [],
             "price_source": price_source,
+            "market_data_source": market_data_source,
+            "market_source_label": display_price_source_label(price_source, market_data_source),
         }
         risk_score_factor = risk_factor_score(enriched_item)
         total_signal = composite_signal_score(
@@ -1095,6 +1217,7 @@ def build_macro_flash_topics(macro_bundle: dict[str, Any], holdings: list[dict[s
                 "id": item.get("id"),
                 "name": item["name"],
                 "severity": item["severity"],
+                "impact_categories": item.get("impact_categories", []),
                 "summary": item["summary"],
                 "headline": top_headline,
                 "impact_labels": impact_labels,
@@ -1104,6 +1227,13 @@ def build_macro_flash_topics(macro_bundle: dict[str, Any], holdings: list[dict[s
                 "impact_weight_pct": impact_weight_pct,
             }
         )
+    rows.sort(
+        key=lambda item: (
+            {"高": 0, "中": 1, "低": 2}.get(item["severity"], 3),
+            -abs(int(item.get("score") or 0)),
+            -(float(item.get("impact_weight_pct") or 0.0)),
+        )
+    )
     return rows
 
 
@@ -1399,6 +1529,7 @@ def diagnose_holding(holding: dict[str, Any]) -> dict[str, Any]:
 
 def build_priority_actions(
     holdings: list[dict[str, Any]],
+    trades: list[dict[str, Any]],
     total_financing_hkd: float,
     total_derivative_notional_hkd: float,
     total_nav_hkd: float,
@@ -1406,45 +1537,66 @@ def build_priority_actions(
 ) -> list[dict[str, str]]:
     actions: list[dict[str, str]] = []
     by_symbol = {item["symbol"]: item for item in holdings}
-    if macro_topics:
-        top_macro = max(
-            macro_topics,
-            key=lambda item: (
-                {"高": 3, "中": 2, "低": 1}.get(item["severity"], 0),
-                item.get("impact_weight_pct", 0.0),
-            ),
-        )
-        if top_macro.get("impact_weight_pct", 0.0) >= 20:
-            actions.append(
-                {
-                    "title": f"把 {top_macro['name']} 当作本周一级变量",
-                    "detail": (
-                        f"{top_macro['headline']} "
-                        f"该主题关联持仓约 {top_macro.get('impact_weight_pct', 0.0):.2f}% ，"
-                        "本周的加减仓应先服从这个外部变量。"
-                    ),
-                }
-            )
-    if "03690.HK" in by_symbol:
-        item = by_symbol["03690.HK"]
+    holding_notes = {item["symbol"]: diagnose_holding(item) for item in holdings}
+    trade_snapshot = build_trade_behavior_snapshot(trades, holdings)
+    top_macro = max(
+        macro_topics,
+        key=lambda item: (
+            {"高": 3, "中": 2, "低": 1}.get(item["severity"], 0),
+            item.get("impact_weight_pct", 0.0),
+        ),
+        default=None,
+    )
+    pressure_holding = next(
+        (
+            item
+            for item in sorted(holdings, key=lambda row: (row["weight_pct"], -(row.get("signal_score", 50))), reverse=True)
+            if item["weight_pct"] >= 8 and (item.get("signal_score", 50) < 45 or (item.get("statement_pnl_pct") or 0.0) <= -35)
+        ),
+        None,
+    )
+    if pressure_holding:
+        note = holding_notes[pressure_holding["symbol"]]
         actions.append(
             {
-                "title": "先处理美团的大仓位拖累",
+                "title": f"给 {pressure_holding['name']} 设明确的降权窗口",
                 "detail": (
-                    f"美团当前约占股票市值 {item['weight_pct']:.2f}%，浮亏 {item['statement_pnl_pct']:.2f}% 。"
-                    "后续策略应围绕降权与释放风险预算，而不是等待被动回本。"
+                    f"它当前权重 {pressure_holding['weight_pct']:.2f}% ，综合信号 {pressure_holding.get('signal_score', 0)}，"
+                    f"趋势 {pressure_holding.get('trend_state', '无数据')}，浮盈亏 {pressure_holding.get('statement_pnl_pct', 0.0):.2f}% 。"
+                    f"当前更适合按“{note['stance']}”执行：{note['action']}"
+                ),
+            }
+        )
+    repeated_buy_symbols = [symbol for symbol, count in trade_snapshot["buy_symbol_counts"].most_common(3) if count >= 2]
+    if repeated_buy_symbols:
+        repeated_buy_names = "、".join(unique_strings([by_symbol.get(symbol, {}).get("name", symbol) for symbol in repeated_buy_symbols], limit=3))
+        repeated_buy_count = sum(trade_snapshot["buy_symbol_counts"][symbol] for symbol in repeated_buy_symbols)
+        macro_text = (
+            f" 同时要把“{top_macro['name']}”当成前置条件。"
+            if top_macro and any(by_symbol.get(symbol, {}).get("category") in top_macro.get("impact_categories", []) for symbol in repeated_buy_symbols)
+            else ""
+        )
+        actions.append(
+            {
+                "title": f"暂停继续在 {repeated_buy_names} 上叠加同方向风险",
+                "detail": (
+                    f"最近交易里 {repeated_buy_names} 被连续买入 {repeated_buy_count} 笔。"
+                    "除非你明确把它们归为短线交易仓，否则先暂停继续加码，避免把弹性仓一路抬成组合主风险。"
+                    f"{macro_text}"
                 ),
             }
         )
     crypto_names = [symbol for symbol in ("MSTR", "BMNR", "COIN", "CRCL", "IREN") if symbol in by_symbol]
     if crypto_names:
         crypto_weight = sum(by_symbol[symbol]["weight_pct"] for symbol in crypto_names)
+        crypto_name_text = "、".join(unique_strings([by_symbol[symbol]["name"] for symbol in crypto_names], limit=5))
         actions.append(
             {
-                "title": "把 Crypto Beta 与衍生品分开看待",
+                "title": "把 Crypto 相关仓并成一个风险桶",
                 "detail": (
-                    f"MSTR/BMNR/COIN/CRCL/IREN 合计约 {crypto_weight:.2f}% 权重，"
-                    "再叠加卖 Put 和 FCN，会让同一风险因子被重复放大。"
+                    f"{crypto_name_text} 合计约 {crypto_weight:.2f}% 权重。"
+                    "如果再叠加卖 Put、FCN 或其他结构性产品，同一个因子会在多个账户重复放大，"
+                    "下一步优先做的是削减重复暴露，而不是继续摊到更多相关标的。"
                 ),
             }
         )
@@ -1453,57 +1605,1711 @@ def build_priority_actions(
     if financing_ratio >= 15 or derivative_ratio >= 15:
         actions.append(
             {
-                "title": "把融资和结构性票据都降到可控区",
+                "title": "先把融资和结构性产品压回主动区间",
                 "detail": (
                     f"当前融资约占净资产 {financing_ratio:.2f}%，衍生品估算名义本金约占 {derivative_ratio:.2f}% 。"
-                    "先恢复调仓主动权，再谈提高赔率。"
+                    "这已经决定了你很难从容调仓。先恢复主动权，再谈提高赔率。"
                 ),
             }
         )
-    core_names = [symbol for symbol in ("00700.HK", "NVDA", "META") if symbol in by_symbol]
-    if core_names:
-        actions.append(
-            {
-                "title": "让核心资产重新定义底仓",
-                "detail": (
-                    "腾讯、NVDA、META 这类更接近质量型资产，应承担底仓功能；"
-                    "交易仓和高波动仓不应继续主导净值曲线。"
-                ),
-            }
+    quality_candidates = [
+        item
+        for item in sorted(holdings, key=lambda row: (row.get("signal_score", 0), row["fundamental_score"], -row["weight_pct"]), reverse=True)
+        if item["fundamental_score"] >= 4 and item.get("signal_score", 0) >= 68 and item["style"] not in {"leveraged", "speculative", "crypto_beta"}
+    ]
+    if quality_candidates:
+        quality_names = "、".join(unique_strings([item["name"] for item in quality_candidates], limit=3))
+        macro_clause = (
+            f" 在“{top_macro['name']}”影响未缓和前，新增预算尤其只该给这些质量更高、验证更清晰的仓位。"
+            if top_macro and top_macro.get("impact_weight_pct", 0.0) >= 20
+            else ""
         )
-    tactical_names = [symbol for symbol in ("07709.HK", "TSLL") if symbol in by_symbol]
-    if tactical_names:
         actions.append(
             {
-                "title": "杠杆工具必须从中长期仓里剥离",
+                "title": f"释放出的预算只补到 {quality_names}",
                 "detail": (
-                    "07709.HK、TSLL 这类产品更像交易指令，不是长期投资标的。"
-                    "保留的话要有明确持有期限、止损和退出条件。"
-                ),
-            }
-        )
-    weakest_core = next(
-        (
-            item
-            for item in sorted(holdings, key=lambda row: (row["weight_pct"], -(row.get("signal_score", 50))), reverse=True)
-            if item["weight_pct"] >= 5 and item.get("signal_score", 50) < 45
-        ),
-        None,
-    )
-    if weakest_core:
-        actions.append(
-            {
-                "title": f"{weakest_core['name']} 先解决信号与仓位不匹配",
-                "detail": (
-                    f"它当前权重 {weakest_core['weight_pct']:.2f}% ，综合信号仅 {weakest_core.get('signal_score', 0)}。"
-                    "这类仓位更适合先降风险，再等待更清晰的基本面或趋势确认。"
+                    f"如果你需要重新部署资金，优先考虑 {quality_names} 这类基本面和综合信号都更强的仓位，"
+                    "不要再平均撒向修复仓、杠杆工具和高波动主题。"
+                    f"{macro_clause}"
                 ),
             }
         )
     return actions[:5]
 
 
-def monitored_statements(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def holding_size_bucket(weight_pct: float) -> str:
+    if weight_pct >= 12:
+        return "超配核心"
+    if weight_pct >= 6:
+        return "核心持仓"
+    if weight_pct >= 2:
+        return "卫星配置"
+    return "观察仓"
+
+
+def split_watch_items(text: str) -> list[str]:
+    return [item.strip() for item in re.split(r"[、,，/]+", text) if item.strip()]
+
+
+def factor_signal_comment(label: str, score: int) -> str:
+    if label == "基本面":
+        return {
+            2: "基本面质量在组合里属于第一梯队。",
+            1: "基本面仍站得住，但还不够强到无视估值与节奏。",
+            0: "基本面中性，需要靠趋势或催化配合。",
+            -1: "基本面容错率偏低，不适合重仓。",
+            -2: "基本面支撑弱，仓位只能轻。",
+        }.get(score, "基本面维度暂无结论。")
+    if label == "趋势":
+        return {
+            2: "价格结构强，适合把执行节奏建立在趋势未破坏上。",
+            1: "趋势正在修复，但还没到可以大幅激进的时候。",
+            0: "趋势未给出方向，需要等待确认。",
+            -1: "趋势转弱，反弹更适合做结构调整。",
+            -2: "趋势明显偏弱，不宜只看成本线。",
+        }.get(score, "趋势维度暂无结论。")
+    if label == "新闻":
+        return {
+            2: "近期新闻流明显偏正面，利于强化市场预期。",
+            1: "近期新闻略偏正面，但仍需业绩或数据验证。",
+            0: "新闻流中性，对价格影响有限。",
+            -1: "新闻流偏谨慎，情绪面会拖累估值。",
+            -2: "新闻流明显偏空，容易压制风险偏好。",
+        }.get(score, "新闻维度暂无结论。")
+    if label == "宏观":
+        return {
+            2: "宏观环境对该主题形成顺风。",
+            1: "宏观环境略有支持，但强度有限。",
+            0: "宏观环境未构成明确顺风或逆风。",
+            -1: "宏观环境略偏逆风，节奏要保守。",
+            -2: "宏观环境明确逆风，执行上应先控风险。",
+        }.get(score, "宏观维度暂无结论。")
+    return {
+        2: "风险预算允许相对主动。",
+        1: "风险可控，但仍需仓位纪律。",
+        0: "风险预算中性。",
+        -1: "风险开始高于赔率，要保留余地。",
+        -2: "风险显著高于赔率，应优先控制敞口。",
+    }.get(score, "风控维度暂无结论。")
+
+
+def build_trade_behavior_snapshot(trades: list[dict[str, Any]], holdings: list[dict[str, Any]]) -> dict[str, Any]:
+    recent_trades = trades[:12]
+    holding_by_symbol = {item["symbol"]: item for item in holdings}
+    buys = [item for item in recent_trades if item["side"] == "买入"]
+    sells = [item for item in recent_trades if item["side"] == "卖出"]
+    averaging_down = [
+        item
+        for item in buys
+        if (holding_by_symbol.get(item["symbol"], {}).get("statement_pnl_pct") or 0.0) <= -15
+    ]
+    momentum_adds = [
+        item
+        for item in buys
+        if (holding_by_symbol.get(item["symbol"], {}).get("signal_score") or 0) >= 60
+    ]
+    high_beta_adds = [
+        item
+        for item in buys
+        if holding_by_symbol.get(item["symbol"], {}).get("style") in {"leveraged", "speculative", "crypto_beta"}
+    ]
+    theme_counter = Counter(
+        holding_by_symbol[item["symbol"]]["category_name"]
+        for item in buys
+        if item["symbol"] in holding_by_symbol
+    )
+    dominant_theme = theme_counter.most_common(1)[0][0] if theme_counter else "暂无集中主题"
+    buy_symbol_counts = Counter(item["symbol"] for item in buys if item.get("symbol"))
+    sell_symbol_counts = Counter(item["symbol"] for item in sells if item.get("symbol"))
+    return {
+        "recent_trades": recent_trades,
+        "buy_count": len(buys),
+        "sell_count": len(sells),
+        "averaging_down": averaging_down,
+        "momentum_adds": momentum_adds,
+        "high_beta_adds": high_beta_adds,
+        "dominant_theme": dominant_theme,
+        "buy_symbol_counts": buy_symbol_counts,
+        "sell_symbol_counts": sell_symbol_counts,
+        "latest_trade": recent_trades[0] if recent_trades else None,
+    }
+
+
+def fallback_ai_engine_meta() -> dict[str, Any]:
+    return {
+        "mode": "rules",
+        "provider": "local",
+        "model": None,
+        "label": "组合分析引擎",
+        "note": "AI 洞察会结合持仓、交易、走势和市场主题生成组合提示。",
+    }
+
+
+def empty_ai_insights() -> dict[str, Any]:
+    return {
+        "headline": "",
+        "deep_summary": "",
+        "cards": [],
+        "playbook": [],
+        "sections": [],
+        "position_actions": [],
+        "engine": fallback_ai_engine_meta(),
+    }
+
+
+def build_default_deep_summary(rule_based: dict[str, Any]) -> str:
+    headline = rule_based.get("headline") or ""
+    first_card = (rule_based.get("cards") or [{}])[0].get("detail") or ""
+    first_action = (rule_based.get("playbook") or [""])[0]
+    summary = " ".join(part for part in [headline, first_card, first_action] if part).strip()
+    return summary[:420]
+
+
+def pick_ai_focus_holdings(holdings: list[dict[str, Any]], trades: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    trade_symbols = {item["symbol"] for item in trades[:10] if item.get("symbol")}
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    candidate_groups = [
+        holdings[:8],
+        [item for item in holdings if item["symbol"] in trade_symbols],
+        [item for item in holdings if item["style"] in {"leveraged", "speculative", "crypto_beta"}],
+        [
+            item
+            for item in holdings
+            if item["weight_pct"] >= 4 and (item.get("signal_score", 50) < 48 or (item.get("statement_pnl_pct") or 0.0) <= -25)
+        ],
+        [
+            item
+            for item in holdings
+            if item["fundamental_score"] >= 4 and item.get("signal_score", 0) >= 68 and item["style"] not in {"leveraged", "speculative", "crypto_beta"}
+        ],
+    ]
+    for group in candidate_groups:
+        for item in group:
+            if item["symbol"] in seen:
+                continue
+            seen.add(item["symbol"])
+            selected.append(item)
+            if len(selected) >= 6:
+                return selected
+    return selected
+
+
+def build_rule_sections(
+    holdings: list[dict[str, Any]],
+    focus_holdings: list[dict[str, Any]],
+    trade_snapshot: dict[str, Any],
+    pressure_holding: dict[str, Any] | None,
+    top_macro: dict[str, Any] | None,
+    macro_affected_names: str,
+    theme_names: str,
+    financing_ratio: float,
+    derivative_ratio: float,
+    repeat_add_names: str,
+    high_beta_names: str,
+    quality_redeploy_names: str,
+) -> list[dict[str, Any]]:
+    top_weight_names = "、".join(unique_strings([item["name"] for item in holdings[:4]], limit=4)) or "暂无"
+    weak_news_names = (
+        "、".join(
+            unique_strings(
+                [item["name"] for item in focus_holdings if item.get("news_signal") in {"偏空", "显著偏空"}],
+                limit=4,
+            )
+        )
+        or "暂无"
+    )
+    sections = [
+        {
+            "title": "组合结构诊断",
+            "summary": (
+                f"组合净值目前主要由 {top_weight_names} 这些头部仓位驱动，主线集中在 {theme_names}。"
+                + (
+                    f" {pressure_holding['name']} 是当前最需要先处理的弱信号大仓。"
+                    if pressure_holding
+                    else " 当前没有单一仓位形成绝对拖累，但集中度依然偏高。"
+                )
+            ),
+            "bullets": [
+                f"头部仓位决定了大部分净值弹性，分散化的关键不在持仓数量，而在是否共享同一宏观驱动。",
+                f"新增预算优先考虑 {quality_redeploy_names} 这类“基本面更强 + 信号更好”的仓位，而不是平均摊给修复仓。",
+                (
+                    f"{pressure_holding['name']} 继续占用大仓位，会直接拖慢组合再配置。"
+                    if pressure_holding
+                    else "当前组合更像集中型表达，后续资金分配要避免进一步堆在同一条主线上。"
+                ),
+            ],
+        },
+        {
+            "title": "宏观与新闻传导",
+            "summary": (
+                f"当前最重要的外部变量是“{top_macro['name']}”，它影响的组合权重约 {top_macro.get('impact_weight_pct', 0.0):.2f}% 。"
+                if top_macro
+                else "当前宏观主题没有单一压倒性变量，但多个主题仍可能在风险偏好收缩时同步承压。"
+            ),
+            "bullets": [
+                (
+                    f"受该变量影响最大的仓位包括 {macro_affected_names}，处理优先级要高于单只股票故事。"
+                    if top_macro
+                    else f"需要持续跟踪新闻流偏弱的仓位，当前明显偏弱的包括 {weak_news_names}。"
+                ),
+                f"当前个股新闻流偏弱的重点仓包括 {weak_news_names}，这会削弱纯靠估值修复的胜率。",
+                "宏观主题、个股新闻和趋势信号如果同时朝同一个方向走，组合回撤会被放大；这比单一利空更值得警惕。",
+            ],
+        },
+        {
+            "title": "交易与杠杆路径",
+            "summary": (
+                f"最近交易的新增风险主要落在 {repeat_add_names}，融资占净资产 {financing_ratio:.2f}% ，衍生品名义本金占 {derivative_ratio:.2f}% 。"
+            ),
+            "bullets": [
+                (
+                    "最近存在逆势补仓迹象，说明交易纪律容易被成本线牵引。"
+                    if trade_snapshot["averaging_down"]
+                    else "最近交易没有明显失控，但仍需明确区分底仓、交易仓和修复仓。"
+                ),
+                (
+                    f"高波动风险主要集中在 {high_beta_names}，这些仓位不能和核心底仓使用同一套持有规则。"
+                    if high_beta_names != "暂无"
+                    else "当前高波动工具仓不算极端，但杠杆与交易频率仍要单独管理。"
+                ),
+                "一旦宏观逆风和弱趋势叠加，杠杆、衍生品和高 beta 仓位会先放大回撤，再压缩你对优质资产的加仓空间。",
+            ],
+        },
+        {
+            "title": "下一周执行框架",
+            "summary": "下周的核心不是继续找新故事，而是先把仓位分层、资金来源和验证节点重新排清楚。",
+            "bullets": [
+                (
+                    f"先处理 {pressure_holding['name']} 这类弱信号大仓，再讨论新增分配。"
+                    if pressure_holding
+                    else "先定义哪些仓位能承担底仓任务，哪些只能留在观察仓或交易仓。"
+                ),
+                f"新增预算优先留给 {quality_redeploy_names}，不要再平均撒向高波动修复仓。",
+                "每笔新增仓都要绑定验证指标和失效条件，否则交易动作会不自觉演变成被动摊平。",
+            ],
+        },
+    ]
+    return sections
+
+
+def build_rule_position_actions(focus_holdings: list[dict[str, Any]]) -> list[dict[str, str]]:
+    actions: list[dict[str, str]] = []
+    for item in focus_holdings[:8]:
+        detail = fundamental_details_for_holding(item)
+        diagnosis = diagnose_holding(item)
+        trigger_parts = [detail["catalyst"]]
+        if item.get("trend_state"):
+            trigger_parts.append(f"当前趋势 {item['trend_state']}")
+        if item.get("news_headline"):
+            trigger_parts.append(f"最新新闻线索：{item['news_headline']}")
+        actions.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "stance": diagnosis.get("stance") or "继续跟踪",
+                "thesis": f"{detail['business_model']} 当前最关键的盈利验证点是：{detail['earnings_driver']}",
+                "trigger": "；".join(part for part in trigger_parts if part)[:220],
+                "risk": (diagnosis.get("risk") or detail["red_flags"])[:220],
+                "action": (diagnosis.get("action") or "围绕验证指标和风险预算动态调整。")[:240],
+            }
+        )
+    return actions
+
+
+def enhance_ai_insights(rule_based: dict[str, Any], diagnostic_payload: dict[str, Any]) -> dict[str, Any]:
+    overlay = generate_ai_overlay(diagnostic_payload)
+    merged = {
+        **rule_based,
+        "engine": overlay.get("engine") or fallback_ai_engine_meta(),
+        "deep_summary": build_default_deep_summary(rule_based),
+    }
+    if overlay.get("ok"):
+        if overlay.get("headline"):
+            merged["headline"] = overlay["headline"]
+        if overlay.get("cards"):
+            merged["cards"] = overlay["cards"]
+        if overlay.get("playbook"):
+            merged["playbook"] = overlay["playbook"]
+        if overlay.get("deep_summary"):
+            merged["deep_summary"] = overlay["deep_summary"]
+        if overlay.get("sections"):
+            merged["sections"] = overlay["sections"]
+        if overlay.get("position_actions"):
+            merged["position_actions"] = overlay["position_actions"]
+    return merged
+
+
+def build_default_stock_detail_ai(
+    target: dict[str, Any],
+    detail: dict[str, str],
+    holding_note: dict[str, Any],
+    executive_summary: list[str],
+    bull_case: list[str],
+    bear_case: list[str],
+    watchlist: list[str],
+    action_plan: list[str],
+    latest_trade: dict[str, Any] | None,
+) -> dict[str, Any]:
+    trade_line = (
+        f"最近一次相关交易是 {latest_trade['date']} 的“{latest_trade['side']}”，需要和当前持仓定位一起看。"
+        if latest_trade
+        else "近期没有直接交易记录，更适合围绕验证指标与风险预算做动作。"
+    )
+    return {
+        "headline": f"{target['name']} 当前最关键的矛盾，是“{holding_note['stance']}”与 {target.get('trend_state', '无数据')} 之间是否匹配。",
+        "deep_summary": " ".join(executive_summary[:3])[:420],
+        "executive_summary": executive_summary[:4],
+        "sections": [
+            {
+                "title": "业务与催化",
+                "summary": f"{detail['business_model']} 当前最关键的盈利验证点是：{detail['earnings_driver']}",
+                "bullets": [detail["catalyst"], detail["valuation_anchor"]],
+            },
+            {
+                "title": "盘面与交易",
+                "summary": (
+                    f"当前处于 {target.get('trend_state', '无数据')} / {target.get('position_label', '无数据')}，"
+                    f"新闻流 {target.get('news_signal', '中性')}，宏观环境 {target.get('macro_signal', '中性')}。"
+                ),
+                "bullets": [holding_note["action"], trade_line],
+            },
+            {
+                "title": "风险与执行",
+                "summary": holding_note["risk"],
+                "bullets": [detail["red_flags"], action_plan[0] if action_plan else "围绕验证指标和风险预算动态调整。"],
+            },
+        ],
+        "bull_case": bull_case[:3],
+        "bear_case": bear_case[:3],
+        "watchlist": watchlist[:6],
+        "action_plan": action_plan[:4],
+        "engine": fallback_ai_engine_meta(),
+    }
+
+
+def enhance_stock_detail_ai(default_ai: dict[str, Any], diagnostic_payload: dict[str, Any]) -> dict[str, Any]:
+    overlay = generate_stock_detail_overlay(diagnostic_payload)
+    merged = {**default_ai, "engine": overlay.get("engine") or fallback_ai_engine_meta()}
+    if overlay.get("ok"):
+        for key in ["headline", "deep_summary", "executive_summary", "sections", "bull_case", "bear_case", "watchlist", "action_plan"]:
+            if overlay.get(key):
+                merged[key] = overlay[key]
+    return merged
+
+
+def build_ai_insights(
+    holdings: list[dict[str, Any]],
+    trades: list[dict[str, Any]],
+    derivatives: list[dict[str, Any]],
+    total_nav_hkd: float,
+    total_financing_hkd: float,
+    total_derivative_notional_hkd: float,
+    macro_topics: list[dict[str, Any]],
+) -> dict[str, Any]:
+    trade_snapshot = build_trade_behavior_snapshot(trades, holdings)
+    holding_by_symbol = {item["symbol"]: item for item in holdings}
+    top_holdings = holdings[:5]
+    theme_names = "、".join(unique_strings([item["category_name"] for item in top_holdings], limit=3)) or "多主题"
+    core_names = (
+        "、".join(
+            unique_strings(
+                [item["name"] for item in sorted(holdings, key=lambda row: (row.get("signal_score", 0), row["weight_pct"]), reverse=True)
+                 if item["fundamental_score"] >= 4 and item.get("signal_score", 0) >= 60],
+                limit=3,
+            )
+        )
+        or "暂无"
+    )
+    high_beta_names = (
+        "、".join(unique_strings([item["name"] for item in holdings if item["style"] in {"leveraged", "speculative", "crypto_beta"}], limit=4))
+        or "暂无"
+    )
+    financing_ratio = safe_pct(total_financing_hkd, total_nav_hkd) or 0.0
+    derivative_ratio = safe_pct(total_derivative_notional_hkd, total_nav_hkd) or 0.0
+    pressure_holding = next(
+        (
+            item
+            for item in sorted(holdings, key=lambda row: row["weight_pct"], reverse=True)
+            if item["weight_pct"] >= 8 and (item.get("signal_score", 50) < 45 or (item.get("statement_pnl_pct") or 0.0) <= -35)
+        ),
+        None,
+    )
+    repeat_add_names = "、".join(
+        unique_strings(
+            [
+                holding_by_symbol.get(symbol, {}).get("name", symbol)
+                for symbol, count in trade_snapshot["buy_symbol_counts"].most_common(4)
+                if count >= 1
+            ],
+            limit=4,
+        )
+    ) or "暂无"
+    high_beta_add_names = "、".join(
+        unique_strings([holding_by_symbol.get(item["symbol"], {}).get("name", item["symbol"]) for item in trade_snapshot["high_beta_adds"]], limit=4)
+    ) or "暂无"
+    quality_redeploy_names = (
+        "、".join(
+            unique_strings(
+                [
+                    item["name"]
+                    for item in sorted(holdings, key=lambda row: (row.get("signal_score", 0), row["fundamental_score"], -row["weight_pct"]), reverse=True)
+                    if item["fundamental_score"] >= 4 and item.get("signal_score", 0) >= 68 and item["style"] not in {"leveraged", "speculative", "crypto_beta"}
+                ],
+                limit=3,
+            )
+        )
+        or core_names
+    )
+    macro_affected_names = "暂无"
+    top_macro = max(
+        macro_topics,
+        key=lambda item: (
+            {"高": 3, "中": 2, "低": 1}.get(item["severity"], 0),
+            abs(item.get("score", 0)),
+            item.get("impact_weight_pct", 0.0),
+        ),
+        default=None,
+    )
+    if top_macro:
+        macro_affected_names = (
+            "、".join(
+                unique_strings(
+                    [item["name"] for item in holdings if item["category"] in top_macro.get("impact_categories", [])],
+                    limit=4,
+                )
+            )
+            or "暂无"
+        )
+    headline = (
+        f"这套组合当前真正决定净值弹性的，不只是 {theme_names} 这些主线本身，"
+        "而是你是否把弱信号大仓、近期新增交易和杠杆/衍生品暴露拆开管理。"
+    )
+    cards = [
+        (
+            {
+                "title": "最大仓位拖累点",
+                "tone": "down",
+                "detail": (
+                    f"{pressure_holding['name']} 当前权重 {pressure_holding['weight_pct']:.2f}% ，综合信号 {pressure_holding.get('signal_score', 0)}，"
+                    f"趋势 {pressure_holding.get('trend_state', '无数据')}，浮盈亏 {pressure_holding.get('statement_pnl_pct', 0.0):.2f}% 。"
+                    "它已经不只是观点仓，而是会直接拖慢再配置节奏的净值约束项。"
+                ),
+            }
+            if pressure_holding
+            else {
+                "title": "组合结构画像",
+                "tone": "warn",
+                "detail": (
+                    f"当前头部仓位把组合重心放在 {theme_names}，说明少数核心观点在驱动大部分净值。"
+                    "一旦这些观点同时受同一宏观变量影响，波动会被同步放大。"
+                ),
+            }
+        ),
+        {
+            "title": "最近交易把风险往哪里推",
+            "tone": "down" if trade_snapshot["averaging_down"] or trade_snapshot["high_beta_adds"] else "up",
+            "detail": (
+                f"最近 {len(trade_snapshot['recent_trades'])} 笔交易里，买入 {trade_snapshot['buy_count']} 笔、卖出 {trade_snapshot['sell_count']} 笔，"
+                f"新增风险主要打在 {repeat_add_names}。"
+                f"{' 存在逆势补仓迹象。' if trade_snapshot['averaging_down'] else ''}"
+                f"{' 同时继续给高波动仓加码，代表标的是 ' + high_beta_add_names + '。' if trade_snapshot['high_beta_adds'] else ''}"
+            ),
+        },
+        {
+            "title": "风险传导链条",
+            "tone": "down" if financing_ratio >= 15 or derivative_ratio >= 15 else "warn",
+            "detail": (
+                f"融资约占净资产 {financing_ratio:.2f}%，衍生品名义本金约占 {derivative_ratio:.2f}%，"
+                f"高波动仓主要集中在 {high_beta_names}。"
+                + (
+                    f" 同时“{top_macro['name']}”影响的持仓约 {top_macro.get('impact_weight_pct', 0.0):.2f}% ，代表仓位包括 {macro_affected_names}。"
+                    if top_macro
+                    else ""
+                )
+                + "这意味着方向判断一旦失效，回撤不会只出现在一个模块。"
+            ),
+        },
+        {
+            "title": "下一笔资金该落到哪里",
+            "tone": "up",
+            "detail": (
+                f"新增预算只值得留给 {quality_redeploy_names} 这类基本面和综合信号都更强的仓位。"
+                + (f" 先处理 {pressure_holding['name']} 这类弱信号大仓，再谈新增分配。" if pressure_holding else "")
+            ),
+        },
+    ]
+    playbook = []
+    if pressure_holding:
+        playbook.append(
+            f"{pressure_holding['name']} 先只做降权/控仓，不再新增摊平；只有当趋势从“{pressure_holding.get('trend_state', '无数据')}”修复且基本面验证改善时，才讨论加回。"
+        )
+    if trade_snapshot["buy_count"]:
+        playbook.append(
+            f"最近新增仓位主要打在 {repeat_add_names}；下一次下单前先确认这些仓位究竟归属底仓、修复仓还是交易仓，不再混用同一套持仓逻辑。"
+        )
+    if top_macro:
+        playbook.append(
+            f"未来一周把“{top_macro['name']}”当一级变量，受影响最大的 {macro_affected_names} 要统一节奏处理，动作优先级高于单只股票故事。"
+        )
+    if financing_ratio >= 15 or derivative_ratio >= 15:
+        playbook.append(
+            f"融资/衍生品暴露还在高位，先把总风险预算往下压，再把释放出来的仓位转给 {quality_redeploy_names} 这类更能承担底仓任务的资产。"
+        )
+    else:
+        playbook.append(f"新增风险预算优先留给 {quality_redeploy_names}，不要再平均撒向修复仓和高波动工具仓。")
+    if trade_snapshot["averaging_down"]:
+        playbook.append("逆势补仓必须带失败条件和退出条件，否则很容易把交易动作升级成结构性错误。")
+    if top_macro:
+        playbook = playbook[:5]
+    focus_holdings = pick_ai_focus_holdings(holdings, trades)
+    rule_based = {
+        "headline": headline,
+        "cards": cards,
+        "playbook": playbook,
+        "sections": build_rule_sections(
+            holdings,
+            focus_holdings,
+            trade_snapshot,
+            pressure_holding,
+            top_macro,
+            macro_affected_names,
+            theme_names,
+            financing_ratio,
+            derivative_ratio,
+            repeat_add_names,
+            high_beta_names,
+            quality_redeploy_names,
+        ),
+        "position_actions": build_rule_position_actions(focus_holdings),
+    }
+    diagnostic_payload = {
+        "summary": {
+            "total_nav_hkd": round(total_nav_hkd, 2),
+            "financing_ratio_pct": round(financing_ratio, 2),
+            "derivative_ratio_pct": round(derivative_ratio, 2),
+            "top_theme_names": theme_names,
+            "core_names": core_names,
+            "high_beta_names": high_beta_names,
+            "repeat_add_names": repeat_add_names,
+            "quality_redeploy_names": quality_redeploy_names,
+            "top_macro_name": top_macro.get("name") if top_macro else None,
+            "top_macro_weight_pct": top_macro.get("impact_weight_pct") if top_macro else None,
+            "macro_affected_names": macro_affected_names,
+        },
+        "top_holdings": [
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "weight_pct": item["weight_pct"],
+                "statement_pnl_pct": item.get("statement_pnl_pct"),
+                "signal_score": item.get("signal_score"),
+                "signal_zone": item.get("signal_zone"),
+                "trend_state": item.get("trend_state"),
+                "macro_signal": item.get("macro_signal"),
+                "news_signal": item.get("news_signal"),
+                "style_label": item.get("style_label"),
+                "category_name": item.get("category_name"),
+                "fundamental_label": item.get("fundamental_label"),
+            }
+            for item in holdings[:6]
+        ],
+        "focus_holdings": [
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "weight_pct": item["weight_pct"],
+                "statement_pnl_pct": item.get("statement_pnl_pct"),
+                "signal_score": item.get("signal_score"),
+                "signal_zone": item.get("signal_zone"),
+                "trend_state": item.get("trend_state"),
+                "position_label": item.get("position_label"),
+                "macro_signal": item.get("macro_signal"),
+                "news_signal": item.get("news_signal"),
+                "news_headline": item.get("news_headline"),
+                "style_label": item.get("style_label"),
+                "category_name": item.get("category_name"),
+                "fundamental_label": item.get("fundamental_label"),
+                "risk_level": item.get("risk_level"),
+                "role": diagnose_holding(item).get("role"),
+                "stance": diagnose_holding(item).get("stance"),
+                "action_seed": diagnose_holding(item).get("action"),
+                "fundamentals": {
+                    key: value
+                    for key, value in fundamental_details_for_holding(item).items()
+                    if key in {"business_model", "earnings_driver", "valuation_anchor", "catalyst", "red_flags"}
+                },
+            }
+            for item in focus_holdings[:4]
+        ],
+        "trade_snapshot": {
+            "buy_count": trade_snapshot["buy_count"],
+            "sell_count": trade_snapshot["sell_count"],
+            "dominant_theme": trade_snapshot["dominant_theme"],
+            "averaging_down_symbols": [item["symbol"] for item in trade_snapshot["averaging_down"][:5]],
+            "high_beta_add_symbols": [item["symbol"] for item in trade_snapshot["high_beta_adds"][:5]],
+        },
+        "recent_trades": [
+            {
+                "date": item["date"],
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "side": item["side"],
+                "price": item.get("price"),
+                "currency": item.get("currency"),
+                "broker": item.get("broker"),
+                "current_role": diagnose_holding(holding_by_symbol[item["symbol"]]).get("role") if item["symbol"] in holding_by_symbol else None,
+            }
+            for item in trades[:6]
+        ],
+        "macro_topics": [
+            {
+                "name": item.get("name"),
+                "severity": item.get("severity"),
+                "score": item.get("score"),
+                "impact_weight_pct": item.get("impact_weight_pct"),
+                "headline": item.get("headline"),
+                "summary": item.get("summary"),
+                "impact_labels": item.get("impact_labels"),
+            }
+            for item in macro_topics[:3]
+        ],
+        "derivatives": [
+            {
+                "symbol": item.get("symbol"),
+                "description": item.get("description"),
+                "estimated_notional_hkd": item.get("estimated_notional_hkd"),
+                "underlyings": item.get("underlyings"),
+                "broker": item.get("broker"),
+            }
+            for item in derivatives[:4]
+        ],
+        "derivative_count": len(derivatives),
+        "rule_based": {
+            "headline": rule_based["headline"],
+            "cards": rule_based["cards"],
+            "playbook": rule_based["playbook"],
+        },
+    }
+    return enhance_ai_insights(rule_based, diagnostic_payload)
+
+
+def refresh_holding_market_state(
+    holding: dict[str, Any],
+    live_row: dict[str, Any] | None,
+    analysis_date_cn: str | None,
+) -> dict[str, Any]:
+    live_row = live_row or {}
+    current_price = live_row.get("current_price")
+    price_source = holding.get("price_source", "statement")
+    market_data_source = live_row.get("market_data_source") or holding.get("market_data_source")
+    if live_row.get("history"):
+        price_source = "network"
+    elif live_row.get("current_price") is not None:
+        price_source = "cache"
+    if current_price is None:
+        current_price = holding.get("current_price")
+    if current_price is None:
+        current_price = holding.get("statement_price")
+        price_source = "statement"
+        market_data_source = "statement"
+    elif price_source == "cache" and market_data_source is None:
+        market_data_source = "cache"
+    ma20 = live_row.get("ma20", holding.get("ma20"))
+    ma60 = live_row.get("ma60", holding.get("ma60"))
+    position_label = live_row.get("position_label") or holding.get("position_label") or "无数据"
+    trend_state = infer_trend_state(current_price, ma20, ma60, holding.get("cached_reasons") or [])
+    refreshed = {
+        **holding,
+        "live_available": bool(live_row) or holding.get("live_available", False),
+        "current_price": current_price,
+        "trade_date": live_row.get("trade_date") or holding.get("trade_date") or analysis_date_cn,
+        "change_pct": live_row.get("change_pct", holding.get("change_pct")),
+        "change_pct_5d": live_row.get("change_pct_5d", holding.get("change_pct_5d")),
+        "ma20": ma20,
+        "ma60": ma60,
+        "range_position_60d": live_row.get("range_position_60d", holding.get("range_position_60d")),
+        "position_label": position_label,
+        "trend_state": trend_state,
+        "history": live_row.get("history") or holding.get("history", []),
+        "normalized_history": live_row.get("normalized_history") or holding.get("normalized_history", []),
+        "price_source": price_source,
+        "market_data_source": market_data_source,
+        "market_source_label": display_price_source_label(price_source, market_data_source),
+    }
+    factor_scores = dict(holding.get("factor_scores", {}))
+    factor_scores["fundamental"] = factor_scores.get("fundamental", factor_score_bucket(int(refreshed.get("fundamental_score", 3)) - 3))
+    factor_scores["trend"] = trend_factor_score(trend_state)
+    factor_scores["news"] = factor_scores.get("news", 0)
+    factor_scores["macro"] = factor_scores.get("macro", 0)
+    factor_scores["risk"] = risk_factor_score(refreshed)
+    refreshed["factor_scores"] = factor_scores
+    refreshed["signal_score"] = composite_signal_score(
+        factor_scores["fundamental"],
+        factor_scores["trend"],
+        factor_scores["news"],
+        factor_scores["macro"],
+        factor_scores["risk"],
+    )
+    refreshed["signal_zone"] = signal_zone(refreshed["signal_score"])
+    return refreshed
+
+
+def build_detail_signal_matrix(target: dict[str, Any], peers: list[dict[str, Any]]) -> dict[str, Any]:
+    columns = [
+        {"key": "fundamental", "label": "基本面"},
+        {"key": "trend", "label": "趋势"},
+        {"key": "news", "label": "新闻"},
+        {"key": "macro", "label": "宏观"},
+        {"key": "risk", "label": "风控"},
+    ]
+    rows = []
+    for item in [target, *peers]:
+        rows.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "is_target": item["symbol"] == target["symbol"],
+                "signal_score": item.get("signal_score", 50),
+                "signal_zone": item.get("signal_zone", "中性跟踪"),
+                "trend_state": item.get("trend_state", "无数据"),
+                "cells": [
+                    {
+                        "label": column["label"],
+                        "score": item.get("factor_scores", {}).get(column["key"], 0),
+                    }
+                    for column in columns
+                ],
+            }
+        )
+    return {"columns": columns, "rows": rows}
+
+
+def build_detail_comparison_history(target: dict[str, Any], peers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    target_points = target.get("normalized_history") or []
+    if not target_points:
+        return []
+    rows = [
+        {
+            "symbol": target["symbol"],
+            "name": target["name"],
+            "is_target": True,
+            "points": target_points,
+        }
+    ]
+    for item in peers:
+        points = item.get("normalized_history") or []
+        if not points:
+            continue
+        rows.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "is_target": False,
+                "points": points,
+            }
+        )
+    return rows
+
+
+def build_stock_detail_payload(
+    symbol: str,
+    force_refresh: bool = False,
+    include_live: bool = True,
+    allow_cached_fallback: bool = True,
+    share_mode: bool = False,
+    user_id: str | None = None,
+) -> dict[str, Any]:
+    dashboard = build_dashboard_payload(
+        force_refresh=force_refresh,
+        include_live=False,
+        allow_cached_fallback=allow_cached_fallback,
+        include_ai=False,
+        user_id=user_id,
+        refresh_portfolio=False,
+    )
+    target = next(
+        (
+            item
+            for item in dashboard["holdings"]
+            if item["symbol"] in symbol_variants(symbol) or symbol in symbol_variants(item["symbol"])
+        ),
+        None,
+    )
+    if target is None:
+        raise KeyError(symbol)
+
+    peer_candidates = [
+        item
+        for item in dashboard["holdings"]
+        if item["category"] == target["category"] and item["symbol"] != target["symbol"]
+    ][:3]
+    detail_live_bundle = fetch_live_bundle([target], force_refresh=force_refresh, allow_network=include_live)
+    peer_live_bundle = (
+        fetch_live_bundle(peer_candidates, force_refresh=False, allow_network=False)
+        if peer_candidates
+        else {"rows_by_symbol": {}, "updated_at": None}
+    )
+    detail_rows_by_symbol = {
+        **peer_live_bundle.get("rows_by_symbol", {}),
+        **detail_live_bundle.get("rows_by_symbol", {}),
+    }
+    target = refresh_holding_market_state(
+        target,
+        lookup_symbol_value(detail_rows_by_symbol, target["symbol"], {}),
+        dashboard["analysis_date_cn"],
+    )
+    peer_candidates = [
+        refresh_holding_market_state(
+            item,
+            lookup_symbol_value(detail_rows_by_symbol, item["symbol"], {}),
+            dashboard["analysis_date_cn"],
+        )
+        for item in peer_candidates
+    ]
+    detail = fundamental_details_for_holding(target)
+    holding_note = diagnose_holding(target)
+    related_trades = [
+        item
+        for item in dashboard["trades"]
+        if item["symbol"] in symbol_variants(target["symbol"]) or target["symbol"] in symbol_variants(item["symbol"])
+    ]
+    related_derivatives = [
+        item
+        for item in dashboard["derivatives"]
+        if item["symbol"] in symbol_variants(target["symbol"])
+        or any(underlying in symbol_variants(target["symbol"]) for underlying in item.get("underlyings", []))
+    ]
+    demo_holdings_by_symbol = {item["symbol"]: item for item in demoize_top_holdings(dashboard["holdings"])}
+    target_demo = demo_holdings_by_symbol.get(target["symbol"], {})
+    demo_weight_pct = target_demo.get("demo_weight_pct")
+    if demo_weight_pct is None:
+        demo_weight_pct = share_demo_pct(target.get("weight_pct"), f"share-detail-weight:{target['symbol']}", floor=1.2, ceil=26.0)
+    demo_pnl_pct = target_demo.get("demo_pnl_pct")
+    if demo_pnl_pct is None:
+        demo_pnl_pct = share_demo_pct(target.get("statement_pnl_pct"), f"share-detail-pnl-pct:{target['symbol']}")
+    demo_pnl_hkd = share_demo_signed_hkd(target.get("statement_pnl_hkd"), f"share-detail-pnl-hkd:{target['symbol']}")
+    demo_avg_cost = share_demo_price(target.get("avg_cost"), f"share-detail-cost:{target['symbol']}")
+    account_alias_by_id = {
+        account["account_id"]: f"账户 {index}"
+        for index, account in enumerate(target.get("accounts", []), start=1)
+        if account.get("account_id")
+    }
+    peers = [
+        {
+            "symbol": item["symbol"],
+            "name": item["name"],
+            "signal_score": item.get("signal_score", 50),
+            "trend_state": item.get("trend_state"),
+            "current_price": item.get("current_price"),
+            "change_pct": item.get("change_pct"),
+            "normalized_history": item.get("normalized_history", []),
+            "factor_scores": item.get("factor_scores", {}),
+            "signal_zone": item.get("signal_zone", "中性跟踪"),
+        }
+        for item in peer_candidates
+    ]
+    signal_rows = [
+        {
+            "label": "基本面",
+            "score": target.get("factor_scores", {}).get("fundamental", 0),
+            "comment": factor_signal_comment("基本面", target.get("factor_scores", {}).get("fundamental", 0)),
+        },
+        {
+            "label": "趋势",
+            "score": target.get("factor_scores", {}).get("trend", 0),
+            "comment": factor_signal_comment("趋势", target.get("factor_scores", {}).get("trend", 0)),
+        },
+        {
+            "label": "新闻",
+            "score": target.get("factor_scores", {}).get("news", 0),
+            "comment": factor_signal_comment("新闻", target.get("factor_scores", {}).get("news", 0)),
+        },
+        {
+            "label": "宏观",
+            "score": target.get("factor_scores", {}).get("macro", 0),
+            "comment": factor_signal_comment("宏观", target.get("factor_scores", {}).get("macro", 0)),
+        },
+        {
+            "label": "风控",
+            "score": target.get("factor_scores", {}).get("risk", 0),
+            "comment": factor_signal_comment("风控", target.get("factor_scores", {}).get("risk", 0)),
+        },
+    ]
+    related_accounts = []
+    for index, account in enumerate(target.get("accounts", []), start=1):
+        account_label = account["broker"] if not share_mode else f"账户 {index}"
+        demo_statement_value = share_demo_hkd(
+            hkd_value(account.get("statement_value"), target["currency"]),
+            f"share-detail-account-value:{target['symbol']}:{account.get('account_id') or index}",
+        )
+        demo_statement_pnl_pct = share_demo_pct(
+            safe_pct(account.get("statement_pnl") or 0.0, (account.get("cost") or 0.0) * (account.get("quantity") or 0.0)),
+            f"share-detail-account-pnl:{target['symbol']}:{account.get('account_id') or index}",
+        )
+        related_accounts.append(
+            {
+                "label": account_label,
+                "account_id": account["account_id"] if not share_mode else None,
+                "quantity": account.get("quantity") if not share_mode else share_demo_quantity(
+                    account.get("quantity"),
+                    f"share-detail-account-qty:{target['symbol']}:{account.get('account_id') or index}",
+                ),
+                "statement_value": hkd_value(account.get("statement_value"), target["currency"]) if not share_mode else demo_statement_value,
+                "statement_pnl_pct": (
+                    safe_pct(account.get("statement_pnl") or 0.0, (account.get("cost") or 0.0) * (account.get("quantity") or 0.0))
+                    if not share_mode
+                    else demo_statement_pnl_pct
+                ),
+            }
+        )
+    portfolio_context = [
+        {
+            "label": "组合定位",
+            "value": holding_note["role"],
+        },
+        {
+            "label": "仓位层级",
+            "value": holding_size_bucket(target["weight_pct"]),
+        },
+        {
+            "label": "组合权重",
+            "value": f"{target['weight_pct']:.2f}%" if not share_mode else (f"{demo_weight_pct:.2f}%" if demo_weight_pct is not None else "演示中"),
+        },
+        {
+            "label": "账户分布",
+            "value": f"{target['account_count']} 个账户",
+        },
+        {
+            "label": "浮盈亏",
+            "value": (
+                f"{target['statement_pnl_pct']:.2f}% / HK${target['statement_pnl_hkd']:,.0f}"
+                if not share_mode
+                else (
+                    (
+                        f"{demo_pnl_pct:+.2f}% / {'-' if (demo_pnl_hkd or 0.0) < 0 else ''}HK${abs(demo_pnl_hkd or 0.0):,.0f}"
+                        if demo_pnl_pct is not None and demo_pnl_hkd is not None
+                        else "演示中"
+                    )
+                )
+            ),
+        },
+        {
+            "label": "衍生品关联",
+            "value": "存在相关衍生品或结构性敞口" if related_derivatives else "暂无相关衍生品关联",
+        },
+        {
+            "label": "价格来源",
+            "value": f"{display_price_source_label(target.get('price_source'), target.get('market_data_source'))} · {target.get('trade_date') or dashboard['analysis_date_cn']}",
+        },
+    ]
+    latest_trade = related_trades[0] if related_trades else None
+    executive_summary = [
+        f"{target['name']} 当前在组合中属于“{holding_note['role']}”，仓位约 {target['weight_pct']:.2f}% ，执行建议偏向“{holding_note['stance']}”。",
+        f"最新价格来自{display_price_source_label(target.get('price_source'), target.get('market_data_source'))}，交易日期 {target.get('trade_date') or dashboard['analysis_date_cn']}；当前处于 {target.get('trend_state', '无数据')} / {target.get('position_label', '无数据')}。",
+        f"从商业上看，{detail['business_model']} 目前最关键的验证点是：{detail['earnings_driver']}",
+        (
+            f"最近新闻流 {target.get('news_signal', '中性')}，最新线索是“{target.get('news_headline')}”。"
+            if target.get("news_headline")
+            else f"当前新闻流 {target.get('news_signal', '中性')}，宏观环境 {target.get('macro_signal', '中性')}。"
+        ),
+    ]
+    bull_case = [
+        detail["catalyst"],
+        detail["valuation_anchor"],
+        f"当前综合信号 {target.get('signal_score', 50)}，若趋势继续改善，执行上更容易形成正反馈。",
+    ]
+    bear_case = [
+        detail["red_flags"],
+        detail["balance_sheet"],
+        holding_note["risk"],
+    ]
+    action_plan = [
+        holding_note["action"],
+        f"最新价格来自{display_price_source_label(target.get('price_source'), target.get('market_data_source'))}，先把下一个动作建立在 {target.get('trend_state', '无数据')} 与 {'、'.join(split_watch_items(target['watch_items'])[:2])} 同步验证的前提上。",
+        (
+            f"最近一笔相关交易是 {latest_trade['date']} 的“{latest_trade['side']}”，下一次动作前先确认它是否与“{holding_note['stance']}”一致。"
+            if latest_trade
+            else "近期没有直接交易记录，下一次动作更应该先围绕验证指标与风险预算，而不是成本线。"
+        ),
+    ]
+    watchlist = split_watch_items(target["watch_items"])
+    relevant_macro_topics = [
+        item
+        for item in dashboard.get("macro", {}).get("topics", [])
+        if target["category"] in item.get("impact_categories", [])
+    ]
+    if not relevant_macro_topics:
+        relevant_macro_topics = (dashboard.get("macro", {}).get("topics") or [])[:2]
+    detail_ai = build_default_stock_detail_ai(
+        target,
+        detail,
+        holding_note,
+        executive_summary,
+        bull_case,
+        bear_case,
+        watchlist,
+        action_plan,
+        latest_trade,
+    )
+    detail_ai_payload = {
+        "summary": {
+            "symbol": target["symbol"],
+            "name": target["name"],
+            "category_name": target["category_name"],
+            "style_label": target["style_label"],
+            "portfolio_role": holding_note["role"],
+            "stance": holding_note["stance"],
+            "weight_pct": None if share_mode else round(target["weight_pct"], 2),
+            "signal_score": target.get("signal_score"),
+            "signal_zone": target.get("signal_zone"),
+            "trend_state": target.get("trend_state"),
+            "position_label": target.get("position_label"),
+            "macro_signal": target.get("macro_signal"),
+            "news_signal": target.get("news_signal"),
+            "price_source": display_price_source_label(target.get("price_source"), target.get("market_data_source")),
+            "trade_date": target.get("trade_date") or dashboard["analysis_date_cn"],
+            "related_trade_count": len(related_trades),
+            "related_derivative_count": len(related_derivatives),
+            "peer_count": len(peer_candidates),
+        },
+        "fundamentals": {
+            key: value
+            for key, value in detail.items()
+            if key in {"business_model", "earnings_driver", "valuation_anchor", "catalyst", "balance_sheet", "red_flags"}
+        },
+        "rule_based": {
+            "executive_summary": executive_summary[:4],
+            "bull_case": bull_case[:3],
+            "bear_case": bear_case[:3],
+            "watchlist": watchlist[:6],
+            "action_plan": action_plan[:3],
+            "holding_note": {
+                "role": holding_note["role"],
+                "stance": holding_note["stance"],
+                "risk": holding_note["risk"],
+                "action": holding_note["action"],
+            },
+        },
+        "news": {
+            "signal": target.get("news_signal"),
+            "headline": target.get("news_headline"),
+        },
+        "macro_topics": [
+            {
+                "name": item.get("name"),
+                "severity": item.get("severity"),
+                "headline": item.get("headline"),
+                "summary": item.get("summary"),
+            }
+            for item in relevant_macro_topics[:3]
+        ],
+        "peers": [
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "signal_score": item.get("signal_score"),
+                "signal_zone": item.get("signal_zone"),
+                "trend_state": item.get("trend_state"),
+                "change_pct": item.get("change_pct"),
+            }
+            for item in peer_candidates[:3]
+        ],
+        "recent_trades": [
+            {
+                "date": item["date"],
+                "side": item["side"],
+                "broker": item["broker"] if not share_mode else "已脱敏账户",
+                "price": item["price"] if not share_mode else None,
+                "currency": item["currency"],
+            }
+            for item in related_trades[:4]
+        ],
+        "related_derivatives": [
+            {
+                "symbol": item["symbol"],
+                "description": item["description"] if not share_mode else "存在相关衍生品或结构性敞口",
+                "estimated_notional_hkd": item["estimated_notional_hkd"] if not share_mode else None,
+            }
+            for item in related_derivatives[:3]
+        ],
+    }
+    if not include_live:
+        detail_ai = enhance_stock_detail_ai(detail_ai, detail_ai_payload)
+    if share_mode:
+        detail_ai = sanitize_stock_detail_ai_for_share(detail_ai)
+    price_cards = [
+        {
+            "label": "当前价格",
+            "value": f"{'HK$' if target['currency'] == 'HKD' else '$'}{(target.get('current_price') or 0):,.2f}" if target.get("current_price") is not None else "--",
+            "delta": f"{target.get('change_pct', 0):+.2f}%" if target.get("change_pct") is not None else "--",
+        },
+        {
+            "label": "行情日期",
+            "value": target.get("trade_date") or dashboard["analysis_date_cn"] or "--",
+            "delta": display_price_source_label(target.get("price_source"), target.get("market_data_source")),
+        },
+        {
+            "label": "持仓成本",
+            "value": (
+                f"{'HK$' if target['currency'] == 'HKD' else '$'}{(target.get('avg_cost') or 0):,.2f}"
+                if not share_mode and target.get("avg_cost") is not None
+                else (
+                    f"{'HK$' if target['currency'] == 'HKD' else '$'}{demo_avg_cost:,.2f}"
+                    if share_mode and demo_avg_cost is not None
+                    else "--"
+                )
+            ),
+            "delta": "平均成本",
+        },
+        {
+            "label": "60日位置",
+            "value": target.get("position_label") or "无数据",
+            "delta": target.get("trend_state") or "无数据",
+        },
+    ]
+    focus_cards = [
+        {
+            "label": "行情状态",
+            "value": target.get("trade_date") or dashboard["analysis_date_cn"] or "--",
+            "detail": f"{display_price_source_label(target.get('price_source'), target.get('market_data_source'))} · 详情页已单独刷新当前标的",
+        },
+        {
+            "label": "新闻流",
+            "value": target.get("news_signal", "中性"),
+            "detail": target.get("news_headline") or "暂无新的个股新闻摘要，当前以本地研究快照为主。",
+        },
+        {
+            "label": "执行锚点",
+            "value": holding_note["stance"],
+            "detail": holding_note["action"],
+        },
+        {
+            "label": "最近交易提示",
+            "value": f"{len(related_trades)} 笔相关交易" if related_trades else "暂无直接交易",
+            "detail": (
+                f"{latest_trade['date']} 最近一次是“{latest_trade['side']}”，需要和当前持仓定位一起看。"
+                if latest_trade
+                else "没有近期直接交易，适合把下一次动作完全建立在验证指标和趋势上。"
+            ),
+        },
+    ]
+    return {
+        "generated_at": dashboard["generated_at"],
+        "analysis_date_cn": dashboard["analysis_date_cn"],
+        "share_mode": share_mode,
+        "hero": {
+            "symbol": target["symbol"],
+            "name": target["name"],
+            "category_name": target["category_name"],
+            "style_label": target["style_label"],
+            "fundamental_label": target["fundamental_label"],
+            "signal_score": target.get("signal_score", 50),
+            "signal_zone": target.get("signal_zone", "中性跟踪"),
+            "trend_state": target.get("trend_state", "无数据"),
+            "position_label": target.get("position_label", "无数据"),
+            "macro_signal": target.get("macro_signal", "中性"),
+            "news_signal": target.get("news_signal", "中性"),
+            "current_price": target.get("current_price"),
+            "change_pct": target.get("change_pct"),
+            "change_pct_5d": target.get("change_pct_5d"),
+            "trade_date": target.get("trade_date"),
+            "price_source": target.get("price_source"),
+            "price_source_label": display_price_source_label(target.get("price_source"), target.get("market_data_source")),
+            "news_headline": target.get("news_headline"),
+        },
+        "source_meta": {
+            "price_source_label": display_price_source_label(target.get("price_source"), target.get("market_data_source")),
+            "live_updated_at": detail_live_bundle.get("updated_at") or dashboard.get("live", {}).get("updated_at"),
+            "macro_updated_at": dashboard.get("macro", {}).get("updated_at"),
+            "trade_date": target.get("trade_date") or dashboard["analysis_date_cn"],
+        },
+        "ai_detail": detail_ai,
+        "executive_summary": detail_ai["executive_summary"],
+        "focus_cards": focus_cards,
+        "signal_rows": signal_rows,
+        "signal_matrix": build_detail_signal_matrix(target, peer_candidates),
+        "portfolio_context": portfolio_context,
+        "price_cards": price_cards,
+        "account_rows": related_accounts,
+        "related_trades": [
+            {
+                "date": item["date"],
+                "side": item["side"],
+                "broker": item["broker"] if not share_mode else account_alias_by_id.get(item.get("account_id"), "账户"),
+                "quantity": item["quantity"] if not share_mode else share_demo_quantity(
+                    item.get("quantity"),
+                    f"share-detail-trade-qty:{target['symbol']}:{item.get('account_id')}:{item['date']}:{item['side']}",
+                ),
+                "price": item["price"] if not share_mode else share_demo_price(
+                    item.get("price"),
+                    f"share-detail-trade-price:{target['symbol']}:{item.get('account_id')}:{item['date']}:{item['side']}",
+                ),
+                "currency": item["currency"],
+            }
+            for item in related_trades
+        ],
+        "derivative_rows": [
+            {
+                "symbol": item["symbol"],
+                "description": (
+                    item["description"]
+                    if not share_mode
+                    else ("相关期权或结构性产品敞口" if item.get("underlyings") else "相关衍生品或结构性产品敞口")
+                ),
+                "estimated_notional_hkd": item["estimated_notional_hkd"] if not share_mode else share_demo_hkd(
+                    item.get("estimated_notional_hkd"),
+                    f"share-detail-derivative:{target['symbol']}:{item.get('account_id')}:{item['symbol']}",
+                    minimum_non_zero=1800.0,
+                ),
+            }
+            for item in related_derivatives
+        ],
+        "bull_case": detail_ai["bull_case"],
+        "bear_case": detail_ai["bear_case"],
+        "watchlist": detail_ai["watchlist"],
+        "action_plan": detail_ai["action_plan"],
+        "peers": peers,
+        "history": target.get("history", []),
+        "comparison_history": build_detail_comparison_history(target, peer_candidates),
+        "holding_note": holding_note,
+    }
+
+
+def demoize_weight_rows(rows: list[dict[str, Any]], seed_prefix: str) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    raw_values = []
+    for index, row in enumerate(rows):
+        actual_weight = float(row.get("weight_pct") or 0.0)
+        seed = f"{seed_prefix}:{row.get('id') or row.get('label') or row.get('symbol') or index}"
+        raw = max(2.8, actual_weight * 0.62 + (len(rows) - index) * 1.2 + stable_unit(seed) * 3.4)
+        raw_values.append(raw)
+    total = sum(raw_values) or 1.0
+    demo_rows = []
+    for row, raw in zip(rows, raw_values):
+        demo_rows.append({**row, "weight_pct": round(raw / total * 100.0, 2), "is_virtual": True})
+    return demo_rows
+
+
+def demoize_top_holdings(holdings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    demo_weights = demoize_weight_rows(
+        [{"symbol": item["symbol"], "weight_pct": item["weight_pct"]} for item in holdings[:12]],
+        "share-holding-weight",
+    )
+    weight_by_symbol = {item["symbol"]: item["weight_pct"] for item in demo_weights}
+    rows = []
+    for item in holdings[:12]:
+        unit = stable_unit(f"share-pnl:{item['symbol']}")
+        base_pnl = float(item.get("statement_pnl_pct") or 0.0)
+        demo_pnl_pct = round(max(-26.0, min(24.0, base_pnl * 0.35 + (unit - 0.5) * 13.0)), 2)
+        rows.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "category_name": item["category_name"],
+                "style_label": item["style_label"],
+                "fundamental_label": item["fundamental_label"],
+                "signal_score": item.get("signal_score", 50),
+                "signal_zone": item.get("signal_zone", "中性跟踪"),
+                "trend_state": item.get("trend_state", "无数据"),
+                "macro_signal": item.get("macro_signal", "中性"),
+                "news_signal": item.get("news_signal", "中性"),
+                "current_price": item.get("current_price"),
+                "change_pct": item.get("change_pct"),
+                "change_pct_5d": item.get("change_pct_5d"),
+                "currency": item["currency"],
+                "market_source_label": item.get("market_source_label"),
+                "trade_date": item.get("trade_date"),
+                "demo_weight_pct": weight_by_symbol.get(item["symbol"], 0.0),
+                "demo_pnl_pct": demo_pnl_pct,
+                "demo_size_index": round(55 + weight_by_symbol.get(item["symbol"], 0.0) * 1.8 + stable_unit(f"share-size:{item['symbol']}") * 18, 1),
+            }
+        )
+    return rows
+
+
+def sanitize_share_text(text: str | None) -> str:
+    if not text:
+        return ""
+    sanitized = str(text)
+    sanitized = re.sub(r"\d+(?:\.\d+)?\s*(?:亿|万)\s*(?:HKD|USD|港元|港币|美元)?", "演示规模", sanitized)
+    sanitized = re.sub(r"(?:HKD|USD)\s?[\d,]+(?:\.\d+)?", "演示规模", sanitized)
+    sanitized = re.sub(r"HK\$\s?[\d,]+(?:\.\d+)?", "演示规模", sanitized)
+    sanitized = re.sub(r"(?<![A-Z])\$\s?[\d,]+(?:\.\d+)?", "演示规模", sanitized)
+    sanitized = re.sub(r"[+-]?\d+(?:\.\d+)?%", "演示比例", sanitized)
+    return sanitized
+
+
+def sanitize_ai_insights_for_share(ai_insights: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **ai_insights,
+        "headline": sanitize_share_text(ai_insights.get("headline")),
+        "deep_summary": sanitize_share_text(ai_insights.get("deep_summary")),
+        "cards": [
+            {
+                **card,
+                "title": sanitize_share_text(card.get("title")),
+                "detail": sanitize_share_text(card.get("detail")),
+            }
+            for card in ai_insights.get("cards", [])
+        ],
+        "playbook": [sanitize_share_text(item) for item in ai_insights.get("playbook", [])],
+        "sections": [
+            {
+                "title": sanitize_share_text(item.get("title")),
+                "summary": sanitize_share_text(item.get("summary")),
+                "bullets": [sanitize_share_text(point) for point in item.get("bullets", [])],
+            }
+            for item in ai_insights.get("sections", [])
+        ],
+        "position_actions": [
+            {
+                "symbol": sanitize_share_text(item.get("symbol")),
+                "name": sanitize_share_text(item.get("name")),
+                "stance": sanitize_share_text(item.get("stance")),
+                "thesis": sanitize_share_text(item.get("thesis")),
+                "trigger": sanitize_share_text(item.get("trigger")),
+                "risk": sanitize_share_text(item.get("risk")),
+                "action": sanitize_share_text(item.get("action")),
+            }
+            for item in ai_insights.get("position_actions", [])
+        ],
+    }
+
+
+def sanitize_stock_detail_ai_for_share(ai_detail: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **ai_detail,
+        "headline": sanitize_share_text(ai_detail.get("headline")),
+        "deep_summary": sanitize_share_text(ai_detail.get("deep_summary")),
+        "executive_summary": [sanitize_share_text(item) for item in ai_detail.get("executive_summary", [])],
+        "sections": [
+            {
+                "title": sanitize_share_text(item.get("title")),
+                "summary": sanitize_share_text(item.get("summary")),
+                "bullets": [sanitize_share_text(point) for point in item.get("bullets", [])],
+            }
+            for item in ai_detail.get("sections", [])
+        ],
+        "bull_case": [sanitize_share_text(item) for item in ai_detail.get("bull_case", [])],
+        "bear_case": [sanitize_share_text(item) for item in ai_detail.get("bear_case", [])],
+        "watchlist": [sanitize_share_text(item) for item in ai_detail.get("watchlist", [])],
+        "action_plan": [sanitize_share_text(item) for item in ai_detail.get("action_plan", [])],
+    }
+
+
+def build_share_demo_charts(payload: dict[str, Any]) -> dict[str, Any]:
+    holdings = payload["holdings"]
+    top_demo_holdings = demoize_top_holdings(holdings)
+    demo_weight_by_symbol = {item["symbol"]: item["demo_weight_pct"] for item in top_demo_holdings}
+    demo_pnl_by_symbol = {item["symbol"]: item["demo_pnl_pct"] for item in top_demo_holdings}
+
+    style_rows = []
+    for row in payload["charts"]["style_mix"]:
+        members = row.get("core_holdings") or []
+        member_symbols = [item["symbol"] for item in holdings if item["name"] in members]
+        demo_avg_pnl = 0.0
+        if member_symbols:
+            demo_avg_pnl = sum(demo_pnl_by_symbol.get(symbol, 0.0) for symbol in member_symbols) / len(member_symbols)
+        style_rows.append({**row, "avg_pnl_pct": round(demo_avg_pnl, 2)})
+
+    regime_rows = []
+    for row in payload["charts"]["price_regime"]:
+        regime_rows.append({**row, "avg_signal": round(float(row.get("avg_signal") or 0.0), 2)})
+
+    scatter_rows = []
+    for item in top_demo_holdings:
+        scatter_rows.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "market": "SHARE",
+                "x": item["demo_weight_pct"],
+                "y": item["demo_pnl_pct"],
+                "size": item["demo_size_index"] ** 2,
+                "size_index": item["demo_size_index"],
+                "category_name": item["category_name"],
+                "macro_signal": item["macro_signal"],
+                "is_virtual": True,
+            }
+        )
+
+    return {
+        "theme_donut": demoize_weight_rows(payload["charts"]["theme_donut"], "share-theme"),
+        "style_mix": demoize_weight_rows(style_rows, "share-style"),
+        "price_regime": demoize_weight_rows(regime_rows, "share-regime"),
+        "holding_scatter": scatter_rows,
+        "top_holdings": top_demo_holdings,
+    }
+
+
+def build_share_dimension_rows(
+    rows: list[dict[str, Any]],
+    seed_prefix: str,
+    total_demo_value_hkd: float,
+) -> list[dict[str, Any]]:
+    demo_rows = demoize_weight_rows(rows, seed_prefix)
+    return [
+        {
+            **row,
+            "demo_value_hkd": round(total_demo_value_hkd * float(row.get("weight_pct") or 0.0) / 100.0, 2),
+        }
+        for row in demo_rows
+    ]
+
+
+def build_share_accounts(payload: dict[str, Any], total_demo_nav_hkd: float) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    account_cards = payload.get("accounts", [])
+    demo_nav_rows = build_share_dimension_rows(
+        [{"id": card["account_id"], "weight_pct": card["nav_hkd"]} for card in account_cards],
+        "share-account-nav",
+        total_demo_nav_hkd,
+    )
+    nav_by_account_id = {item["id"]: item["demo_value_hkd"] for item in demo_nav_rows}
+    derivative_by_account: dict[str, float] = defaultdict(float)
+    for item in payload.get("derivatives", []):
+        derivative_by_account[item["account_id"]] += float(item.get("estimated_notional_hkd") or 0.0)
+    account_alias_by_id = {card["account_id"]: f"账户 {index}" for index, card in enumerate(account_cards, start=1)}
+    rows = []
+    for index, card in enumerate(account_cards, start=1):
+        account_seed = f"share-account:{card['account_id']}"
+        rows.append(
+            {
+                "label": account_alias_by_id.get(card["account_id"], f"账户 {index}"),
+                "broker": card["broker"],
+                "statement_date": card["statement_date"],
+                "holding_count": card["holding_count"],
+                "trade_count": card["trade_count"],
+                "derivative_count": card["derivative_count"],
+                "risk_notes": [sanitize_share_text(note) for note in card.get("risk_notes", [])],
+                "top_names": card.get("top_names"),
+                "demo_nav_hkd": nav_by_account_id.get(card["account_id"], share_demo_hkd(card.get("nav_hkd"), f"{account_seed}:nav")),
+                "demo_financing_hkd": share_demo_hkd(card.get("financing_hkd"), f"{account_seed}:financing", minimum_non_zero=800.0),
+                "demo_derivative_hkd": share_demo_hkd(
+                    derivative_by_account.get(card["account_id"]),
+                    f"{account_seed}:derivative",
+                    minimum_non_zero=1200.0,
+                ),
+                "demo_weight_pct": next(
+                    (
+                        float(item.get("weight_pct") or 0.0)
+                        for item in demo_nav_rows
+                        if item.get("id") == card["account_id"]
+                    ),
+                    0.0,
+                ),
+            }
+        )
+    return rows, account_alias_by_id
+
+
+def build_share_derivatives(derivatives: list[dict[str, Any]], account_alias_by_id: dict[str, str]) -> list[dict[str, Any]]:
+    rows = []
+    for index, item in enumerate(derivatives[:8], start=1):
+        underlyings = item.get("underlyings") or []
+        if underlyings:
+            description = f"关联 {' / '.join(underlyings[:2])} 的期权或结构性敞口"
+        else:
+            description = "相关衍生品或结构性产品敞口"
+        rows.append(
+            {
+                "symbol": item["symbol"],
+                "account_label": account_alias_by_id.get(item.get("account_id"), f"账户 {index}"),
+                "description": description,
+                "demo_notional_hkd": share_demo_hkd(
+                    item.get("estimated_notional_hkd"),
+                    f"share-derivative:{item.get('account_id')}:{item['symbol']}",
+                    minimum_non_zero=1800.0,
+                ),
+            }
+        )
+    return rows
+
+
+def build_share_payload(
+    force_refresh: bool = False,
+    include_live: bool = True,
+    allow_cached_fallback: bool = True,
+) -> dict[str, Any]:
+    payload = build_dashboard_payload(
+        force_refresh=force_refresh,
+        include_live=include_live,
+        allow_cached_fallback=allow_cached_fallback,
+    )
+    top_theme_names = [item["label"] for item in payload["breakdowns"]["themes"][:3]]
+    share_demo = build_share_demo_charts(payload)
+    share_ai_insights = sanitize_ai_insights_for_share(payload["ai_insights"])
+    share_strategy_views = [
+        {
+            **item,
+            "tag": sanitize_share_text(item.get("tag")),
+            "summary": sanitize_share_text(item.get("summary")),
+        }
+        for item in payload["strategy_views"]
+    ]
+    share_macro_topics = []
+    for item in payload["macro"]["topics"]:
+        share_macro_topics.append(
+            {
+                **item,
+                "headline": sanitize_share_text(item.get("headline")),
+                "summary": sanitize_share_text(item.get("summary")),
+                "impact_weight_pct": round(
+                    max(6.0, float(item.get("impact_weight_pct") or 0.0) * 0.58 + stable_unit(f"share-macro:{item.get('id') or item.get('name')}") * 6.0),
+                    2,
+                ),
+            }
+        )
+    notes_by_symbol = {item["symbol"]: item for item in payload["brief"]["holding_notes"]}
+    demo_holding_by_symbol = {item["symbol"]: item for item in share_demo["top_holdings"]}
+    public_holdings = []
+    public_brief = []
+    for item in payload["holdings"][:12]:
+        note = notes_by_symbol.get(item["symbol"], {})
+        demo = demo_holding_by_symbol.get(item["symbol"], {})
+        public_holdings.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "category_name": item["category_name"],
+                "style_label": item["style_label"],
+                "fundamental_label": item["fundamental_label"],
+                "signal_score": item.get("signal_score", 50),
+                "signal_zone": item.get("signal_zone", "中性跟踪"),
+                "trend_state": item.get("trend_state", "无数据"),
+                "macro_signal": item.get("macro_signal", "中性"),
+                "news_signal": item.get("news_signal", "中性"),
+                "current_price": item.get("current_price"),
+                "change_pct": item.get("change_pct"),
+                "change_pct_5d": item.get("change_pct_5d"),
+                "currency": item["currency"],
+                "market_source_label": item.get("market_source_label"),
+                "trade_date": item.get("trade_date"),
+                "stance": note.get("stance") or "继续跟踪",
+                "summary": sanitize_share_text(note.get("thesis") or item["business_note"]),
+                "action": sanitize_share_text(note.get("action") or "维持跟踪并等待验证。"),
+                "demo_weight_pct": demo.get("demo_weight_pct"),
+                "demo_pnl_pct": demo.get("demo_pnl_pct"),
+                "demo_size_index": demo.get("demo_size_index"),
+            }
+        )
+        public_brief.append(
+            {
+                "symbol": item["symbol"],
+                "name": item["name"],
+                "category_name": item["category_name"],
+                "role": note.get("role") or item["style_label"],
+                "stance": note.get("stance") or "继续跟踪",
+                "thesis": sanitize_share_text(note.get("thesis") or item["business_note"]),
+                "watch_items": sanitize_share_text(note.get("watch_items") or item["watch_items"]),
+                "risk": sanitize_share_text(note.get("risk") or item["fundamental_note"]),
+                "action": sanitize_share_text(note.get("action") or "维持跟踪并等待验证。"),
+                "trend_state": item.get("trend_state", "无数据"),
+                "signal_zone": item.get("signal_zone", "中性跟踪"),
+                "demo_weight_pct": demo.get("demo_weight_pct"),
+                "demo_pnl_pct": demo.get("demo_pnl_pct"),
+                "current_price": item.get("current_price"),
+                "change_pct": item.get("change_pct"),
+                "currency": item["currency"],
+                "market_source_label": item.get("market_source_label"),
+            }
+        )
+    ai_engine = payload["ai_insights"].get("engine") or fallback_ai_engine_meta()
+    live = payload.get("live", {})
+    provider_counts = live.get("provider_counts", {})
+    provider_summary = provider_summary_text(provider_counts) or "无在线行情"
+    demo_total_nav_hkd = share_demo_hkd(payload["summary"].get("total_nav_hkd"), "share-summary-nav", minimum_non_zero=30000.0) or 0.0
+    demo_total_statement_value_hkd = share_demo_hkd(
+        payload["summary"].get("total_statement_value_hkd"),
+        "share-summary-equity",
+        minimum_non_zero=22000.0,
+    ) or 0.0
+    demo_total_financing_hkd = share_demo_hkd(
+        payload["summary"].get("total_financing_hkd"),
+        "share-summary-financing",
+        minimum_non_zero=2600.0,
+    ) or 0.0
+    demo_total_derivative_notional_hkd = share_demo_hkd(
+        payload["summary"].get("total_derivative_notional_hkd"),
+        "share-summary-derivative",
+        minimum_non_zero=3200.0,
+    ) or 0.0
+    share_accounts, account_alias_by_id = build_share_accounts(payload, demo_total_nav_hkd)
+    share_breakdowns = {
+        "themes": build_share_dimension_rows(payload["breakdowns"]["themes"], "share-breakdown-theme", demo_total_statement_value_hkd),
+        "markets": build_share_dimension_rows(payload["breakdowns"]["markets"], "share-breakdown-market", demo_total_statement_value_hkd),
+        "brokers": build_share_dimension_rows(payload["breakdowns"]["brokers"], "share-breakdown-broker", demo_total_nav_hkd),
+    }
+    share_derivatives = build_share_derivatives(payload["derivatives"], account_alias_by_id)
+    public_trades = [
+        {
+            "date": item["date"],
+            "symbol": item["symbol"],
+            "side": item["side"],
+            "broker": account_alias_by_id.get(item.get("account_id"), "账户"),
+        }
+        for item in payload["trades"][:10]
+    ]
+    return {
+        "generated_at": payload["generated_at"],
+        "analysis_date_cn": payload["analysis_date_cn"],
+        "headline": (
+            f"脱敏演示版保留了 {payload['summary']['account_count']} 个账户、"
+            f"{payload['summary']['holding_count']} 个持仓的模块结构，资金与仓位全部替换为 mock 数据。"
+        ),
+        "overview": (
+            f"当前以 {'、'.join(top_theme_names)} 为主线，保留资产总览、账户视角、市场/主题/风格拆分、近期交易与衍生品等模块。"
+            "所有资金规模、仓位、市值、收益和账户层字段均已替换为比真实组合低一个量级以上的演示数据；"
+            "当前价、涨跌幅、趋势状态、宏观主题和执行建议仍来自公开行情或研究框架。"
+        ),
+        "share_notice": "该分享版现在保留个人资产总览、账户视角、市场/主题/风格、交易与衍生品等模块，但所有资金规模均为演示值，不代表真实净值或仓位。",
+        "demo_notice": "演示字段包括：演示净资产、演示市值、演示融资、演示衍生品名义本金、演示权重、演示收益和演示热度指数。整体规模已缩小到真实组合的一成以下。",
+        "demo_summary": {
+            "account_count": payload["summary"]["account_count"],
+            "holding_count": payload["summary"]["holding_count"],
+            "trade_count": payload["summary"]["trade_count"],
+            "derivative_count": payload["summary"]["derivative_count"],
+            "total_nav_hkd": demo_total_nav_hkd,
+            "total_statement_value_hkd": demo_total_statement_value_hkd,
+            "total_financing_hkd": demo_total_financing_hkd,
+            "total_derivative_notional_hkd": demo_total_derivative_notional_hkd,
+        },
+        "share_meta": {
+            "ai_label": ai_engine.get("label"),
+            "ai_note": sanitize_share_text(ai_engine.get("note")),
+            "market_summary": provider_summary,
+            "trade_window_days": HISTORY_POINTS,
+        },
+        "ai_insights": share_ai_insights,
+        "strategy_views": share_strategy_views,
+        "demo_charts": share_demo,
+        "breakdowns": share_breakdowns,
+        "macro": {
+            **payload["macro"],
+            "topics": share_macro_topics,
+        },
+        "accounts": share_accounts,
+        "holdings": public_holdings,
+        "top_holdings": public_holdings,
+        "recent_trades": public_trades,
+        "derivatives": share_derivatives,
+        "brief": {
+            "priority_actions": [
+                {
+                    **item,
+                    "title": sanitize_share_text(item.get("title")),
+                    "detail": sanitize_share_text(item.get("detail")),
+                }
+                for item in payload["brief"]["priority_actions"]
+            ],
+            "holding_notes": public_brief,
+        },
+        "live": live,
+    }
+
+
+def monitored_statements(accounts: list[dict[str, Any]], user_id: str | None = None) -> list[dict[str, Any]]:
     date_by_account = {account["account_id"]: account["statement_date"] for account in accounts}
     source_states = {}
     for account in accounts:
@@ -1515,7 +3321,7 @@ def monitored_statements(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]
                 "issue": account.get("load_issue"),
             }
     rows = []
-    for item in get_statement_sources():
+    for item in get_statement_sources(user_id=user_id):
         path = Path(item["path"])
         status = source_states.get(item["account_id"], {})
         rows.append(
@@ -1535,19 +3341,134 @@ def monitored_statements(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]
     return rows
 
 
+def _empty_dashboard_payload(user_id: str | None = None) -> dict[str, Any]:
+    today = now_cn_date()
+    headline = "先登录并导入你的第一份券商数据"
+    overview = "当前账号下还没有持仓、交易或结单数据。你可以继续上传结单，或在设置页查看各券商的接入条件。"
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "analysis_date_cn": today,
+        "snapshot_date": today,
+        "summary": {
+            "account_count": 0,
+            "holding_count": 0,
+            "trade_count": 0,
+            "derivative_count": 0,
+            "total_nav_hkd": 0.0,
+            "total_statement_value_hkd": 0.0,
+            "total_financing_hkd": 0.0,
+            "total_derivative_notional_hkd": 0.0,
+            "top5_ratio": 0.0,
+            "top1_weight_pct": 0.0,
+            "statement_start_date": today,
+            "statement_end_date": today,
+        },
+        "headline": headline,
+        "overview": overview,
+        "live": {
+            "updated_at": None,
+            "tracked_count": 0,
+            "errors": [],
+            "source_mode": "empty",
+            "fallback_symbols": [],
+            "provider_counts": {},
+            "provider_summary": "",
+        },
+        "macro": {
+            "updated_at": None,
+            "topics": [],
+            "errors": [],
+            "source_mode": "empty",
+        },
+        "source_health": {
+            "parsed_count": 0,
+            "cached_count": 0,
+            "error_count": 0,
+        },
+        "methodology": {
+            "ai_engine": fallback_ai_engine_meta(),
+            "market_data": {
+                "history_window_days": HISTORY_POINTS,
+                "provider_counts": {},
+                "provider_summary": "",
+                "fallback_rule": "尚未导入数据，暂不启动在线行情与缓存回退链路。",
+            },
+        },
+        "ai_insights": empty_ai_insights(),
+        "key_drivers": [],
+        "risk_flags": [],
+        "accounts": [],
+        "breakdowns": {
+            "themes": [],
+            "markets": [],
+            "brokers": [],
+        },
+        "charts": {
+            "theme_donut": [],
+            "broker_risk": [],
+            "holding_scatter": [],
+            "performance": [],
+            "health_radar": [],
+            "style_mix": [],
+            "signal_heatmap": [],
+            "price_regime": [],
+            "macro_topics": [],
+        },
+        "holdings": [],
+        "top_holdings": [],
+        "fundamental_deep_dive": [],
+        "trades": [],
+        "derivatives": [],
+        "strategy_views": [],
+        "brief": {
+            "headline": headline,
+            "overview": overview,
+            "priority_actions": [
+                {
+                    "title": "先完成首个用户数据导入",
+                    "detail": "用手机号或微信完成登录后，优先上传券商结单，或在设置页查看券商自动同步的官方接入要求。",
+                }
+            ],
+            "framework": REFERENCE_FRAMEWORK,
+            "holding_notes": [],
+            "disclaimer": "当前页面还没有用户级投资数据，暂不生成组合判断。",
+        },
+        "update_guide": [
+            "首次使用先登录，再上传第一份结单建立你的账户数据。",
+            "如果暂时没有自动同步能力，可以先通过 PDF 结单完成持仓和交易导入。",
+            "设置页会标出各家券商当前的接入方式和准备事项。",
+        ],
+        "statement_sources": monitored_statements([], user_id=user_id),
+        "reference_sources": [
+            {
+                "label": item["label"],
+                "type": item["type"],
+                "file_name": Path(item["path"]).name,
+            }
+            for item in get_reference_analysis_sources(user_id=user_id)
+        ],
+    }
+
+
 def build_dashboard_payload(
     force_refresh: bool = False,
     include_live: bool = True,
     allow_cached_fallback: bool = True,
     strict_account_ids: set[str] | None = None,
+    include_ai: bool = True,
+    user_id: str | None = None,
+    refresh_portfolio: bool = False,
 ) -> dict[str, Any]:
     portfolio = load_real_portfolio(
-        force_refresh=force_refresh,
+        force_refresh=force_refresh and refresh_portfolio,
         allow_cached_fallback=allow_cached_fallback,
         strict_account_ids=strict_account_ids,
+        user_id=user_id,
     )
     research_cache = load_local_analysis_cache()
     accounts = portfolio["accounts"]
+    if not accounts:
+        return _empty_dashboard_payload(user_id=user_id)
     total_value_hkd = portfolio["total_statement_value_hkd"]
     holdings = [normalize_holding(item, total_value_hkd) for item in portfolio["aggregate_holdings"]]
     holdings.sort(key=lambda item: item["statement_value_hkd"], reverse=True)
@@ -1555,7 +3476,14 @@ def build_dashboard_payload(
     derivatives = [normalize_derivative(item) for item in portfolio["derivatives"]]
     trades = [normalize_trade(item) for item in portfolio["recent_trades"]]
     total_derivative_notional_hkd = round(sum(item["estimated_notional_hkd"] for item in derivatives), 2)
-    live_bundle = {"updated_at": None, "rows_by_symbol": {}, "errors": [], "source_mode": "empty", "fallback_symbols": []}
+    live_bundle = {
+        "updated_at": None,
+        "rows_by_symbol": {},
+        "errors": [],
+        "source_mode": "empty",
+        "fallback_symbols": [],
+        "provider_counts": {},
+    }
     macro_bundle = {"updated_at": None, "topics": [], "category_scores": {}, "errors": [], "source_mode": "empty"}
     if include_live:
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -1595,22 +3523,37 @@ def build_dashboard_payload(
         portfolio["total_nav_hkd"],
     )
     key_drivers = build_key_drivers(holdings, risk_flags, macro_topics)
+    ai_insights = (
+        build_ai_insights(
+            holdings,
+            trades,
+            derivatives,
+            portfolio["total_nav_hkd"],
+            portfolio["total_financing_hkd"],
+            total_derivative_notional_hkd,
+            macro_topics,
+        )
+        if include_ai
+        else empty_ai_insights()
+    )
     source_health = portfolio.get("source_health") or {"parsed_count": len(accounts), "cached_count": 0, "error_count": 0}
 
     main_theme_names = "、".join(item["label"] for item in theme_breakdown[:3])
     top_names = "、".join(item["name"] for item in holdings[:5])
     live_mode_map = {
         "network": "在线行情",
-        "mixed": "在线行情 + 本地日更快照",
-        "cache": "本地日更快照",
+        "mixed": "在线行情 + 最近同步价格",
+        "cache": "最近同步价格",
         "empty": "结单价格",
     }
     macro_mode_map = {
         "network": "在线宏观新闻",
-        "mixed": "在线宏观新闻 + 本地研究快照",
-        "cache": "本地研究快照",
+        "mixed": "在线宏观新闻 + 参考研究",
+        "cache": "参考研究",
         "empty": "静态框架",
     }
+    provider_counts = live_bundle.get("provider_counts", {})
+    provider_summary = provider_summary_text(provider_counts)
     source_cache_overview = ""
     if source_health.get("cached_count"):
         source_cache_overview = f"结单层有 {source_health['cached_count']} 个账户使用缓存快照。"
@@ -1622,6 +3565,8 @@ def build_dashboard_payload(
         f"股票市值约 HK${portfolio['total_statement_value_hkd']:,.0f}，净资产约 HK${portfolio['total_nav_hkd']:,.0f}，"
         f"融资相关负现金约 HK${portfolio['total_financing_hkd']:,.0f}。"
         f"当前价格层使用 {live_mode_map.get(live_bundle.get('source_mode'), '离线快照')}，"
+        f"{f'主数据源为 {provider_summary}；' if provider_summary else ''}"
+        f"60 日走势窗口固定为 {HISTORY_POINTS} 个交易日，接口异常时自动回退到本地日更快照，再兜底到结单价格。"
         f"宏观层使用 {macro_mode_map.get(macro_bundle.get('source_mode'), '静态框架')}。"
         f"{source_cache_overview}"
         "建议阅读顺序是：先看关键驱动与风险旗标，再看优先动作，最后逐只检查个股定位。"
@@ -1653,6 +3598,8 @@ def build_dashboard_payload(
             "errors": live_bundle.get("errors", []),
             "source_mode": live_bundle.get("source_mode", "empty"),
             "fallback_symbols": live_bundle.get("fallback_symbols", []),
+            "provider_counts": provider_counts,
+            "provider_summary": provider_summary,
         },
         "macro": {
             "updated_at": macro_bundle.get("updated_at"),
@@ -1661,6 +3608,16 @@ def build_dashboard_payload(
             "source_mode": macro_bundle.get("source_mode", "empty"),
         },
         "source_health": source_health,
+        "methodology": {
+            "ai_engine": ai_insights.get("engine") or fallback_ai_engine_meta(),
+            "market_data": {
+                "history_window_days": HISTORY_POINTS,
+                "provider_counts": provider_counts,
+                "provider_summary": provider_summary,
+                "fallback_rule": "在线行情失败时先回退到本地日更快照，再兜底为结单价格。",
+            },
+        },
+        "ai_insights": ai_insights,
         "key_drivers": key_drivers,
         "risk_flags": risk_flags,
         "accounts": account_cards,
@@ -1697,6 +3654,7 @@ def build_dashboard_payload(
             "overview": overview,
             "priority_actions": build_priority_actions(
                 holdings,
+                trades,
                 portfolio["total_financing_hkd"],
                 total_derivative_notional_hkd,
                 portfolio["total_nav_hkd"],
@@ -1704,32 +3662,66 @@ def build_dashboard_payload(
             ),
             "framework": REFERENCE_FRAMEWORK,
             "holding_notes": holding_notes,
-            "disclaimer": (
-                "本页结论基于你提供的真实结单与本地参考分析框架自动生成，"
-                "属于研究辅助与执行清单，不构成个性化投顾承诺。"
-            ),
+            "disclaimer": "以下内容用于辅助复盘、跟踪和风险管理，不构成个性化投顾承诺。",
         },
         "update_guide": [
-            "右上角“上传新结单”可为指定账户替换最新 PDF，并立即重建结单缓存；无需再手动改 `statement_sources.py`。",
-            "“刷新行情与宏观”继续走外部行情接口和新闻搜索，用于更新价格、走势与国际政治经济摘要。",
-            "网页展示以真实结单快照为准，适合做仓位复盘、集中度监控、融资/衍生品风险管理和个股跟踪。",
+            "上传新结单后，对应账户的持仓、交易和账户汇总会立即更新。",
+            f"刷新后会同步最新价格、近 {HISTORY_POINTS} 日走势和组合提示。",
+            "建议先看总览，再到持仓和账户页逐项确认重点变化。",
+            "页面更适合做仓位复盘、集中度监控、融资/衍生品风险管理和个股跟踪。",
         ],
-        "statement_sources": monitored_statements(accounts),
+        "statement_sources": monitored_statements(accounts, user_id=user_id),
         "reference_sources": [
             {
                 "label": item["label"],
                 "type": item["type"],
                 "file_name": Path(item["path"]).name,
             }
-            for item in REFERENCE_ANALYSIS_SOURCES
+            for item in get_reference_analysis_sources(user_id=user_id)
         ],
     }
 
 
-def validate_payload(payload: dict[str, Any]) -> list[str]:
+def build_dashboard_ai_payload_from_snapshot(snapshot_payload: dict[str, Any]) -> dict[str, Any]:
+    summary = snapshot_payload.get("summary") or {}
+    macro = snapshot_payload.get("macro") or {}
+    holdings = snapshot_payload.get("holdings") or []
+    trades = snapshot_payload.get("trades") or []
+    derivatives = snapshot_payload.get("derivatives") or []
+
+    ai_insights = (
+        build_ai_insights(
+            holdings,
+            trades,
+            derivatives,
+            float(summary.get("total_nav_hkd") or 0.0),
+            float(summary.get("total_financing_hkd") or 0.0),
+            float(summary.get("total_derivative_notional_hkd") or 0.0),
+            macro.get("topics") or [],
+        )
+        if holdings
+        else empty_ai_insights()
+    )
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "analysis_date_cn": snapshot_payload.get("analysis_date_cn") or now_cn_date(),
+        "snapshot_date": snapshot_payload.get("snapshot_date"),
+        "methodology": {
+            "ai_engine": ai_insights.get("engine") or fallback_ai_engine_meta(),
+        },
+        "ai_insights": ai_insights,
+        "ai_status": {
+            "state": "ready",
+            "message": "AI 洞察已更新，已结合组合结构、近期交易和风险预算完成分析。",
+        },
+    }
+
+
+def validate_payload(payload: dict[str, Any], user_id: str | None = None) -> list[str]:
     errors = []
     summary = payload["summary"]
-    if summary["account_count"] != len(get_statement_sources()):
+    if summary["account_count"] != len(get_statement_sources(user_id=user_id)):
         errors.append("account count mismatch")
     if summary["holding_count"] < 20:
         errors.append("too few holdings")

@@ -1,0 +1,486 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02D587394971AB2730C35379 /* DataHubViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3B0686F248921DA6F1011A /* DataHubViewModel.swift */; };
+		09ABB225F3FD7FC3761B7B6A /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE6BCFFC8EC7012A1EC671C7 /* AppSettingsStore.swift */; };
+		569150252F8AEC1CC12F7489 /* HomeScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 914A0398AC10A98207289624 /* HomeScreen.swift */; };
+		5BEF5DE7EA220E5542A848E4 /* VitalCommandIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB1C9E242D8B95EF62C2D646 /* VitalCommandIOSApp.swift */; };
+		81A110A7095AC23A73E63476 /* DataHubScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B2FD805CF0698D8BAFDFC7 /* DataHubScreen.swift */; };
+		8C23DFBFF56AF9726E8AB9A4 /* ReportsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = C95713B3C6710BE4BF05C702 /* ReportsScreen.swift */; };
+		A248CF7ABCFDA6F0DC3E9B3F /* UIComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370B17794FB5436AB4C78103 /* UIComponents.swift */; };
+		A71FC6D666C277499C0735D9 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3BD030B66EC2B3B467B95AA /* SettingsScreen.swift */; };
+		AD7B865FF63E011CF60828A3 /* TrendsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83976B1022A3925846CE52FE /* TrendsViewModel.swift */; };
+		B46CBA158D38970542340FE6 /* ReportDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = A280331C88DD6396537857BE /* ReportDetailScreen.swift */; };
+		B4C8692BF64B4D67DA83A77C /* HomeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE421D7AE650F346CA36F8EB /* HomeViewModel.swift */; };
+		BBC5794847B0DCF72EA64F86 /* ReportsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31E0D83F67053E2D62FB62A6 /* ReportsViewModel.swift */; };
+		BBEF01792580FBADD4EF97DC /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CF8909CB9F3C413BBBDA1CF /* MainTabView.swift */; };
+		D9833C58EE9DA14CC707CF3D /* LoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 140BFC2163F429B009003422 /* LoadState.swift */; };
+		DCC06E9159400E9A8C46B013 /* TrendsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0B1C51D7033F8BE4303E4CB /* TrendsScreen.swift */; };
+		E1ADC4D58E0A906974789A06 /* VitalCommandMobileCore in Frameworks */ = {isa = PBXBuildFile; productRef = A817E6D02B60FA6433342271 /* VitalCommandMobileCore */; };
+		EC5F9FFEB96DD6BF76F1D04C /* ReportDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAE9C19DFD0758AEB7EEC723 /* ReportDetailViewModel.swift */; };
+		FE7F7A20F689F4BEBD53367B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6D889B4FCAECC76163D09401 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		140BFC2163F429B009003422 /* LoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadState.swift; sourceTree = "<group>"; };
+		21B2FD805CF0698D8BAFDFC7 /* DataHubScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHubScreen.swift; sourceTree = "<group>"; };
+		2F3B0686F248921DA6F1011A /* DataHubViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHubViewModel.swift; sourceTree = "<group>"; };
+		31E0D83F67053E2D62FB62A6 /* ReportsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsViewModel.swift; sourceTree = "<group>"; };
+		35CA740698828C50018496FC /* VitalCommandIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = VitalCommandIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		370B17794FB5436AB4C78103 /* UIComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIComponents.swift; sourceTree = "<group>"; };
+		4CF8909CB9F3C413BBBDA1CF /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		6D889B4FCAECC76163D09401 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		83976B1022A3925846CE52FE /* TrendsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsViewModel.swift; sourceTree = "<group>"; };
+		914A0398AC10A98207289624 /* HomeScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeScreen.swift; sourceTree = "<group>"; };
+		A280331C88DD6396537857BE /* ReportDetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDetailScreen.swift; sourceTree = "<group>"; };
+		A3BD030B66EC2B3B467B95AA /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		BB1C9E242D8B95EF62C2D646 /* VitalCommandIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VitalCommandIOSApp.swift; sourceTree = "<group>"; };
+		C95713B3C6710BE4BF05C702 /* ReportsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsScreen.swift; sourceTree = "<group>"; };
+		DE6BCFFC8EC7012A1EC671C7 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
+		E0B1C51D7033F8BE4303E4CB /* TrendsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrendsScreen.swift; sourceTree = "<group>"; };
+		E5E0F9A7EC83CF5D17F500CC /* VitalCommandMobileCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = VitalCommandMobileCore; path = VitalCommandMobileCore; sourceTree = SOURCE_ROOT; };
+		EE421D7AE650F346CA36F8EB /* HomeViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeViewModel.swift; sourceTree = "<group>"; };
+		FAE9C19DFD0758AEB7EEC723 /* ReportDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportDetailViewModel.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4C1D771E441249F703FD9BDF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1ADC4D58E0A906974789A06 /* VitalCommandMobileCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4575C84C372F1C89860AFD0A /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				A3BD030B66EC2B3B467B95AA /* SettingsScreen.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		63B6C1B326A5F45387BBEDF5 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				E5E0F9A7EC83CF5D17F500CC /* VitalCommandMobileCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		6F7D61DDA00FE8BF503BC510 /* DataHub */ = {
+			isa = PBXGroup;
+			children = (
+				21B2FD805CF0698D8BAFDFC7 /* DataHubScreen.swift */,
+				2F3B0686F248921DA6F1011A /* DataHubViewModel.swift */,
+			);
+			path = DataHub;
+			sourceTree = "<group>";
+		};
+		75CE8B4F06152417EE66518B /* App */ = {
+			isa = PBXGroup;
+			children = (
+				DE6BCFFC8EC7012A1EC671C7 /* AppSettingsStore.swift */,
+				4CF8909CB9F3C413BBBDA1CF /* MainTabView.swift */,
+				BB1C9E242D8B95EF62C2D646 /* VitalCommandIOSApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		780626A506E572A7150C4335 /* VitalCommandIOS */ = {
+			isa = PBXGroup;
+			children = (
+				6D889B4FCAECC76163D09401 /* Assets.xcassets */,
+				75CE8B4F06152417EE66518B /* App */,
+				DAFB80456C376634673C6404 /* Features */,
+			);
+			path = VitalCommandIOS;
+			sourceTree = "<group>";
+		};
+		921B27E6AA9B9E7F83CA2E56 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				140BFC2163F429B009003422 /* LoadState.swift */,
+				370B17794FB5436AB4C78103 /* UIComponents.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A37D9838AAEE2B1FD96F3CD3 = {
+			isa = PBXGroup;
+			children = (
+				63B6C1B326A5F45387BBEDF5 /* Packages */,
+				780626A506E572A7150C4335 /* VitalCommandIOS */,
+				A4495424AF605DEC8A5E4FCF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A4495424AF605DEC8A5E4FCF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				35CA740698828C50018496FC /* VitalCommandIOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		CFDA961D5929E7FFEDA16D50 /* Trends */ = {
+			isa = PBXGroup;
+			children = (
+				E0B1C51D7033F8BE4303E4CB /* TrendsScreen.swift */,
+				83976B1022A3925846CE52FE /* TrendsViewModel.swift */,
+			);
+			path = Trends;
+			sourceTree = "<group>";
+		};
+		DAFB80456C376634673C6404 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				6F7D61DDA00FE8BF503BC510 /* DataHub */,
+				EE76AA48F5A896D2EF4A9508 /* Home */,
+				DF9AD53F32D261FC3E2CF233 /* Reports */,
+				4575C84C372F1C89860AFD0A /* Settings */,
+				921B27E6AA9B9E7F83CA2E56 /* Shared */,
+				CFDA961D5929E7FFEDA16D50 /* Trends */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		DF9AD53F32D261FC3E2CF233 /* Reports */ = {
+			isa = PBXGroup;
+			children = (
+				A280331C88DD6396537857BE /* ReportDetailScreen.swift */,
+				FAE9C19DFD0758AEB7EEC723 /* ReportDetailViewModel.swift */,
+				C95713B3C6710BE4BF05C702 /* ReportsScreen.swift */,
+				31E0D83F67053E2D62FB62A6 /* ReportsViewModel.swift */,
+			);
+			path = Reports;
+			sourceTree = "<group>";
+		};
+		EE76AA48F5A896D2EF4A9508 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				914A0398AC10A98207289624 /* HomeScreen.swift */,
+				EE421D7AE650F346CA36F8EB /* HomeViewModel.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		F7E2753C6D43CC4648B4E3C8 /* VitalCommandIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 67048D02AB6AD885CFD3270C /* Build configuration list for PBXNativeTarget "VitalCommandIOS" */;
+			buildPhases = (
+				97481B333E1CF7B18BE9CF27 /* Sources */,
+				E319B18EC1CCE7F814A1297D /* Resources */,
+				4C1D771E441249F703FD9BDF /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = VitalCommandIOS;
+			packageProductDependencies = (
+				A817E6D02B60FA6433342271 /* VitalCommandMobileCore */,
+			);
+			productName = VitalCommandIOS;
+			productReference = 35CA740698828C50018496FC /* VitalCommandIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		39A6D3007A2C390971AB155B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					F7E2753C6D43CC4648B4E3C8 = {
+						DevelopmentTeam = BBT2D26L2V;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = DFF79863B7FE6E8E1C14C4B5 /* Build configuration list for PBXProject "VitalCommandIOS" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = A37D9838AAEE2B1FD96F3CD3;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6EB7DDD6C13B63D4A0AC2265 /* XCLocalSwiftPackageReference "VitalCommandMobileCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A4495424AF605DEC8A5E4FCF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				F7E2753C6D43CC4648B4E3C8 /* VitalCommandIOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E319B18EC1CCE7F814A1297D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FE7F7A20F689F4BEBD53367B /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		97481B333E1CF7B18BE9CF27 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				09ABB225F3FD7FC3761B7B6A /* AppSettingsStore.swift in Sources */,
+				81A110A7095AC23A73E63476 /* DataHubScreen.swift in Sources */,
+				02D587394971AB2730C35379 /* DataHubViewModel.swift in Sources */,
+				569150252F8AEC1CC12F7489 /* HomeScreen.swift in Sources */,
+				B4C8692BF64B4D67DA83A77C /* HomeViewModel.swift in Sources */,
+				D9833C58EE9DA14CC707CF3D /* LoadState.swift in Sources */,
+				BBEF01792580FBADD4EF97DC /* MainTabView.swift in Sources */,
+				B46CBA158D38970542340FE6 /* ReportDetailScreen.swift in Sources */,
+				EC5F9FFEB96DD6BF76F1D04C /* ReportDetailViewModel.swift in Sources */,
+				8C23DFBFF56AF9726E8AB9A4 /* ReportsScreen.swift in Sources */,
+				BBC5794847B0DCF72EA64F86 /* ReportsViewModel.swift in Sources */,
+				A71FC6D666C277499C0735D9 /* SettingsScreen.swift in Sources */,
+				DCC06E9159400E9A8C46B013 /* TrendsScreen.swift in Sources */,
+				AD7B865FF63E011CF60828A3 /* TrendsViewModel.swift in Sources */,
+				A248CF7ABCFDA6F0DC3E9B3F /* UIComponents.swift in Sources */,
+				5BEF5DE7EA220E5542A848E4 /* VitalCommandIOSApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		218276AB5986FF9454D677C7 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2504C124EEBAA2F083BDC351 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		74963B79AD4ECBC5D3ED7B63 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = BBT2D26L2V;
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HealthAI;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
+					UIInterfaceOrientationPortrait,
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xmly.vitalcommandios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.1;
+			};
+			name = Release;
+		};
+		F10DDF5D6548457C33187490 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = BBT2D26L2V;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HealthAI;
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
+					UIInterfaceOrientationPortrait,
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xmly.vitalcommandios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.1;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		67048D02AB6AD885CFD3270C /* Build configuration list for PBXNativeTarget "VitalCommandIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2504C124EEBAA2F083BDC351 /* Debug */,
+				218276AB5986FF9454D677C7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		DFF79863B7FE6E8E1C14C4B5 /* Build configuration list for PBXProject "VitalCommandIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F10DDF5D6548457C33187490 /* Debug */,
+				74963B79AD4ECBC5D3ED7B63 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		6EB7DDD6C13B63D4A0AC2265 /* XCLocalSwiftPackageReference "VitalCommandMobileCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = VitalCommandMobileCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A817E6D02B60FA6433342271 /* VitalCommandMobileCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = VitalCommandMobileCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 39A6D3007A2C390971AB155B /* Project object */;
+}

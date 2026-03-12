@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>logFormatVersion</key>
+	<integer>12</integer>
+	<key>logs</key>
+	<dict>
+		<key>F966F8F8-9852-45B4-8016-DD6B8B537EFB</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>F966F8F8-9852-45B4-8016-DD6B8B537EFB.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>PortfolioWorkbenchIOS project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>PortfolioWorkbenchIOS</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project PortfolioWorkbenchIOS with scheme PortfolioWorkbenchIOS and configuration Debug</string>
+			<key>timeStartedRecording</key>
+			<real>794930037.13064504</real>
+			<key>timeStoppedRecording</key>
+			<real>794930052.38541996</real>
+			<key>title</key>
+			<string>Building project PortfolioWorkbenchIOS with scheme PortfolioWorkbenchIOS and configuration Debug</string>
+			<key>uniqueIdentifier</key>
+			<string>F966F8F8-9852-45B4-8016-DD6B8B537EFB</string>
+		</dict>
+	</dict>
+</dict>
+</plist>

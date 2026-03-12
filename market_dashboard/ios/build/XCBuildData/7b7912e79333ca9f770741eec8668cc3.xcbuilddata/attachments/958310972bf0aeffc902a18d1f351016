@@ -1,0 +1,26 @@
+{
+  "" : {
+    "const-values" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary.swiftconstvalues",
+    "dependencies" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary.d",
+    "diagnostics" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary.dia",
+    "emit-module-dependencies" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary-emit-module.dia",
+    "pch" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchMobileCore-primary.swiftdeps"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/Models.swift" : {
+    "index-unit-output-path" : "/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/Models.o",
+    "llvm-bc" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/Models.bc",
+    "object" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/Models.o"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/MultipartFormData.swift" : {
+    "index-unit-output-path" : "/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/MultipartFormData.o",
+    "llvm-bc" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/MultipartFormData.bc",
+    "object" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/MultipartFormData.o"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore/PortfolioWorkbenchAPIClient.swift" : {
+    "index-unit-output-path" : "/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchAPIClient.o",
+    "llvm-bc" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchAPIClient.bc",
+    "object" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/PortfolioWorkbenchMobileCore/build/PortfolioWorkbenchMobileCore.build/Release-iphonesimulator/PortfolioWorkbenchMobileCore.build/Objects-normal/arm64/PortfolioWorkbenchAPIClient.o"
+  }
+}
