@@ -143,7 +143,7 @@ function buildGeneticInsights(
         : []
     },
     possible_reason:
-      "该类 finding 更适合作为长期背景和个体差异提示，不能替代连续指标记录，但可以帮助解释长期倾向。",
+      "这类基因结果更适合放在长期观察中，用来解释个体差异和长期倾向。",
     suggested_action: finding.suggestion,
     disclaimer:
       "非医疗诊断：以下内容仅用于健康数据整理、趋势解释与生活方式管理，不替代医生判断。"

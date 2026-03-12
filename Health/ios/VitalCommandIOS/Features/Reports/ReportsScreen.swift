@@ -1,0 +1,254 @@
+import SwiftUI
+import VitalCommandMobileCore
+
+struct ReportsScreen: View {
+    @EnvironmentObject private var settings: AppSettingsStore
+    @StateObject private var viewModel = ReportsViewModel()
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                switch viewModel.state {
+                case .idle, .loading:
+                    ProgressView("正在加载报告")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                case let .failed(message):
+                    EmptyStateCard(
+                        title: "报告列表暂时不可用",
+                        message: message,
+                        actionTitle: "重试"
+                    ) {
+                        Task { await reload() }
+                    }
+                    .padding()
+
+                case .loaded:
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            reportHeader
+
+                            ForEach(viewModel.visibleReports) { report in
+                                NavigationLink {
+                                    ReportDetailScreen(reportID: report.id)
+                                } label: {
+                                    ReportSnapshotCard(report: report)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(16)
+                    }
+                    .background(Color.appGroupedBackground)
+                }
+            }
+            .navigationTitle("报告")
+        }
+        .task(id: settings.dashboardReloadKey) {
+            await reload()
+        }
+        .onAppear {
+            Task {
+                await reload()
+            }
+        }
+    }
+
+    private func reload() async {
+        do {
+            let client = try settings.makeClient()
+            await viewModel.load(using: client)
+        } catch {
+            viewModel.setError(error.localizedDescription)
+        }
+    }
+
+    private var reportHeader: some View {
+        let reports = viewModel.visibleReports
+        let insights = reports.flatMap(\.structuredInsights.insights)
+        let positiveCount = insights.filter { $0.severity == .positive }.count
+        let attentionCount = insights.filter { $0.severity == .medium || $0.severity == .high }.count
+
+        return SectionCard(title: "报告总览", subtitle: "周报与月报摘要，先看重点再进入详情。") {
+            VStack(alignment: .leading, spacing: 14) {
+                Picker("报告类型", selection: $viewModel.selectedKind) {
+                    Text("周报").tag(ReportKind.weekly)
+                    Text("月报").tag(ReportKind.monthly)
+                }
+                .pickerStyle(.segmented)
+
+                HStack(spacing: 12) {
+                    ReportSummaryBadge(
+                        title: "当前列表",
+                        value: "\(reports.count)",
+                        tint: .teal
+                    )
+                    ReportSummaryBadge(
+                        title: "积极洞察",
+                        value: "\(positiveCount)",
+                        tint: .green
+                    )
+                    ReportSummaryBadge(
+                        title: "需关注",
+                        value: "\(attentionCount)",
+                        tint: .orange
+                    )
+                }
+            }
+        }
+    }
+}
+
+private struct ReportSummaryBadge: View {
+    let title: String
+    let value: String
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(tint)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+}
+
+private struct ReportSnapshotCard: View {
+    let report: HealthReportSnapshotRecord
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                StatusBadge(
+                    text: report.reportType == .weekly ? "周报" : "月报",
+                    tint: report.reportType == .weekly ? .teal : .indigo
+                )
+                Spacer()
+                Text(report.periodEnd)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(report.title)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.primary)
+
+            Text(report.summary.output.headline)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
+                ForEach(report.structuredInsights.metricSummaries.prefix(4)) { metric in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(metric.metricName)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(metricValue(metric))
+                            .font(.subheadline.weight(.bold))
+                        Text(metricDelta(metric))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(metricTint(metric).opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
+
+            HStack(spacing: 8) {
+                ForEach(report.structuredInsights.insights.prefix(3)) { insight in
+                    Text(insight.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(insightColor(insight.severity))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(insightColor(insight.severity).opacity(0.10), in: Capsule())
+                        .lineLimit(1)
+                }
+                if let review = report.planReview {
+                    Text("计划 \(Int(review.overallCompletionRate * 100))%")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.purple)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.purple.opacity(0.10), in: Capsule())
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.forward")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .background(
+            LinearGradient(
+                colors: [
+                    (report.reportType == .weekly ? Color.teal : Color.indigo).opacity(0.12),
+                    Color.white
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: 26, style: .continuous)
+        )
+    }
+
+    private func metricValue(_ metric: MetricSummary) -> String {
+        if metric.unit == "mmol/L" {
+            return "\(formatDecimal(metric.latestValue, fractionDigits: 2)) \(metric.unit)"
+        }
+        if metric.unit == "%" {
+            return "\(formatDecimal(metric.latestValue, fractionDigits: 1)) \(metric.unit)"
+        }
+        if metric.unit == "min" && metric.metricCode.contains("sleep") {
+            return "\(formatDecimal(metric.latestValue / 60, fractionDigits: 1)) h"
+        }
+        return "\(Int(metric.latestValue.rounded())) \(metric.unit)"
+    }
+
+    private func metricDelta(_ metric: MetricSummary) -> String {
+        guard let delta = metric.latestVsMean else {
+            return "暂无基线对比"
+        }
+        let sign = delta > 0 ? "+" : ""
+        if metric.unit == "mmol/L" || metric.unit == "%" {
+            return "较均值 \(sign)\(formatDecimal(delta, fractionDigits: 2)) \(metric.unit)"
+        }
+        return "较均值 \(sign)\(Int(delta.rounded())) \(metric.unit)"
+    }
+
+    private func metricTint(_ metric: MetricSummary) -> Color {
+        if metric.abnormalFlag == "high" || metric.abnormalFlag == "low" {
+            return .orange
+        }
+        return metric.trendDirection == "down" ? .teal : .blue
+    }
+
+    private func insightColor(_ severity: StructuredInsightSeverity) -> Color {
+        switch severity {
+        case .positive:
+            return .green
+        case .low:
+            return .blue
+        case .medium:
+            return .orange
+        case .high:
+            return .red
+        }
+    }
+}

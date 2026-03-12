@@ -1,0 +1,676 @@
+{
+  "builtTestProducts" : [
+    {
+      "binaryPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.xctest/Contents/MacOS/VitalCommandMobileCorePackageTests",
+      "packagePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore",
+      "productName" : "VitalCommandMobileCorePackageTests"
+    }
+  ],
+  "copyCommands" : {
+
+  },
+  "explicitTargetDependencyImportCheckingMode" : {
+    "none" : {
+
+    }
+  },
+  "generatedSourceTargetSet" : [
+
+  ],
+  "pluginDescriptions" : [
+
+  ],
+  "swiftCommands" : {
+    "C.VitalCommandMobileCore-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/sources",
+      "importPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/HealthAPIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/MultipartFormData.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VitalCommandMobileCore",
+      "moduleOutputPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCore.swiftmodule",
+      "objects" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.swift.o",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.swift.o",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/include/VitalCommandMobileCore-Swift.h",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vitalcommandmobilecore"
+      ],
+      "outputFileMapPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCore.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/HealthAPIClient.swift",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/Models.swift",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/MultipartFormData.swift"
+      ],
+      "tempsPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.VitalCommandMobileCorePackageTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/sources",
+      "importPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.derived/runner.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCoreTests.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VitalCommandMobileCorePackageTests",
+      "moduleOutputPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCorePackageTests.swiftmodule",
+      "objects" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/runner.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-emit-objc-header",
+        "-emit-objc-header-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/include/VitalCommandMobileCorePackageTests-Swift.h",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vitalcommandmobilecore"
+      ],
+      "outputFileMapPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCorePackageTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.derived/runner.swift"
+      ],
+      "tempsPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build",
+      "wholeModuleOptimization" : false
+    },
+    "C.VitalCommandMobileCoreTests-arm64-apple-macosx26.0-debug.module" : {
+      "executable" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "fileList" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/sources",
+      "importPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "inputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Tests/VitalCommandMobileCoreTests/HealthAPIClientTests.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCore.swiftmodule"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/sources"
+        }
+      ],
+      "isLibrary" : true,
+      "moduleName" : "VitalCommandMobileCoreTests",
+      "moduleOutputPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCoreTests.swiftmodule",
+      "objects" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/HealthAPIClientTests.swift.o"
+      ],
+      "otherArguments" : [
+        "-target",
+        "arm64-apple-macosx14.0",
+        "-incremental",
+        "-enable-batch-mode",
+        "-serialize-diagnostics",
+        "-index-store-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/index/store",
+        "-Onone",
+        "-enable-testing",
+        "-Xfrontend",
+        "-enable-cross-import-overlays",
+        "-j10",
+        "-DSWIFT_PACKAGE",
+        "-DDEBUG",
+        "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+        "-module-cache-path",
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+        "-parseable-output",
+        "-parse-as-library",
+        "-swift-version",
+        "5",
+        "-plugin-path",
+        "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+        "-sdk",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-F",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-I",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-L",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+        "-g",
+        "-Xcc",
+        "-isysroot",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+        "-Xcc",
+        "-F",
+        "-Xcc",
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+        "-Xcc",
+        "-fPIC",
+        "-Xcc",
+        "-g",
+        "-package-name",
+        "vitalcommandmobilecore"
+      ],
+      "outputFileMapPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/output-file-map.json",
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/HealthAPIClientTests.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules/VitalCommandMobileCoreTests.swiftmodule"
+        }
+      ],
+      "prepareForIndexing" : false,
+      "sources" : [
+        "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Tests/VitalCommandMobileCoreTests/HealthAPIClientTests.swift"
+      ],
+      "tempsPath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build",
+      "wholeModuleOptimization" : false
+    }
+  },
+  "swiftFrontendCommands" : {
+
+  },
+  "swiftTargetScanArgs" : {
+    "VitalCommandMobileCore" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VitalCommandMobileCore",
+      "-package-name",
+      "vitalcommandmobilecore",
+      "-c",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/HealthAPIClient.swift",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/Models.swift",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/MultipartFormData.swift",
+      "-I",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/include/VitalCommandMobileCore-Swift.h",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vitalcommandmobilecore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "VitalCommandMobileCorePackageTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VitalCommandMobileCorePackageTests",
+      "-package-name",
+      "vitalcommandmobilecore",
+      "-c",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.derived/runner.swift",
+      "-I",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-emit-objc-header",
+      "-emit-objc-header-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/include/VitalCommandMobileCorePackageTests-Swift.h",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vitalcommandmobilecore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ],
+    "VitalCommandMobileCoreTests" : [
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc",
+      "-module-name",
+      "VitalCommandMobileCoreTests",
+      "-package-name",
+      "vitalcommandmobilecore",
+      "-c",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Tests/VitalCommandMobileCoreTests/HealthAPIClientTests.swift",
+      "-I",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/Modules",
+      "-target",
+      "arm64-apple-macosx14.0",
+      "-incremental",
+      "-enable-batch-mode",
+      "-serialize-diagnostics",
+      "-index-store-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/index/store",
+      "-Onone",
+      "-enable-testing",
+      "-Xfrontend",
+      "-enable-cross-import-overlays",
+      "-j10",
+      "-DSWIFT_PACKAGE",
+      "-DDEBUG",
+      "-DSWIFT_MODULE_RESOURCE_BUNDLE_UNAVAILABLE",
+      "-module-cache-path",
+      "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/ModuleCache",
+      "-parseable-output",
+      "-parse-as-library",
+      "-swift-version",
+      "5",
+      "-plugin-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing",
+      "-sdk",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-F",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-I",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-L",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib",
+      "-g",
+      "-Xcc",
+      "-isysroot",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX26.2.sdk",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/Frameworks",
+      "-Xcc",
+      "-F",
+      "-Xcc",
+      "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/Library/PrivateFrameworks",
+      "-Xcc",
+      "-fPIC",
+      "-Xcc",
+      "-g",
+      "-package-name",
+      "vitalcommandmobilecore",
+      "-driver-use-frontend-path",
+      "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+    ]
+  },
+  "targetDependencyMap" : {
+    "VitalCommandMobileCore" : [
+
+    ],
+    "VitalCommandMobileCorePackageTests" : [
+      "VitalCommandMobileCoreTests",
+      "VitalCommandMobileCore"
+    ],
+    "VitalCommandMobileCoreTests" : [
+      "VitalCommandMobileCore"
+    ]
+  },
+  "testDiscoveryCommands" : {
+
+  },
+  "testEntryPointCommands" : {
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.derived/runner.swift" : {
+      "inputs" : [
+
+      ],
+      "outputs" : [
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.derived/runner.swift"
+        }
+      ]
+    }
+  },
+  "traitConfiguration" : {
+    "default" : {
+
+    }
+  },
+  "writeCommands" : {
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/HealthAPIClient.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/Models.swift"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/MultipartFormData.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/sources"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.derived/runner.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/sources"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.product/Objects.LinkFileList" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<link-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.build/runner.swift.o"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/HealthAPIClientTests.swift.o"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCorePackageTests.product/Objects.LinkFileList"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/sources" : {
+      "alwaysOutOfDate" : false,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<sources-file-list>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Tests/VitalCommandMobileCoreTests/HealthAPIClientTests.swift"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCoreTests.build/sources"
+    },
+    "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt" : {
+      "alwaysOutOfDate" : true,
+      "inputs" : [
+        {
+          "kind" : "virtual",
+          "name" : "<swift-get-version>"
+        },
+        {
+          "kind" : "file",
+          "name" : "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc"
+        }
+      ],
+      "outputFilePath" : "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/swift-version--58304C5D6DBC2206.txt"
+    }
+  }
+}

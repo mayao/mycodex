@@ -71,6 +71,10 @@ export interface ImportRequest {
   importerKey: ImporterKey;
   userId: string;
   filePath: string;
+  importTaskId?: string;
+  dataSourceId?: string;
+  sourceFileName?: string;
+  taskNotes?: string;
 }
 
 export interface ImportWarning {

@@ -127,7 +127,7 @@ function buildFallbackSummary(
   if (primary.length === 0) {
     return {
       period_kind: input.period.kind,
-      headline: `${input.period.label}未出现新的高优先级结构化提醒，当前更适合保持记录并观察趋势延续性。`,
+      headline: `${input.period.label}没有出现新的高优先级变化，建议继续记录并观察趋势是否延续。`,
       most_important_changes: ["现有结构化证据未提示新的高优先级变化。"],
       possible_reasons: ["现有结构化证据不足以支持进一步判断。"],
       priority_actions: ["继续按当前节奏记录关键指标，并按计划复查。"],
@@ -171,8 +171,8 @@ function buildFallbackSummary(
   const contextInsight = contextualInsights[0];
   const headline =
     topInsight.severity === "positive"
-      ? `${input.period.label}出现了可延续的积极变化，但仍需结合后续记录确认趋势是否稳定。${contextInsight ? ` 同时，${contextInsight.title}也提示这些变化要放在年度基线和长期背景中理解。` : ""}`
-      : `${input.period.label}最值得关注的变化集中在${topInsight.title.replace(/最近一次|连续 \d+ 次/g, "").trim()}，当前建议以连续观察和明确行动为主。${contextInsight ? ` 同时，${contextInsight.title}提示不能只看短期波动，还要结合年度体检和长期背景一起判断。` : ""}`;
+      ? `${input.period.label}出现了积极变化，建议继续当前节奏并确认趋势是否稳定。${contextInsight ? ` 同时也要兼顾${contextInsight.title}。` : ""}`
+      : `${input.period.label}重点关注${topInsight.title.replace(/最近一次|连续 \d+ 次/g, "").trim()}，建议继续跟踪并落实下一步行动。${contextInsight ? ` 同时也要兼顾${contextInsight.title}。` : ""}`;
 
   return {
     period_kind: input.period.kind,

@@ -1,0 +1,109 @@
+INSERT OR REPLACE INTO data_sources (
+  id,
+  source_type,
+  name,
+  vendor,
+  ingest_channel,
+  note
+)
+VALUES (
+  'source-gene-report',
+  'gene_pdf',
+  '基因检测报告',
+  'Gene 微基因',
+  'mock',
+  '当前为 schema 与演示 mock，后续再接真实报告'
+);
+
+INSERT OR REPLACE INTO genetic_findings (
+  id,
+  source_id,
+  gene_symbol,
+  variant_id,
+  trait_code,
+  risk_level,
+  evidence_level,
+  summary,
+  suggestion,
+  recorded_at,
+  raw_payload_json
+)
+VALUES
+(
+  'gene-lpa-demo',
+  'source-gene-report',
+  'LPA',
+  'rs3798220',
+  'lipid.lpa_background',
+  'high',
+  'A',
+  '演示位点提示可能存在较高的 Lp(a) 背景倾向，适合作为长期风险标签而非短期波动指标。',
+  '将 Lp(a) 作为慢变量，每 6-12 个月复查一次，并与 LDL-C 管理联动观察。',
+  '2025-12-01T09:00:00+08:00',
+  '{"isDemo":true,"category":"lipid"}'
+),
+(
+  'gene-apoe-demo',
+  'source-gene-report',
+  'APOE',
+  'rs429358',
+  'lipid.ldl_clearance_response',
+  'medium',
+  'B',
+  '演示位点提示 LDL-C 对饮食结构和恢复波动可能更敏感，适合作为解释同样干预下个体差异的背景因素。',
+  '把 LDL-C 与 ApoB 的复查节奏固定下来，重点观察饮食调整后的回落幅度是否稳定。',
+  '2025-12-01T09:00:00+08:00',
+  '{"isDemo":true,"category":"lipid"}'
+),
+(
+  'gene-fto-demo',
+  'source-gene-report',
+  'FTO',
+  'rs9939609',
+  'body.weight_regain_tendency',
+  'medium',
+  'B',
+  '演示位点提示体脂和食欲调节可能更容易在生活节奏波动时反弹，适合作为体重管理中的长期背景提示。',
+  '把体脂率、体重和训练执行度一起看，优先关注节假日或出差周期后的回弹幅度。',
+  '2025-12-01T09:00:00+08:00',
+  '{"isDemo":true,"category":"body"}'
+),
+(
+  'gene-tcf7l2-demo',
+  'source-gene-report',
+  'TCF7L2',
+  'rs7903146',
+  'glycemic.postprandial_response',
+  'medium',
+  'A',
+  '演示位点提示餐后血糖波动可能更值得关注，适合作为解释相同体重下降下代谢改善速度差异的背景信息。',
+  '如后续接入更多血糖或饮食记录，可优先观察晚餐后恢复速度与下一次复查的关系。',
+  '2025-12-01T09:00:00+08:00',
+  '{"isDemo":true,"category":"glycemic"}'
+),
+(
+  'gene-caffeine-demo',
+  'source-gene-report',
+  'CYP1A2',
+  'rs762551',
+  'sleep.caffeine_sensitivity',
+  'medium',
+  'B',
+  '演示位点提示咖啡因清除速度可能偏慢，适合作为睡眠恢复建议的个体化背景信息。',
+  '如后续导入真实基因结果，可结合睡眠数据评估晚间咖啡因摄入窗口。',
+  '2025-12-01T09:00:00+08:00',
+  '{"isDemo":true,"category":"sleep"}'
+),
+(
+  'gene-ace-demo',
+  'source-gene-report',
+  'ACE',
+  'rs4343',
+  'activity.endurance_response',
+  'low',
+  'C',
+  '演示位点提示更适合通过连续的训练执行度与恢复质量来观察耐力适应，而不是仅凭单次训练表现做判断。',
+  '把训练分钟、活动能量和睡眠恢复放在同一时间轴上看，判断当前训练安排是否可持续。',
+  '2025-12-01T09:00:00+08:00',
+  '{"isDemo":true,"category":"activity"}'
+);

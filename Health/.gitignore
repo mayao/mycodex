@@ -6,7 +6,13 @@ tsconfig.tsbuildinfo
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
+data/*.db
 npm-debug.log*
 .env
 .env.local
 .env.*.local
+build/
+output/
+ios/build/
+*.xcuserdata
+.DS_Store

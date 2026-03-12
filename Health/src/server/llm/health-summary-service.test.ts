@@ -106,7 +106,7 @@ test("week summaries keep low-severity insights that happen early in the local d
     new MockHealthSummaryProvider()
   );
 
-  assert.match(result.output.headline, /^2026-03-03 至 2026-03-08 周报最值得关注的变化集中在体重/);
+  assert.match(result.output.headline, /^2026-03-03 至 2026-03-08 周报重点关注体重/);
   assert.ok(
     result.output.most_important_changes.some((item) => item.includes("体重 在本周起始日凌晨出现回落"))
   );

@@ -1,9 +1,19 @@
-import { randomUUID } from "node:crypto";
 import { basename } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 import { buildImportAuditPayload } from "./import-privacy";
 import { canonicalizeUnit, extractUnitFromHeader, normalizeHeader, stripHeaderUnit } from "./header-utils";
+import {
+  appendTaskNotes,
+  buildReferenceRange,
+  buildTaskNotes,
+  createImportTask,
+  ensureDataSource,
+  ensureMetricDefinition,
+  finalizeImportTask,
+  insertImportRowLog,
+  upsertMetricRecord
+} from "./import-task-support";
 import { readTabularFile } from "./tabular-reader";
 import { computeAbnormalFlag, normalizeMetricValue } from "./unit-normalizer";
 import type {
@@ -16,29 +26,6 @@ import type {
   ImporterSpec,
   MappedHeader
 } from "./types";
-
-function buildReferenceRange(mapping: ImportFieldMapping): string | null {
-  if (mapping.referenceRange) {
-    return mapping.referenceRange;
-  }
-
-  if (
-    typeof mapping.referenceLow === "number" &&
-    typeof mapping.referenceHigh === "number"
-  ) {
-    return `${mapping.referenceLow} - ${mapping.referenceHigh} ${mapping.canonicalUnit}`;
-  }
-
-  if (typeof mapping.referenceLow === "number") {
-    return `>= ${mapping.referenceLow} ${mapping.canonicalUnit}`;
-  }
-
-  if (typeof mapping.referenceHigh === "number") {
-    return `<= ${mapping.referenceHigh} ${mapping.canonicalUnit}`;
-  }
-
-  return null;
-}
 
 function formatSampleTime(value: string): string | undefined {
   const trimmed = value.trim();
@@ -129,202 +116,12 @@ function parseNumericValue(rawValue: string): number {
   return numeric;
 }
 
-function ensureMetricDefinition(database: DatabaseSync, mapping: ImportFieldMapping): void {
-  database
-    .prepare(
-      `
-      INSERT INTO metric_definition (
-        metric_code,
-        metric_name,
-        category,
-        description,
-        canonical_unit,
-        better_direction,
-        reference_range,
-        supported_source_types,
-        is_active,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      ON CONFLICT(metric_code) DO UPDATE SET
-        metric_name = excluded.metric_name,
-        category = excluded.category,
-        description = excluded.description,
-        canonical_unit = excluded.canonical_unit,
-        better_direction = excluded.better_direction,
-        reference_range = excluded.reference_range,
-        updated_at = CURRENT_TIMESTAMP
-    `
-    )
-    .run(
-      mapping.metricCode,
-      mapping.metricName,
-      mapping.category,
-      mapping.description,
-      mapping.canonicalUnit,
-      mapping.betterDirection,
-      buildReferenceRange(mapping),
-      "csv,xlsx,xls"
-    );
-}
-
-function ensureDataSource(
-  database: DatabaseSync,
-  userId: string,
-  sourceType: string,
-  sourceName: string
-): string {
-  const sourceId = `data-source::${sourceType}`;
-
-  database
-    .prepare(
-      `
-      INSERT INTO data_source (
-        id, user_id, source_type, source_name, vendor, ingest_channel,
-        source_file, notes, created_at, updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      ON CONFLICT(id) DO UPDATE SET
-        source_name = excluded.source_name,
-        updated_at = CURRENT_TIMESTAMP
-    `
-    )
-    .run(
-      sourceId,
-      userId,
-      sourceType,
-      sourceName,
-      null,
-      "file",
-      null,
-      `importer source ${sourceType}`
-    );
-
-  return sourceId;
-}
-
-function insertImportRowLog(
-  database: DatabaseSync,
-  importTaskId: string,
-  result: ImportRowResult,
-  auditPayload: Record<string, string>
-): void {
-  database
-    .prepare(
-      `
-      INSERT INTO import_row_log (
-        id, import_task_id, row_number, row_status, metric_code,
-        source_field, error_message, raw_payload_json, created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `
-    )
-    .run(
-      randomUUID(),
-      importTaskId,
-      result.rowNumber,
-      result.status,
-      result.metricCode ?? null,
-      result.sourceField ?? null,
-      result.errorMessage ?? null,
-      JSON.stringify(auditPayload)
-    );
-}
-
-function buildTaskNotes(warnings: ImportWarning[], fatalError?: string): string {
-  const notes = [`warning_count=${warnings.length}`];
-  const warningCodes = [...new Set(warnings.map((warning) => warning.code))];
-
-  if (warningCodes.length > 0) {
-    notes.push(`warning_codes=${warningCodes.join(",")}`);
-  }
-
-  if (fatalError) {
-    notes.push(`fatal_reason=${fatalError}`);
-  }
-
-  return notes.join(" | ");
-}
-
-function createImportTask(
-  database: DatabaseSync,
-  request: ImportRequest,
-  spec: ImporterSpec,
-  dataSourceId: string
-): string {
-  const importTaskId = `import-task::${randomUUID()}`;
-
-  database
-    .prepare(
-      `
-      INSERT INTO import_task (
-        id, user_id, data_source_id, task_type, task_status, source_type,
-        source_file, started_at, finished_at, total_records, success_records,
-        failed_records, notes, created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `
-    )
-    .run(
-      importTaskId,
-      request.userId,
-      dataSourceId,
-      spec.taskType,
-      "running",
-      spec.sourceType,
-      basename(request.filePath),
-      new Date().toISOString(),
-      null,
-      0,
-      0,
-      0,
-      null
-    );
-
-  return importTaskId;
-}
-
-function finalizeImportTask(
-  database: DatabaseSync,
-  importTaskId: string,
-  taskStatus: ImportTaskStatus,
-  totalRecords: number,
-  successRecords: number,
-  failedRecords: number,
-  notes: string
-): void {
-  database
-    .prepare(
-      `
-      UPDATE import_task
-      SET
-        task_status = ?,
-        finished_at = ?,
-        total_records = ?,
-        success_records = ?,
-        failed_records = ?,
-        notes = ?
-      WHERE id = ?
-    `
-    )
-    .run(
-      taskStatus,
-      new Date().toISOString(),
-      totalRecords,
-      successRecords,
-      failedRecords,
-      notes,
-      importTaskId
-    );
-}
-
 export function executeTabularImport(
   database: DatabaseSync,
   spec: ImporterSpec,
   request: ImportRequest
 ): ImportExecutionResult {
-  const sourceFile = basename(request.filePath);
+  const sourceFile = request.sourceFileName ?? basename(request.filePath);
   const data = readTabularFile(request.filePath);
   const mappedHeaders = resolveMappedHeaders(data.headers, spec.fieldMappings);
   const warnings: ImportWarning[] = data.headers
@@ -342,12 +139,28 @@ export function executeTabularImport(
       header,
       message: `Unmapped header: ${header}`
     }));
-  const dataSourceId = ensureDataSource(database, request.userId, spec.sourceType, spec.sourceName);
-  const importTaskId = createImportTask(database, request, spec, dataSourceId);
+  const dataSourceId =
+    request.dataSourceId ??
+    ensureDataSource(database, request.userId, {
+      sourceType: spec.sourceType,
+      sourceName: spec.sourceName,
+      ingestChannel: "file",
+      sourceFile,
+      notes: `importer source ${spec.sourceType}`
+    });
+  const importTaskId =
+    request.importTaskId ??
+    createImportTask(database, request, {
+      dataSourceId,
+      taskType: spec.taskType,
+      sourceType: spec.sourceType,
+      sourceFile,
+      notes: request.taskNotes
+    });
   const logSummary: ImportRowResult[] = [];
 
   for (const header of mappedHeaders) {
-    ensureMetricDefinition(database, header.mapping);
+    ensureMetricDefinition(database, header.mapping, "csv,xlsx,xls,pdf,image,ocr");
   }
 
   if (data.rows.length === 0) {
@@ -363,7 +176,7 @@ export function executeTabularImport(
       0,
       0,
       0,
-      buildTaskNotes(warnings, "fatal import error")
+      appendTaskNotes(request.taskNotes, buildTaskNotes(warnings, "fatal import error"))
     );
 
     return {
@@ -392,7 +205,7 @@ export function executeTabularImport(
       0,
       0,
       0,
-      buildTaskNotes(warnings, "fatal import error")
+      appendTaskNotes(request.taskNotes, buildTaskNotes(warnings, "fatal import error"))
     );
 
     return {
@@ -475,36 +288,23 @@ export function executeTabularImport(
           });
           const abnormalFlag = computeAbnormalFlag(normalized.normalizedValue, field.mapping);
 
-          database
-            .prepare(
-              `
-              INSERT INTO metric_record (
-                id, user_id, data_source_id, import_task_id, metric_code,
-                metric_name, category, raw_value, normalized_value, unit,
-                reference_range, abnormal_flag, sample_time, source_type,
-                source_file, notes, created_at
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            `
-            )
-            .run(
-              randomUUID(),
-              request.userId,
-              dataSourceId,
-              importTaskId,
-              field.mapping.metricCode,
-              field.mapping.metricName,
-              field.mapping.category,
-              row[field.header].trim(),
-              normalized.normalizedValue,
-              normalized.normalizedUnit,
-              buildReferenceRange(field.mapping),
-              abnormalFlag,
-              sampleTime,
-              spec.sourceType,
-              sourceFile,
-              noteText
-            );
+          upsertMetricRecord(database, {
+            userId: request.userId,
+            dataSourceId,
+            importTaskId,
+            metricCode: field.mapping.metricCode,
+            metricName: field.mapping.metricName,
+            category: field.mapping.category,
+            rawValue: row[field.header].trim(),
+            normalizedValue: normalized.normalizedValue,
+            unit: normalized.normalizedUnit,
+            referenceRange: buildReferenceRange(field.mapping),
+            abnormalFlag,
+            sampleTime,
+            sourceType: spec.sourceType,
+            sourceFile,
+            notes: noteText
+          });
 
           const result: ImportRowResult = {
             rowNumber,
@@ -549,7 +349,10 @@ export function executeTabularImport(
       totalRecords,
       successRecords,
       failedRecords,
-      buildTaskNotes(warnings, taskStatus === "failed" ? "fatal import error" : undefined)
+      appendTaskNotes(
+        request.taskNotes,
+        buildTaskNotes(warnings, taskStatus === "failed" ? "fatal import error" : undefined)
+      )
     );
 
     return {
@@ -572,9 +375,12 @@ export function executeTabularImport(
       totalRecords,
       successRecords,
       failedRecords,
-      buildTaskNotes(
-        warnings,
-        error instanceof Error ? "fatal import error" : "fatal import error"
+      appendTaskNotes(
+        request.taskNotes,
+        buildTaskNotes(
+          warnings,
+          error instanceof Error ? "fatal import error" : "fatal import error"
+        )
       )
     );
     throw error;

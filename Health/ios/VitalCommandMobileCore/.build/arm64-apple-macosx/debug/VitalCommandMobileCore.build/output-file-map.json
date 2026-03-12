@@ -1,0 +1,26 @@
+{
+  "": {
+    "swift-dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/master.swiftdeps"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/HealthAPIClient.swift": {
+    "dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.d",
+    "object": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.swift.o",
+    "swiftmodule": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient~partial.swiftmodule",
+    "swift-dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.swiftdeps",
+    "diagnostics": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/HealthAPIClient.dia"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/Models.swift": {
+    "dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.d",
+    "object": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.swift.o",
+    "swiftmodule": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models~partial.swiftmodule",
+    "swift-dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.swiftdeps",
+    "diagnostics": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/Models.dia"
+  },
+  "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/Sources/VitalCommandMobileCore/MultipartFormData.swift": {
+    "dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.d",
+    "object": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.swift.o",
+    "swiftmodule": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData~partial.swiftmodule",
+    "swift-dependencies": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.swiftdeps",
+    "diagnostics": "/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/Health/ios/VitalCommandMobileCore/.build/arm64-apple-macosx/debug/VitalCommandMobileCore.build/MultipartFormData.dia"
+  }
+}

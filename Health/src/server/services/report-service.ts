@@ -24,6 +24,8 @@ import {
   toEndOfAppDayIso
 } from "../utils/app-time";
 import { generateHolisticStructuredInsights } from "./holistic-insight-service";
+import { getPlanReviewForPeriod, type PlanReviewData } from "./health-plan-service";
+import { sanitizeHealthSummary, sanitizeReportSnapshot } from "./user-facing-copy";
 
 interface StoredReportSnapshotPayload {
   schemaVersion: number;
@@ -31,6 +33,7 @@ interface StoredReportSnapshotPayload {
   promptVersion: string;
   summary: HealthSummaryGenerationResult;
   structuredInsights: StructuredInsightsResult;
+  planReview?: PlanReviewData;
 }
 
 interface ServiceClockOptions {
@@ -94,7 +97,7 @@ function hydrateSnapshotRecord(row: {
     return undefined;
   }
 
-  return {
+  return sanitizeReportSnapshot({
     id: row.id,
     reportType: row.report_type as ReportKind,
     periodStart: row.period_start,
@@ -102,8 +105,9 @@ function hydrateSnapshotRecord(row: {
     createdAt: row.created_at,
     title: payload.title,
     summary: payload.summary,
-    structuredInsights: payload.structuredInsights
-  };
+    structuredInsights: payload.structuredInsights,
+    planReview: payload.planReview
+  });
 }
 
 async function createReportSnapshot(
@@ -117,18 +121,22 @@ async function createReportSnapshot(
   const structuredInsights = generateHolisticStructuredInsights(database, userId, {
     asOf: period.asOf
   });
-  const summary = await generateHealthSummaryFromStructuredInsights(
-    structuredInsights,
-    period,
-    resolveHealthSummaryProvider()
+  const summary = sanitizeHealthSummary(
+    await generateHealthSummaryFromStructuredInsights(
+      structuredInsights,
+      period,
+      resolveHealthSummaryProvider()
+    )
   );
   const title = buildReportTitle(reportType, period);
+  const planReview = getPlanReviewForPeriod(userId, period.start, period.end, database);
   const payload: StoredReportSnapshotPayload = {
     schemaVersion: 1,
     title,
     promptVersion: summary.prompt.version,
     summary,
-    structuredInsights
+    structuredInsights,
+    planReview: planReview.items.length > 0 ? planReview : undefined
   };
   const snapshotId = buildSnapshotId(reportType, period.end);
 
@@ -144,7 +152,7 @@ async function createReportSnapshot(
     notes: `${summary.provider}:${summary.model}:${summary.prompt.version}`
   });
 
-  return {
+  return sanitizeReportSnapshot({
     id: snapshotId,
     reportType,
     periodStart: period.start,
@@ -152,8 +160,9 @@ async function createReportSnapshot(
     createdAt: new Date().toISOString(),
     title,
     summary,
-    structuredInsights
-  };
+    structuredInsights,
+    planReview: planReview.items.length > 0 ? planReview : undefined
+  });
 }
 
 async function ensureReportSeries(
@@ -172,7 +181,7 @@ async function ensureReportSeries(
     const targetAsOf = toEndOfAppDayIso(targetDate);
     const period = buildSummaryPeriod(reportType === "weekly" ? "week" : "month", targetAsOf);
     const snapshotId = buildSnapshotId(reportType, period.end);
-    const existing = getUnifiedReportSnapshotById(database, userId, snapshotId);
+    const existing = index === 0 ? undefined : getUnifiedReportSnapshotById(database, userId, snapshotId);
 
     if (existing) {
       const hydrated = hydrateSnapshotRecord(existing);
@@ -200,10 +209,12 @@ export async function getCurrentDailySummary(
     asOf: period.asOf
   });
 
-  return generateHealthSummaryFromStructuredInsights(
-    structuredInsights,
-    period,
-    resolveHealthSummaryProvider()
+  return sanitizeHealthSummary(
+    await generateHealthSummaryFromStructuredInsights(
+      structuredInsights,
+      period,
+      resolveHealthSummaryProvider()
+    )
   );
 }
 

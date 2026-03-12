@@ -1,4 +1,5 @@
 import type { StructuredInsight, StructuredInsightSeverity, StructuredInsightsResult } from "../insights/types";
+import type { PlanReviewData } from "../services/health-plan-service";
 import type { TrendPoint } from "./types";
 
 export type SummaryPeriodKind = "day" | "week" | "month";
@@ -149,6 +150,43 @@ export interface HealthReportSnapshotRecord {
   title: string;
   summary: HealthSummaryGenerationResult;
   structuredInsights: StructuredInsightsResult;
+  planReview?: PlanReviewData;
+}
+
+export interface HealthAnalysisMetric {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "positive" | "attention" | "neutral";
+}
+
+export interface HealthOverviewDigest {
+  headline: string;
+  summary: string;
+  goodSignals: string[];
+  needsAttention: string[];
+  longTermRisks: string[];
+  actionPlan: string[];
+}
+
+export interface HealthDimensionAnalysis {
+  key: string;
+  kicker: string;
+  title: string;
+  summary: string;
+  goodSignals: string[];
+  needsAttention: string[];
+  longTermRisks: string[];
+  actionPlan: string[];
+  metrics: HealthAnalysisMetric[];
+}
+
+export interface HealthImportOption {
+  key: string;
+  title: string;
+  description: string;
+  formats: string[];
+  hints: string[];
 }
 
 export interface HealthHomePageData {
@@ -156,9 +194,12 @@ export interface HealthHomePageData {
   disclaimer: string;
   overviewHeadline: string;
   overviewNarrative: string;
+  overviewDigest: HealthOverviewDigest;
   overviewFocusAreas: string[];
   overviewSpotlights: HealthOverviewSpotlight[];
   sourceDimensions: HealthSourceDimensionCard[];
+  dimensionAnalyses: HealthDimensionAnalysis[];
+  importOptions: HealthImportOption[];
   overviewCards: HealthOverviewCard[];
   annualExam?: AnnualExamView;
   geneticFindings: GeneticFindingView[];

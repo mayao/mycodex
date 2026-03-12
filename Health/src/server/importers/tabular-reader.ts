@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import XLSX from "xlsx";
+import * as XLSX from "xlsx";
 
 import type { TabularReadResult } from "./types";
 
@@ -86,7 +86,8 @@ export function readTabularFile(filePath: string): TabularReadResult {
     };
   }
 
-  const workbook = XLSX.readFile(filePath, {
+  const workbook = XLSX.read(readFileSync(filePath), {
+    type: "buffer",
     cellDates: true,
     dense: true
   });
