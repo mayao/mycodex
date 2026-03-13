@@ -99,7 +99,7 @@ function getScopeImpact(scope: "metrics" | "reports" | "imports" | "all", footpr
 export function buildPrivacyExportPlaceholder(
   input: unknown,
   database: DatabaseSync = getDatabase(),
-  userId = "user-self"
+  userId: string = "user-self"
 ) {
   const request = privacyExportRequestSchema.parse(input ?? {});
   const env = getAppEnv();
@@ -120,7 +120,7 @@ export function buildPrivacyExportPlaceholder(
 export function buildPrivacyDeletePlaceholder(
   input: unknown,
   database: DatabaseSync = getDatabase(),
-  userId = "user-self"
+  userId: string = "user-self"
 ) {
   const request = privacyDeleteRequestSchema.parse(input ?? {});
   const env = getAppEnv();

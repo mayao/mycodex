@@ -9,9 +9,9 @@ export async function GET(
   context: { params: Promise<{ snapshotId: string }> }
 ) {
   try {
-    const _userId = getAuthenticatedUserId(request);
+    const userId = getAuthenticatedUserId(request);
     const { snapshotId } = await context.params;
-    const report = await getReportSnapshotDetail(decodeURIComponent(snapshotId));
+    const report = await getReportSnapshotDetail(decodeURIComponent(snapshotId), undefined, userId);
 
     if (!report) {
       return jsonSafeError("未找到对应报告。", 404);

@@ -270,7 +270,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					F7E2753C6D43CC4648B4E3C8 = {
-						DevelopmentTeam = BBT2D26L2V;
+						DevelopmentTeam = J32AD5KDR3;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -418,7 +418,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = BBT2D26L2V;
+				DEVELOPMENT_TEAM = J32AD5KDR3;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -435,18 +435,28 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "HealthAI 需要访问相机来拍摄体检报告或化验单，用于数据上传与分析。";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "HealthAI 使用面容 ID 快速验证身份登录。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthAI 需要读取 Apple 健康中的睡眠、运动、步数和身体组成数据，用于更新你的健康趋势与 AI 分析。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthAI 需要写入健康数据以记录你的健康计划完成情况和自动同步的指标数据。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "HealthAI 需要访问麦克风来进行语音输入，将语音转换为文字与 AI 助手对话。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "HealthAI 需要访问日历来创建健康计划提醒事件，帮助你按时完成健康目标。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "HealthAI 需要语音识别功能来将你的语音转换为文字，方便与 AI 健康助手对话。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationPortraitUpsideDown,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
 					UIInterfaceOrientationPortrait,
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				CURRENT_PROJECT_VERSION = 2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.xmly.vitalcommandios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xihe.healthai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -493,7 +503,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = BBT2D26L2V;
+				DEVELOPMENT_TEAM = J32AD5KDR3;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -516,19 +526,29 @@
 				INFOPLIST_KEY_NSCameraUsageDescription = "HealthAI 需要访问相机来拍摄体检报告或化验单，用于数据上传与分析。";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "HealthAI 使用面容 ID 快速验证身份登录。";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "HealthAI 需要读取 Apple 健康中的睡眠、运动、步数和身体组成数据，用于更新你的健康趋势与 AI 分析。";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "HealthAI 需要写入健康数据以记录你的健康计划完成情况和自动同步的指标数据。";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "HealthAI 需要访问麦克风来进行语音输入，将语音转换为文字与 AI 助手对话。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "HealthAI 需要访问日历来创建健康计划提醒事件，帮助你按时完成健康目标。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "HealthAI 需要语音识别功能来将你的语音转换为文字，方便与 AI 健康助手对话。";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = (
+					UIInterfaceOrientationPortrait,
+					UIInterfaceOrientationPortraitUpsideDown,
+					UIInterfaceOrientationLandscapeLeft,
+					UIInterfaceOrientationLandscapeRight,
+				);
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = (
 					UIInterfaceOrientationPortrait,
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0.0;
+				CURRENT_PROJECT_VERSION = 2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = com.xmly.vitalcommandios;
+				PRODUCT_BUNDLE_IDENTIFIER = com.xihe.healthai;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;

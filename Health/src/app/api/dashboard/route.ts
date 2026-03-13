@@ -6,8 +6,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const _userId = getAuthenticatedUserId(request);
-    return jsonOk(await getHealthHomePageData());
+    const userId = getAuthenticatedUserId(request);
+    return jsonOk(await getHealthHomePageData(undefined, userId));
   } catch (error) {
     if (error instanceof AuthError) {
       return jsonSafeError({ message: error.message, status: 401, error, context: { route: "/api/dashboard", method: "GET" } });

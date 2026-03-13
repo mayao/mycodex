@@ -33,14 +33,59 @@ struct HomeScreen: View {
                                 offlineBanner
                             }
                             heroSection(payload)
-                            aiOverviewSection(payload)
-                            pulseSection(payload)
-                            trendBoardSection(payload)
-                            geneInsightsSection(payload)
-                            bodyCompositionSection(payload)
-                            remindersSection(payload)
+
+                            // — 有数据的模块优先展示 —
+                            let hasAIOverview = !payload.overviewDigest.goodSignals.isEmpty
+                                || !payload.overviewDigest.needsAttention.isEmpty
+                                || !payload.overviewDigest.actionPlan.isEmpty
+                            let hasPulse = !payload.charts.lipid.lines.isEmpty
+                                || !payload.charts.bodyComposition.lines.isEmpty
+                            let hasTrend = hasPulse
+                            let hasGene = !payload.geneticFindings.isEmpty
+                            let hasBody = compositionBars(from: payload).count > 0
+                            let hasReminders = !payload.keyReminders.isEmpty
+                            let hasReports = !payload.latestReports.isEmpty
+                            let hasAnnualExam = payload.annualExam != nil
+
+                            // 1. 有数据的核心模块
+                            if hasAIOverview { aiOverviewSection(payload) }
+                            if hasPulse { pulseSection(payload) }
+                            if hasTrend { trendBoardSection(payload) }
+                            if hasGene { geneInsightsSection(payload) }
+                            if hasBody { bodyCompositionSection(payload) }
+                            if hasReminders { remindersSection(payload) }
                             sourceDimensionsSection(payload)
-                            reportsSection(payload)
+                            if hasReports { reportsSection(payload) }
+
+                            // 2. 无数据的模块 → 引导上传
+                            if !hasAIOverview && !hasPulse {
+                                uploadPromptCard(
+                                    title: "暂无健康数据",
+                                    message: "上传体检报告或连接 Apple 健康，即可获取 AI 健康分析和趋势追踪。",
+                                    icon: "doc.text.magnifyingglass"
+                                )
+                            }
+                            if !hasGene {
+                                uploadPromptCard(
+                                    title: "基因健康维度",
+                                    message: "上传基因检测报告后，可解锁遗传背景分析和个性化健康建议。",
+                                    icon: "allergens"
+                                )
+                            }
+                            if !hasAnnualExam && hasAIOverview {
+                                uploadPromptCard(
+                                    title: "年度体检报告",
+                                    message: "上传体检报告可追踪关键指标的年度变化趋势。",
+                                    icon: "heart.text.clipboard"
+                                )
+                            }
+                            if !hasReports && hasAIOverview {
+                                uploadPromptCard(
+                                    title: "健康报告",
+                                    message: "数据积累一周后将自动生成 AI 健康周报和月报。",
+                                    icon: "chart.bar.doc.horizontal"
+                                )
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.top, 10)
@@ -125,6 +170,34 @@ struct HomeScreen: View {
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.orange.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func uploadPromptCard(title: String, message: String, icon: String) -> some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .frame(width: 40)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+            Spacer()
+            Image(systemName: "arrow.up.doc")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.teal)
+        }
+        .padding(16)
+        .background(Color.appGroupedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.secondary.opacity(0.12), lineWidth: 1)
         )
     }
 
@@ -263,12 +336,17 @@ struct HomeScreen: View {
                 spacing: 12
             ) {
                 ForEach(aiOverviewBlocks(from: payload)) { block in
-                    Button {
-                        activeSheet = .overview(block)
-                    } label: {
+                    if block.lines.isEmpty || block.lines.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
                         AIOverviewBlockCard(block: block)
+                            .opacity(0.45)
+                    } else {
+                        Button {
+                            activeSheet = .overview(block)
+                        } label: {
+                            AIOverviewBlockCard(block: block)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }

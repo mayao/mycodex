@@ -302,9 +302,10 @@ function buildFallbackReply(
 
 export async function replyWithHealthAI(
   request: HealthAIChatRequest,
+  userId: string = "user-self",
   database: DatabaseSync = getDatabase()
 ): Promise<HealthAIChatResponse> {
-  const payload = await getHealthHomePageData(database);
+  const payload = await getHealthHomePageData(database, userId);
   const latestUserMessage = [...request.messages].reverse().find((message) => message.role === "user");
 
   if (!latestUserMessage) {

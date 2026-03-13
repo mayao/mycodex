@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const _userId = getAuthenticatedUserId(request);
+    const userId = getAuthenticatedUserId(request);
     const payload = (await request.json()) as HealthKitSyncRequestPayload;
-    const result = syncHealthKitSamples(payload);
+    const result = syncHealthKitSamples(payload, undefined, userId);
 
     revalidatePath("/", "layout");
     revalidatePath("/data", "page");

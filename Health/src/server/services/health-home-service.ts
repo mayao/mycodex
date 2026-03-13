@@ -936,7 +936,7 @@ interface HealthHomeServiceOptions {
 
 export async function getHealthHomePageData(
   database: DatabaseSync = getDatabase(),
-  userId = "user-self",
+  userId: string = "user-self",
   options: HealthHomeServiceOptions = {}
 ): Promise<HealthHomePageData> {
   const latestAsOf = resolveAnalysisAsOf(getLatestSampleTime(database, userId), options.now);

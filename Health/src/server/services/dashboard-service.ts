@@ -129,7 +129,7 @@ function buildKpis(trends: DashboardData["trends"]): DashboardMetricCard[] {
   ];
 }
 
-export function getDashboardData(database: DatabaseSync = getDatabase()): DashboardData {
+export function getDashboardData(database: DatabaseSync = getDatabase(), userId?: string): DashboardData {
   const trends = {
     bodyComposition: getMergedSeries(
       database,
@@ -138,7 +138,8 @@ export function getDashboardData(database: DatabaseSync = getDatabase()): Dashbo
         { metricCode: "body.body_fat_pct", alias: "bodyFat" },
         { metricCode: "body.skeletal_muscle_pct", alias: "skeletalMuscle" }
       ],
-      ["body_composition"]
+      ["body_composition"],
+      userId
     ),
     lipid: getMergedSeries(
       database,
@@ -147,7 +148,8 @@ export function getDashboardData(database: DatabaseSync = getDatabase()): Dashbo
         { metricCode: "lipid.ldl_c", alias: "ldl" },
         { metricCode: "lipid.lpa", alias: "lpa" }
       ],
-      ["annual_exam", "lipid_panel"]
+      ["annual_exam", "lipid_panel"],
+      userId
     ),
     activity: getMergedSeries(
       database,
@@ -156,7 +158,8 @@ export function getDashboardData(database: DatabaseSync = getDatabase()): Dashbo
         { metricCode: "activity.exercise_minutes", alias: "exerciseMinutes" },
         { metricCode: "activity.stand_hours", alias: "standHours" }
       ],
-      ["activity_daily"]
+      ["activity_daily"],
+      userId
     ),
     sleep: getMergedSeries(
       database,
@@ -164,7 +167,8 @@ export function getDashboardData(database: DatabaseSync = getDatabase()): Dashbo
         { metricCode: "sleep.in_bed_minutes", alias: "inBedMinutes" },
         { metricCode: "sleep.asleep_minutes", alias: "asleepMinutes" }
       ],
-      ["sleep_daily"]
+      ["sleep_daily"],
+      userId
     )
   };
 
@@ -175,7 +179,7 @@ export function getDashboardData(database: DatabaseSync = getDatabase()): Dashbo
     "body.body_fat_pct",
     "sleep.asleep_minutes",
     "activity.exercise_minutes"
-  ]);
+  ], userId);
 
   return {
     generatedAt: new Date().toISOString(),
@@ -185,7 +189,7 @@ export function getDashboardData(database: DatabaseSync = getDatabase()): Dashbo
       latestMetrics,
       trends
     }),
-    coverage: getCoverageSummary(database),
+    coverage: getCoverageSummary(database, userId),
     trends
   };
 }

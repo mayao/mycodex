@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const _userId = getAuthenticatedUserId(request);
+    const userId = getAuthenticatedUserId(request);
     const payload = healthAIChatRequestSchema.parse(await request.json());
-    return jsonOk(await replyWithHealthAI(payload));
+    return jsonOk(await replyWithHealthAI(payload, userId));
   } catch (error) {
     if (error instanceof AuthError) {
       return jsonSafeError({ message: error.message, status: 401, error, context: { route: "/api/ai/chat", method: "POST" } });

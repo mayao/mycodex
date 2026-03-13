@@ -200,7 +200,7 @@ async function ensureReportSeries(
 
 export async function getCurrentDailySummary(
   database: DatabaseSync = getDatabase(),
-  userId = "user-self",
+  userId: string = "user-self",
   options: ServiceClockOptions = {}
 ): Promise<HealthSummaryGenerationResult> {
   const latestAsOf = resolveAnalysisAsOf(getLatestSampleTime(database, userId), options.now);
@@ -220,7 +220,7 @@ export async function getCurrentDailySummary(
 
 export async function getReportsIndexData(
   database: DatabaseSync = getDatabase(),
-  userId = "user-self",
+  userId: string = "user-self",
   options: ServiceClockOptions = {}
 ): Promise<ReportsIndexData> {
   const latestAsOf = resolveAnalysisAsOf(getLatestSampleTime(database, userId), options.now);
@@ -255,7 +255,7 @@ export async function getReportsIndexData(
 export async function getReportSnapshotDetail(
   snapshotId: string,
   database: DatabaseSync = getDatabase(),
-  userId = "user-self"
+  userId: string = "user-self"
 ): Promise<HealthReportSnapshotRecord | undefined> {
   const row = getUnifiedReportSnapshotById(database, userId, snapshotId);
   return row ? hydrateSnapshotRecord(row) : undefined;
@@ -263,7 +263,7 @@ export async function getReportSnapshotDetail(
 
 export function listSavedReportSnapshots(
   database: DatabaseSync = getDatabase(),
-  userId = "user-self",
+  userId: string = "user-self",
   reportType?: ReportKind
 ): HealthReportSnapshotRecord[] {
   return listUnifiedReportSnapshots(database, userId, reportType)

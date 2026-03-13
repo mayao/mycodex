@@ -245,7 +245,7 @@ function normalizeSampleTime(value: string): string {
 export function syncHealthKitSamples(
   payload: HealthKitSyncRequestPayload | HealthKitSyncRequestWirePayload,
   database: DatabaseSync = getDatabase(),
-  userId = "user-self"
+  userId: string = "user-self"
 ): HealthKitSyncResult {
   const normalizedPayload = normalizeHealthKitSyncPayload(payload);
   const dataSourceId = ensureDataSource(database, userId, {

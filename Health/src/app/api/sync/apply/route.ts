@@ -1,4 +1,5 @@
 import { jsonOk, jsonSafeError } from "../../../../server/http/safe-response";
+import { requireSyncPeer } from "../../../../server/http/sync-auth";
 import { applyChanges } from "../../../../server/services/sync/sync-service";
 
 export const dynamic = "force-dynamic";
@@ -7,9 +8,13 @@ export const dynamic = "force-dynamic";
  * POST /api/sync/apply
  * Receive and apply changes from a peer server.
  * Body: { server_id: string, changes: { table_name: Row[] } }
+ * Requires X-Sync-Server-Id header from a registered peer.
  */
 export async function POST(request: Request) {
   try {
+    const auth = requireSyncPeer(request);
+    if (auth instanceof Response) return auth;
+
     const body = (await request.json()) as {
       server_id?: string;
       changes?: Record<string, Record<string, unknown>[]>;

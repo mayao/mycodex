@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS measurements (
 
 CREATE TABLE IF NOT EXISTS genetic_findings (
   id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES users(id),
   source_id TEXT NOT NULL REFERENCES data_sources(id),
   gene_symbol TEXT NOT NULL,
   variant_id TEXT NOT NULL,

@@ -688,7 +688,7 @@ function buildCorrelationInsights(
 
 export function generateStructuredInsights(
   database: DatabaseSync,
-  userId = "user-self",
+  userId: string = "user-self",
   options?: { asOf?: string }
 ): StructuredInsightsResult {
   const histories = loadMetricHistories(database, userId, options?.asOf);

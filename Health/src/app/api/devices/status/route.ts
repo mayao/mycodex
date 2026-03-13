@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
-    const _userId = getAuthenticatedUserId(request);
+    const userId = getAuthenticatedUserId(request);
+    void userId; // device status is not user-scoped currently
     const devices = getDeviceConnectionStatus();
     return jsonOk({ devices });
   } catch (error) {

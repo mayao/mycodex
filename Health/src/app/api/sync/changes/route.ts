@@ -1,4 +1,5 @@
 import { jsonOk, jsonSafeError } from "../../../../server/http/safe-response";
+import { requireSyncPeer } from "../../../../server/http/sync-auth";
 import { getChangesSince } from "../../../../server/services/sync/sync-service";
 
 export const dynamic = "force-dynamic";
@@ -6,10 +7,13 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/sync/changes?since=<ISO timestamp>&tables=<comma-separated>
  * Returns changes since the given timestamp for server-to-server sync.
+ * Requires X-Sync-Server-Id header from a registered peer.
  */
 export async function GET(request: Request) {
   try {
-    // Basic LAN security: check for private IP (optional, can be stricter)
+    const auth = requireSyncPeer(request);
+    if (auth instanceof Response) return auth;
+
     const url = new URL(request.url);
     const since = url.searchParams.get("since") ?? "1970-01-01T00:00:00.000Z";
     const tablesParam = url.searchParams.get("tables");

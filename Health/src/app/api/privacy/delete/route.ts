@@ -6,9 +6,9 @@ import { buildPrivacyDeletePlaceholder } from "../../../../server/privacy/privac
 
 export async function POST(request: Request) {
   try {
-    const _userId = getAuthenticatedUserId(request);
+    const userId = getAuthenticatedUserId(request);
     const body = await request.json().catch(() => ({}));
-    return jsonOk(buildPrivacyDeletePlaceholder(body), { status: 501 });
+    return jsonOk(buildPrivacyDeletePlaceholder(body, undefined, userId), { status: 501 });
   } catch (error) {
     if (error instanceof AuthError) {
       return jsonSafeError({ message: error.message, status: 401, error, context: { route: "/api/privacy/delete", method: "POST" } });

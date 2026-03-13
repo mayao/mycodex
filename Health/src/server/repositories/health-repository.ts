@@ -60,9 +60,34 @@ export interface MetricSeriesQuery {
 
 export function getLatestMetric(
   database: DatabaseSync,
-  metricCode: string
+  metricCode: string,
+  userId?: string
 ): LatestMetric | undefined {
-  const row = database
+  if (userId) {
+    return database
+      .prepare(
+        `
+        SELECT
+          m.metric_code AS metricCode,
+          c.label AS label,
+          c.short_label AS shortLabel,
+          m.value_numeric AS value,
+          m.unit AS unit,
+          s.recorded_at AS recordedAt,
+          s.set_kind AS setKind,
+          s.title AS setTitle
+        FROM measurements m
+        JOIN measurement_sets s ON s.id = m.measurement_set_id
+        JOIN metric_catalog c ON c.code = m.metric_code
+        WHERE m.metric_code = ? AND s.user_id = ?
+        ORDER BY s.recorded_at DESC
+        LIMIT 1
+      `
+      )
+      .get(metricCode, userId) as LatestMetric | undefined;
+  }
+
+  return database
     .prepare(
       `
       SELECT
@@ -83,23 +108,23 @@ export function getLatestMetric(
     `
     )
     .get(metricCode) as LatestMetric | undefined;
-
-  return row;
 }
 
 export function getLatestMetricsMap(
   database: DatabaseSync,
-  metricCodes: string[]
+  metricCodes: string[],
+  userId?: string
 ): Record<string, LatestMetric | undefined> {
   return Object.fromEntries(
-    metricCodes.map((metricCode) => [metricCode, getLatestMetric(database, metricCode)])
+    metricCodes.map((metricCode) => [metricCode, getLatestMetric(database, metricCode, userId)])
   );
 }
 
 function getMetricSeries(
   database: DatabaseSync,
   metricCode: string,
-  kinds?: MeasurementSetKind[]
+  kinds?: MeasurementSetKind[],
+  userId?: string
 ): MetricSeriesRow[] {
   const mapRows = (rows: SqliteMetricSeriesRow[]): MetricSeriesRow[] =>
     rows.map((row) => ({
@@ -107,34 +132,40 @@ function getMetricSeries(
       value: Number(row.value)
     }));
 
+  const userFilter = userId ? " AND s.user_id = ?" : "";
+
   if (kinds && kinds.length > 0) {
     const placeholders = kinds.map(() => "?").join(", ");
+    const params = userId
+      ? [metricCode, ...kinds, userId]
+      : [metricCode, ...kinds];
     const rows = database
       .prepare(
         `
         SELECT s.recorded_at AS recordedAt, m.value_numeric AS value
         FROM measurements m
         JOIN measurement_sets s ON s.id = m.measurement_set_id
-        WHERE m.metric_code = ? AND s.set_kind IN (${placeholders})
+        WHERE m.metric_code = ? AND s.set_kind IN (${placeholders})${userFilter}
         ORDER BY s.recorded_at ASC
       `
       )
-      .all(metricCode, ...kinds) as unknown as SqliteMetricSeriesRow[];
+      .all(...params) as unknown as SqliteMetricSeriesRow[];
 
     return mapRows(rows);
   }
 
+  const params = userId ? [metricCode, userId] : [metricCode];
   const rows = database
     .prepare(
       `
       SELECT s.recorded_at AS recordedAt, m.value_numeric AS value
       FROM measurements m
       JOIN measurement_sets s ON s.id = m.measurement_set_id
-      WHERE m.metric_code = ?
+      WHERE m.metric_code = ?${userFilter}
       ORDER BY s.recorded_at ASC
     `
     )
-    .all(metricCode) as unknown as SqliteMetricSeriesRow[];
+    .all(...params) as unknown as SqliteMetricSeriesRow[];
 
   return mapRows(rows);
 }
@@ -142,12 +173,13 @@ function getMetricSeries(
 export function getMergedSeries(
   database: DatabaseSync,
   queries: MetricSeriesQuery[],
-  kinds?: MeasurementSetKind[]
+  kinds?: MeasurementSetKind[],
+  userId?: string
 ): TrendPoint[] {
   const byDate = new Map<string, TrendPoint>();
 
   for (const query of queries) {
-    const rows = getMetricSeries(database, query.metricCode, kinds);
+    const rows = getMetricSeries(database, query.metricCode, kinds, userId);
 
     for (const row of rows) {
       const date = row.recordedAt.slice(0, 10);
@@ -160,16 +192,19 @@ export function getMergedSeries(
   return [...byDate.values()].sort((left, right) => left.date.localeCompare(right.date));
 }
 
-export function getCoverageSummary(database: DatabaseSync): CoverageItem[] {
+export function getCoverageSummary(database: DatabaseSync, userId?: string): CoverageItem[] {
+  const userFilter = userId ? " WHERE user_id = ?" : "";
+  const params = userId ? [userId] : [];
+
   const rows = database
     .prepare(
       `
       SELECT set_kind AS kind, COUNT(*) AS count, MAX(recorded_at) AS latestRecordedAt
-      FROM measurement_sets
+      FROM measurement_sets${userFilter}
       GROUP BY set_kind
     `
     )
-    .all() as Array<{
+    .all(...params) as Array<{
     kind: MeasurementSetKind;
     count: number;
     latestRecordedAt: string | null;
@@ -182,6 +217,7 @@ export function getCoverageSummary(database: DatabaseSync): CoverageItem[] {
     ...coverageMeta[row.kind]
   }));
 
+  // genetic_findings doesn't have user_id currently, include for all
   const geneRow = database
     .prepare(
       `

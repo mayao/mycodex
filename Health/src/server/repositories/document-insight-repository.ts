@@ -361,6 +361,7 @@ export function listGeneticFindingDigests(
         suggestion,
         recorded_at AS recordedAt
       FROM genetic_findings
+      WHERE user_id = ?
       ORDER BY
         CASE risk_level
           WHEN 'high' THEN 3
@@ -370,7 +371,7 @@ export function listGeneticFindingDigests(
         recorded_at DESC
     `
     )
-    .all() as unknown as GeneticFindingRow[];
+    .all(userId) as unknown as GeneticFindingRow[];
 
   return rows.map((row) => {
     const meta = geneTraitMeta[row.traitCode];
