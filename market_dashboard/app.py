@@ -7,6 +7,7 @@ import ipaddress
 import json
 import re
 import socket
+import subprocess
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -278,6 +279,29 @@ def _build_mobile_ai_chat_context_with_fallback(
         )
 
 
+def _build_mobile_discovery_payload(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
+    host_header = str(handler.headers.get("Host", "") or "").strip()
+    host_without_port = host_header.split(":", 1)[0].strip() if host_header else ""
+    server_port = int(handler.server.server_address[1])
+    lan_ip = _detect_primary_lan_ip()
+    suggested_host = host_without_port or lan_ip or "127.0.0.1"
+    return {
+        "service": "portfolio-workbench",
+        "app_name": "MyInvAI",
+        "bind_host": str(handler.server.server_address[0]),
+        "port": server_port,
+        "suggested_base_url": f"http://{suggested_host}:{server_port}/",
+        "detected_lan_ip": lan_ip,
+        "available_paths": [
+            "/api/mobile/discovery",
+            "/api/mobile/auth/device/bootstrap",
+            "/api/mobile/dashboard",
+            "/api/mobile/stock-detail",
+            "/api/mobile/upload-statement",
+        ],
+    }
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     def _send_bytes(
         self,
@@ -399,6 +423,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if session is None:
                 return
             self._send_json({"user": serialize_user(session["user"])})
+            return
+        if path == "/api/mobile/discovery":
+            self._send_json(_build_mobile_discovery_payload(self))
             return
         if path == "/api/mobile/import-center":
             session = self._require_mobile_session()
@@ -783,18 +810,41 @@ def run_check() -> int:
 
 
 def _detect_primary_lan_ip() -> str | None:
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    candidate_interfaces: list[str] = []
     try:
-        sock.connect(("8.8.8.8", 80))
-        ip_address = sock.getsockname()[0]
-    except OSError:
-        return None
-    finally:
-        sock.close()
+        route_output = subprocess.check_output(
+            ["route", "-n", "get", "default"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+        for line in route_output.splitlines():
+            if "interface:" not in line:
+                continue
+            iface = line.split("interface:", 1)[1].strip()
+            if iface and not iface.startswith("utun"):
+                candidate_interfaces.append(iface)
+                break
+    except (OSError, subprocess.CalledProcessError):
+        pass
 
-    if ip_address.startswith("127."):
-        return None
-    return ip_address
+    candidate_interfaces.extend(["en0", "en1", "en2"])
+    seen: set[str] = set()
+    for iface in candidate_interfaces:
+        if not iface or iface in seen:
+            continue
+        seen.add(iface)
+        try:
+            ip_address = subprocess.check_output(
+                ["ipconfig", "getifaddr", iface],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        except (OSError, subprocess.CalledProcessError):
+            continue
+        if ip_address and not ip_address.startswith(("127.", "169.254.")):
+            return ip_address
+
+    return None
 
 
 def main() -> None:

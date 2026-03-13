@@ -25,6 +25,8 @@
 	</dict>
 	<key>NSFaceIDUsageDescription</key>
 	<string>使用 Face ID 快速解锁你的专属投资账户与个人持仓数据。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于自动发现这台 Mac 上运行的 MyInvAI 后端，并连接你的局域网投资数据服务。</string>
 	<key>PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL</key>
 	<string>$(PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL)</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

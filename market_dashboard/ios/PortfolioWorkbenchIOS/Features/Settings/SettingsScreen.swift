@@ -5,6 +5,7 @@ import PortfolioWorkbenchMobileCore
 struct SettingsScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
     @EnvironmentObject private var dashboardStore: PortfolioDashboardStore
+    @StateObject private var discovery = ServerDiscoveryService()
 
     @FocusState private var isEditingURL: Bool
     @State private var selectedAccountID = ""
@@ -155,6 +156,95 @@ struct SettingsScreen: View {
                 .tint(BrokerPalette.cyan)
                 .foregroundStyle(Color.black)
 
+                HStack(spacing: 10) {
+                    Button {
+                        settings.saveCurrentServer()
+                        refreshMessage = "已保存 \(settings.trimmedServerURLString)"
+                    } label: {
+                        Label("保存当前地址", systemImage: "bookmark")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.teal)
+
+                    Button {
+                        if discovery.isScanning {
+                            discovery.stopScanning()
+                            refreshMessage = "已停止局域网扫描。"
+                        } else {
+                            discovery.startScan(currentServerURLString: settings.trimmedServerURLString)
+                            refreshMessage = nil
+                        }
+                    } label: {
+                        Label(
+                            discovery.isScanning ? "停止扫描" : "自动探测局域网",
+                            systemImage: discovery.isScanning ? "stop.circle" : "antenna.radiowaves.left.and.right"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.gold)
+                }
+
+                if !settings.savedServers.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("已保存地址")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(BrokerPalette.muted)
+
+                        ForEach(settings.savedServers) { server in
+                            serverRow(
+                                title: server.name,
+                                subtitle: server.url,
+                                isSelected: settings.trimmedServerURLString == server.url,
+                                tint: BrokerPalette.teal
+                            ) {
+                                settings.selectServerURL(server.url)
+                                refreshMessage = "已切换到 \(server.url)"
+                            } trailing: {
+                                Button {
+                                    settings.removeSavedServer(server)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .foregroundStyle(BrokerPalette.red)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("局域网部署机器")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(BrokerPalette.muted)
+                        if discovery.isScanning {
+                            ProgressView()
+                                .tint(BrokerPalette.cyan)
+                                .scaleEffect(0.8)
+                        }
+                    }
+
+                    if !discovery.discoveredServers.isEmpty {
+                        ForEach(discovery.discoveredServers) { server in
+                            serverRow(
+                                title: server.name,
+                                subtitle: "\(server.urlString) · \(server.appName)",
+                                isSelected: settings.trimmedServerURLString == server.urlString,
+                                tint: BrokerPalette.cyan
+                            ) {
+                                settings.selectServerURL(server.urlString, name: server.name, rememberSelection: true)
+                                refreshMessage = "已切换到 \(server.name)"
+                            }
+                        }
+                    } else {
+                        Text(discovery.statusMessage ?? "点击“自动探测局域网”后，会扫描同网段内运行中的部署机器。")
+                            .font(.footnote)
+                            .foregroundStyle(BrokerPalette.muted)
+                    }
+                }
+
                 if let refreshMessage {
                     Text(refreshMessage)
                         .font(.footnote)
@@ -162,6 +252,48 @@ struct SettingsScreen: View {
                 }
             }
         }
+    }
+
+    private func serverRow<Trailing: View>(
+        title: String,
+        subtitle: String,
+        isSelected: Bool,
+        tint: Color,
+        action: @escaping () -> Void,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(isSelected ? BrokerPalette.green : tint)
+                        .frame(width: 8, height: 8)
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(BrokerPalette.ink)
+                }
+                Text(subtitle)
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.muted)
+                    .multilineTextAlignment(.leading)
+            }
+
+            Spacer()
+
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(BrokerPalette.green)
+            } else {
+                Image(systemName: "arrow.right.circle")
+                    .foregroundStyle(tint)
+            }
+
+            trailing()
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .onTapGesture(perform: action)
     }
 
     private var updateStatementSection: some View {

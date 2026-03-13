@@ -50,6 +50,12 @@ enum AppSecurityError: LocalizedError {
     }
 }
 
+struct SavedServerEndpoint: Identifiable, Codable, Equatable {
+    var id: String { url }
+    let name: String
+    let url: String
+}
+
 @MainActor
 final class AppSettingsStore: ObservableObject {
     static let defaultServerURLInfoKey = "PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL"
@@ -57,6 +63,7 @@ final class AppSettingsStore: ObservableObject {
     static let autoOwnerLoginInfoKey = "PORTFOLIO_WORKBENCH_AUTO_OWNER_LOGIN"
     static let resetStateOnLaunchInfoKey = "PORTFOLIO_WORKBENCH_RESET_STATE_ON_LAUNCH"
     static let serverURLKey = "portfolio-workbench-ios.server-url"
+    static let savedServersKey = "portfolio-workbench-ios.saved-servers"
     static let hideSensitiveAmountsKey = "portfolio-workbench-ios.hide-sensitive-amounts"
     static let sessionTokenKey = "portfolio-workbench-ios.session-token"
     static let currentUserKey = "portfolio-workbench-ios.current-user"
@@ -73,6 +80,15 @@ final class AppSettingsStore: ObservableObject {
             UserDefaults.standard.set(serverURLString, forKey: Self.serverURLKey)
             lastSessionValidationAt = nil
             lastValidatedServerURLString = nil
+        }
+    }
+    @Published private(set) var savedServers: [SavedServerEndpoint] {
+        didSet {
+            if let data = try? JSONEncoder().encode(savedServers) {
+                UserDefaults.standard.set(data, forKey: Self.savedServersKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.savedServersKey)
+            }
         }
     }
     @Published var hideSensitiveAmounts: Bool {
@@ -123,9 +139,15 @@ final class AppSettingsStore: ObservableObject {
             (Bundle.main.object(forInfoDictionaryKey: Self.defaultServerURLInfoKey) as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         self.serverURLString =
-            UserDefaults.standard.string(forKey: Self.serverURLKey)
-            ?? (bundledDefaultURL?.isEmpty == false ? bundledDefaultURL : nil)
+            Self.normalizeServerURLString(UserDefaults.standard.string(forKey: Self.serverURLKey))
+            ?? Self.normalizeServerURLString(bundledDefaultURL)
             ?? "http://127.0.0.1:8008/"
+        if let data = UserDefaults.standard.data(forKey: Self.savedServersKey),
+           let decoded = try? JSONDecoder().decode([SavedServerEndpoint].self, from: data) {
+            self.savedServers = decoded
+        } else {
+            self.savedServers = []
+        }
         self.hideSensitiveAmounts = UserDefaults.standard.bool(forKey: Self.hideSensitiveAmountsKey)
         self.sessionToken = UserDefaults.standard.string(forKey: Self.sessionTokenKey)
         self.isUsingLocalMockSession = UserDefaults.standard.bool(forKey: Self.localMockSessionKey)
@@ -188,6 +210,10 @@ final class AppSettingsStore: ObservableObject {
         serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var currentServerPort: Int {
+        URL(string: trimmedServerURLString)?.port ?? 8008
+    }
+
     var isAuthenticated: Bool {
         currentUser != nil && !(sessionToken ?? "").isEmpty
     }
@@ -214,6 +240,26 @@ final class AppSettingsStore: ObservableObject {
 
     func toggleSensitiveAmounts() {
         hideSensitiveAmounts.toggle()
+    }
+
+    func selectServerURL(_ rawValue: String, name: String? = nil, rememberSelection: Bool = false) {
+        let normalized = Self.normalizeServerURLString(rawValue) ?? rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        serverURLString = normalized
+        guard rememberSelection, let persistedURL = Self.normalizeServerURLString(normalized) else {
+            return
+        }
+        upsertSavedServer(name: name ?? inferredServerName(from: persistedURL), url: persistedURL)
+    }
+
+    func saveCurrentServer(named name: String? = nil) {
+        guard let normalized = Self.normalizeServerURLString(trimmedServerURLString) else {
+            return
+        }
+        upsertSavedServer(name: name ?? inferredServerName(from: normalized), url: normalized)
+    }
+
+    func removeSavedServer(_ server: SavedServerEndpoint) {
+        savedServers.removeAll { $0.id == server.id }
     }
 
     func updateAuthenticatedSession(_ payload: MobileSessionPayload) {
@@ -412,5 +458,41 @@ final class AppSettingsStore: ObservableObject {
         guard success else {
             throw AppSecurityError.biometricAuthenticationFailed
         }
+    }
+
+    private func upsertSavedServer(name: String, url: String) {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let endpoint = SavedServerEndpoint(
+            name: trimmedName.isEmpty ? inferredServerName(from: url) : trimmedName,
+            url: url
+        )
+        savedServers.removeAll { $0.id == endpoint.id }
+        savedServers.insert(endpoint, at: 0)
+        if savedServers.count > 8 {
+            savedServers = Array(savedServers.prefix(8))
+        }
+    }
+
+    private func inferredServerName(from urlString: String) -> String {
+        guard let url = URL(string: urlString), let host = url.host, !host.isEmpty else {
+            return "当前服务器"
+        }
+        return host
+    }
+
+    private static func normalizeServerURLString(_ rawValue: String?) -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard var components = URLComponents(string: trimmed) else { return nil }
+        guard let scheme = components.scheme?.lowercased(), ["http", "https"].contains(scheme) else { return nil }
+        guard let host = components.host, !host.isEmpty else { return nil }
+        components.scheme = scheme
+        if components.path.isEmpty {
+            components.path = "/"
+        } else if !components.path.hasSuffix("/") {
+            components.path += "/"
+        }
+        return components.url?.absoluteString
     }
 }

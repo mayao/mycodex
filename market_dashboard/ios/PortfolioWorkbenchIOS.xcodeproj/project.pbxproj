@@ -14,6 +14,7 @@
 		35AD8E9528C376F3B009AAE5 /* AccountsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9606718ABC419F1EA282E343 /* AccountsScreen.swift */; };
 		3B27113F120412336CBAB518 /* PortfolioWorkbenchMobileCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0410839EE2F6F947FB989BFF /* PortfolioWorkbenchMobileCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		47CC148CF8BA977C425D84B1 /* OverviewDrilldownViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E3F1D79A7976480297AC3A9 /* OverviewDrilldownViews.swift */; };
+		4CE4BA5DA2063513847107A5 /* ServerDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73FDE400FE8E36A8A7261F6F /* ServerDiscoveryService.swift */; };
 		5BC7D22E0BFAF8C9C09DEE36 /* DeviceAccountIdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */; };
 		607D2E4225E2C3D9D44F67D4 /* PortfolioWorkbenchIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D46D61A5E924FA58270BBFA /* PortfolioWorkbenchIOSApp.swift */; };
 		7A685292EF04DD569A4D3660 /* OverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF619D9ECB95AE8735165420 /* OverviewScreen.swift */; };
@@ -74,6 +75,7 @@
 		6861EE915907DA98EECE0E1D /* HoldingDetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailScreen.swift; sourceTree = "<group>"; };
 		70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		710CCCB27BBE88F1EAA34C04 /* UIComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIComponents.swift; sourceTree = "<group>"; };
+		73FDE400FE8E36A8A7261F6F /* ServerDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDiscoveryService.swift; sourceTree = "<group>"; };
 		786EB81B8EF3E352EC7B88AA /* MultipartFormData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipartFormData.swift; sourceTree = "<group>"; };
 		81EAB2B7C1B84326CC2E0050 /* HoldingDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailViewModel.swift; sourceTree = "<group>"; };
 		92C71BF081459D616797827C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 		0D6E0273B598AAEFC8B1E637 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				73FDE400FE8E36A8A7261F6F /* ServerDiscoveryService.swift */,
 				2514C7174B5A98587F947B55 /* SettingsScreen.swift */,
 			);
 			path = Settings;
@@ -359,6 +362,7 @@
 				7A685292EF04DD569A4D3660 /* OverviewScreen.swift in Sources */,
 				9B34878EF5BE053B102F829D /* PortfolioDashboardStore.swift in Sources */,
 				607D2E4225E2C3D9D44F67D4 /* PortfolioWorkbenchIOSApp.swift in Sources */,
+				4CE4BA5DA2063513847107A5 /* ServerDiscoveryService.swift in Sources */,
 				BA9739AD06A3B37F3E0486C9 /* SettingsScreen.swift in Sources */,
 				F0ECB97AC849809A20085215 /* UIComponents.swift in Sources */,
 			);
@@ -499,7 +503,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://127.0.0.1:8008/";
+				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.245.185:8008/";
 				PRODUCT_BUNDLE_IDENTIFIER = com.bbt2d26l2v.PortfolioWorkbenchIOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -561,7 +565,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://127.0.0.1:8008/";
+				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.245.185:8008/";
 				PRODUCT_BUNDLE_IDENTIFIER = com.bbt2d26l2v.PortfolioWorkbenchIOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

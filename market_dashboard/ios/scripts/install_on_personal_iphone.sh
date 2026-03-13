@@ -30,6 +30,9 @@ detect_lan_ip() {
   local candidate=""
 
   iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')"
+  if [[ "$iface" == utun* ]]; then
+    iface=""
+  fi
   for candidate in "$iface" en0 en1 en2; do
     [[ -n "$candidate" ]] || continue
     if ipconfig getifaddr "$candidate" >/dev/null 2>&1; then
