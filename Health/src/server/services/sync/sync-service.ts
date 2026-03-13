@@ -149,7 +149,7 @@ export function applyChanges(
         // Check if row exists locally
         const localRow = database
           .prepare(`SELECT ${tableDef.updatedAtCol} AS local_updated, origin_server_id AS local_origin FROM ${tableDef.name} WHERE ${tableDef.pk} = ?`)
-          .get(pkValue) as { local_updated: string | null; local_origin: string | null } | undefined;
+          .get(pkValue as string) as { local_updated: string | null; local_origin: string | null } | undefined;
 
         const remoteUpdated = row[tableDef.updatedAtCol] as string | null;
 
@@ -157,13 +157,14 @@ export function applyChanges(
           // INSERT — row doesn't exist locally
           const validCols = columns.filter((c) => c in row);
           const placeholders = validCols.map(() => "?").join(", ");
-          const values = validCols.map((c) => row[c] ?? null);
+          const values = validCols.map((c) => row[c] ?? null) as unknown[];
 
           database
             .prepare(
               `INSERT OR IGNORE INTO ${tableDef.name} (${validCols.join(", ")}) VALUES (${placeholders})`
             )
-            .run(...values);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .run(...(values as any[]))
           applied++;
         } else if (remoteUpdated && localRow.local_updated && remoteUpdated > localRow.local_updated) {
           // UPDATE — remote is newer (last-write-wins)
@@ -171,14 +172,15 @@ export function applyChanges(
             (c) => c !== tableDef.pk && c in row
           );
           const setClause = updateCols.map((c) => `${c} = ?`).join(", ");
-          const values = updateCols.map((c) => row[c] ?? null);
+          const values = updateCols.map((c) => row[c] ?? null) as unknown[];
           values.push(pkValue);
 
           database
             .prepare(
               `UPDATE ${tableDef.name} SET ${setClause} WHERE ${tableDef.pk} = ?`
             )
-            .run(...values);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .run(...(values as any[]))
           applied++;
           conflicts++;
         } else if (
@@ -194,14 +196,15 @@ export function applyChanges(
               (c) => c !== tableDef.pk && c in row
             );
             const setClause = updateCols.map((c) => `${c} = ?`).join(", ");
-            const values = updateCols.map((c) => row[c] ?? null);
+            const values = updateCols.map((c) => row[c] ?? null) as unknown[];
             values.push(pkValue);
 
             database
               .prepare(
                 `UPDATE ${tableDef.name} SET ${setClause} WHERE ${tableDef.pk} = ?`
               )
-              .run(...values);
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              .run(...(values as any[]))
             applied++;
             conflicts++;
           } else {

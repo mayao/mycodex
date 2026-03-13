@@ -91,47 +91,8 @@ function resolveSampleDate(text: string): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function tryParseWithLLM(
-  importerKey: ImporterKey,
-  text: string
-): Promise<ParsedDocumentPayload | undefined> {
-  try {
-    const env = getAppEnv();
-
-    if (
-      env.HEALTH_LLM_PROVIDER !== "openai-compatible" ||
-      !env.HEALTH_LLM_API_KEY ||
-      !env.HEALTH_LLM_BASE_URL
-    ) {
-      return undefined;
-    }
-
-    const spec = importerSpecs[importerKey];
-    const metricCatalog = spec.fieldMappings
-      .map(
-        (mapping) =>
-          `${mapping.metricCode} | ${mapping.metricName} | aliases=${mapping.aliases.join(",")} | unit=${mapping.canonicalUnit}`
-      )
-      .join("\n");
-
-    const response = await fetch(`${env.HEALTH_LLM_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.HEALTH_LLM_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: env.HEALTH_LLM_MODEL ?? "gpt-4.1-mini",
-        temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You extract structured health metrics from OCR or PDF text. Return strict JSON only. Never invent unavailable metrics."
-          },
-          {
-            role: "user",
-            content: `Importer: ${importerKey}
+function buildDocumentExtractionPrompt(importerKey: ImporterKey, metricCatalog: string, text: string): string {
+  return `Importer: ${importerKey}
 
 Allowed metrics:
 ${metricCatalog}
@@ -140,52 +101,168 @@ Return JSON:
 {"sample_date":"YYYY-MM-DD","metrics":[{"metric_code":"...","value":1.23,"unit":"...","source_label":"..."}]}
 
 Document text:
-${text.slice(0, 12000)}`
-          }
-        ]
-      })
-    });
+${text.slice(0, 12000)}`;
+}
 
-    if (!response.ok) {
+const DOCUMENT_SYSTEM_PROMPT =
+  "You extract structured health metrics from OCR or PDF text. Return strict JSON only. Never invent unavailable metrics.";
+
+function parseAndValidateLLMResponse(
+  raw: string,
+  spec: (typeof importerSpecs)[ImporterKey],
+  text: string
+): ParsedDocumentPayload | undefined {
+  const parsed = llmDocumentSchema.safeParse(JSON.parse(raw));
+
+  if (!parsed.success) {
+    return undefined;
+  }
+
+  const allowedMetricCodes = new Set(spec.fieldMappings.map((mapping) => mapping.metricCode));
+  const metrics = parsed.data.metrics.filter((metric) => allowedMetricCodes.has(metric.metric_code));
+
+  if (metrics.length === 0) {
+    return undefined;
+  }
+
+  return {
+    sampleDate: normalizeSampleDate(parsed.data.sample_date ?? "") ?? resolveSampleDate(text),
+    metrics: metrics.map((metric) => ({
+      metricCode: metric.metric_code,
+      value: metric.value,
+      unit: metric.unit,
+      sourceLabel: metric.source_label
+    })),
+    parser: "llm"
+  };
+}
+
+async function tryParseWithAnthropic(
+  importerKey: ImporterKey,
+  text: string,
+  apiKey: string,
+  model: string
+): Promise<ParsedDocumentPayload | undefined> {
+  const spec = importerSpecs[importerKey];
+  const metricCatalog = spec.fieldMappings
+    .map(
+      (mapping) =>
+        `${mapping.metricCode} | ${mapping.metricName} | aliases=${mapping.aliases.join(",")} | unit=${mapping.canonicalUnit}`
+    )
+    .join("\n");
+
+  const userPrompt = buildDocumentExtractionPrompt(importerKey, metricCatalog, text);
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01"
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      system: DOCUMENT_SYSTEM_PROMPT,
+      messages: [{ role: "user", content: userPrompt }]
+    })
+  });
+
+  if (!response.ok) {
+    return undefined;
+  }
+
+  const payload = (await response.json()) as {
+    content?: Array<{ type: string; text?: string }>;
+  };
+
+  const raw = payload.content
+    ?.filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+
+  if (!raw) {
+    return undefined;
+  }
+
+  // Anthropic may wrap JSON in markdown code fences — strip them
+  const jsonString = raw.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+
+  return parseAndValidateLLMResponse(jsonString, spec, text);
+}
+
+async function tryParseWithOpenAI(
+  importerKey: ImporterKey,
+  text: string,
+  apiKey: string,
+  baseUrl: string,
+  model: string
+): Promise<ParsedDocumentPayload | undefined> {
+  const spec = importerSpecs[importerKey];
+  const metricCatalog = spec.fieldMappings
+    .map(
+      (mapping) =>
+        `${mapping.metricCode} | ${mapping.metricName} | aliases=${mapping.aliases.join(",")} | unit=${mapping.canonicalUnit}`
+    )
+    .join("\n");
+
+  const userPrompt = buildDocumentExtractionPrompt(importerKey, metricCatalog, text);
+
+  const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      messages: [
+        { role: "system", content: DOCUMENT_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    return undefined;
+  }
+
+  const payload = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const raw = payload.choices?.[0]?.message?.content;
+
+  if (!raw) {
+    return undefined;
+  }
+
+  return parseAndValidateLLMResponse(raw, spec, text);
+}
+
+async function tryParseWithLLM(
+  importerKey: ImporterKey,
+  text: string
+): Promise<ParsedDocumentPayload | undefined> {
+  try {
+    const env = getAppEnv();
+
+    if (!env.HEALTH_LLM_API_KEY) {
       return undefined;
     }
 
-    const payload = (await response.json()) as {
-      choices?: Array<{
-        message?: {
-          content?: string;
-        };
-      }>;
-    };
-    const raw = payload.choices?.[0]?.message?.content;
-
-    if (!raw) {
-      return undefined;
+    if (env.HEALTH_LLM_PROVIDER === "anthropic") {
+      const model = env.HEALTH_LLM_MODEL ?? "claude-sonnet-4-20250514";
+      return await tryParseWithAnthropic(importerKey, text, env.HEALTH_LLM_API_KEY, model);
     }
 
-    const parsed = llmDocumentSchema.safeParse(JSON.parse(raw));
-
-    if (!parsed.success) {
-      return undefined;
+    if (env.HEALTH_LLM_PROVIDER === "openai-compatible" && env.HEALTH_LLM_BASE_URL) {
+      const model = env.HEALTH_LLM_MODEL ?? "gpt-4.1-mini";
+      return await tryParseWithOpenAI(importerKey, text, env.HEALTH_LLM_API_KEY, env.HEALTH_LLM_BASE_URL, model);
     }
 
-    const allowedMetricCodes = new Set(spec.fieldMappings.map((mapping) => mapping.metricCode));
-    const metrics = parsed.data.metrics.filter((metric) => allowedMetricCodes.has(metric.metric_code));
-
-    if (metrics.length === 0) {
-      return undefined;
-    }
-
-    return {
-      sampleDate: normalizeSampleDate(parsed.data.sample_date ?? "") ?? resolveSampleDate(text),
-      metrics: metrics.map((metric) => ({
-        metricCode: metric.metric_code,
-        value: metric.value,
-        unit: metric.unit,
-        sourceLabel: metric.source_label
-      })),
-      parser: "llm"
-    };
+    return undefined;
   } catch {
     return undefined;
   }

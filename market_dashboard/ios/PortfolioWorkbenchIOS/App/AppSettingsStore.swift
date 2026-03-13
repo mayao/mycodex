@@ -56,6 +56,12 @@ struct SavedServerEndpoint: Identifiable, Codable, Equatable {
     let url: String
 }
 
+private struct ScopedServerSession: Codable {
+    let sessionToken: String
+    let currentUser: MobileUser
+    let isUsingLocalMockSession: Bool
+}
+
 @MainActor
 final class AppSettingsStore: ObservableObject {
     static let defaultServerURLInfoKey = "PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL"
@@ -63,6 +69,7 @@ final class AppSettingsStore: ObservableObject {
     static let autoOwnerLoginInfoKey = "PORTFOLIO_WORKBENCH_AUTO_OWNER_LOGIN"
     static let resetStateOnLaunchInfoKey = "PORTFOLIO_WORKBENCH_RESET_STATE_ON_LAUNCH"
     static let serverURLKey = "portfolio-workbench-ios.server-url"
+    static let scopedSessionsKey = "portfolio-workbench-ios.scoped-sessions"
     static let savedServersKey = "portfolio-workbench-ios.saved-servers"
     static let hideSensitiveAmountsKey = "portfolio-workbench-ios.hide-sensitive-amounts"
     static let sessionTokenKey = "portfolio-workbench-ios.session-token"
@@ -72,6 +79,7 @@ final class AppSettingsStore: ObservableObject {
     private static let sessionValidationInterval: TimeInterval = 90
 
     private let identityStore: DeviceAccountIdentityStore
+    private var scopedSessions: [String: ScopedServerSession]
     private var lastSessionValidationAt: Date?
     private var lastValidatedServerURLString: String?
 
@@ -80,6 +88,7 @@ final class AppSettingsStore: ObservableObject {
             UserDefaults.standard.set(serverURLString, forKey: Self.serverURLKey)
             lastSessionValidationAt = nil
             lastValidatedServerURLString = nil
+            restoreScopedSessionForCurrentServer()
         }
     }
     @Published private(set) var savedServers: [SavedServerEndpoint] {
@@ -103,11 +112,13 @@ final class AppSettingsStore: ObservableObject {
             } else {
                 UserDefaults.standard.removeObject(forKey: Self.sessionTokenKey)
             }
+            persistCurrentScopedSession()
         }
     }
     @Published private(set) var isUsingLocalMockSession: Bool {
         didSet {
             UserDefaults.standard.set(isUsingLocalMockSession, forKey: Self.localMockSessionKey)
+            persistCurrentScopedSession()
         }
     }
     @Published private(set) var currentUser: MobileUser? {
@@ -117,6 +128,7 @@ final class AppSettingsStore: ObservableObject {
             } else {
                 UserDefaults.standard.removeObject(forKey: Self.currentUserKey)
             }
+            persistCurrentScopedSession()
         }
     }
     @Published private(set) var deviceAccountProfile: DeviceAccountProfile {
@@ -138,10 +150,17 @@ final class AppSettingsStore: ObservableObject {
         let bundledDefaultURL =
             (Bundle.main.object(forInfoDictionaryKey: Self.defaultServerURLInfoKey) as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-        self.serverURLString =
+        let initialServerURL =
             Self.normalizeServerURLString(UserDefaults.standard.string(forKey: Self.serverURLKey))
             ?? Self.normalizeServerURLString(bundledDefaultURL)
             ?? "http://127.0.0.1:8008/"
+        self.serverURLString = initialServerURL
+        if let data = UserDefaults.standard.data(forKey: Self.scopedSessionsKey),
+           let decoded = try? JSONDecoder().decode([String: ScopedServerSession].self, from: data) {
+            self.scopedSessions = decoded
+        } else {
+            self.scopedSessions = [:]
+        }
         if let data = UserDefaults.standard.data(forKey: Self.savedServersKey),
            let decoded = try? JSONDecoder().decode([SavedServerEndpoint].self, from: data) {
             self.savedServers = decoded
@@ -149,13 +168,23 @@ final class AppSettingsStore: ObservableObject {
             self.savedServers = []
         }
         self.hideSensitiveAmounts = UserDefaults.standard.bool(forKey: Self.hideSensitiveAmountsKey)
-        self.sessionToken = UserDefaults.standard.string(forKey: Self.sessionTokenKey)
-        self.isUsingLocalMockSession = UserDefaults.standard.bool(forKey: Self.localMockSessionKey)
-        if let data = UserDefaults.standard.data(forKey: Self.currentUserKey),
-           let decoded = try? JSONDecoder().decode(MobileUser.self, from: data) {
-            self.currentUser = decoded
+        let legacySessionToken = UserDefaults.standard.string(forKey: Self.sessionTokenKey)
+        let legacyIsUsingLocalMockSession = UserDefaults.standard.bool(forKey: Self.localMockSessionKey)
+        let legacyCurrentUser: MobileUser? =
+            if let data = UserDefaults.standard.data(forKey: Self.currentUserKey),
+               let decoded = try? JSONDecoder().decode(MobileUser.self, from: data) {
+                decoded
+            } else {
+                nil
+            }
+        if let initialScopedSession = self.scopedSessions[initialServerURL] {
+            self.sessionToken = initialScopedSession.sessionToken
+            self.currentUser = initialScopedSession.currentUser
+            self.isUsingLocalMockSession = initialScopedSession.isUsingLocalMockSession
         } else {
-            self.currentUser = nil
+            self.sessionToken = legacySessionToken
+            self.currentUser = legacyCurrentUser
+            self.isUsingLocalMockSession = legacyIsUsingLocalMockSession
         }
         self.deviceAccountProfile = identityStore.resolveProfile(defaultDeviceLabel: Self.currentDeviceLabel)
         self.biometricUnlockEnabled = UserDefaults.standard.object(forKey: Self.biometricUnlockEnabledKey) as? Bool ?? false
@@ -196,6 +225,7 @@ final class AppSettingsStore: ObservableObject {
 
         refreshBiometryAvailability()
         syncDeviceAccountLabel()
+        persistCurrentScopedSession()
         if biometricUnlockEnabled && isAuthenticated {
             requiresBiometricUnlock = true
         }
@@ -212,6 +242,12 @@ final class AppSettingsStore: ObservableObject {
 
     var currentServerPort: Int {
         URL(string: trimmedServerURLString)?.port ?? 8008
+    }
+
+    var cacheNamespace: String {
+        let serverPart = Self.cacheSafeIdentifier(for: normalizedCurrentServerURL ?? trimmedServerURLString)
+        let userPart = Self.cacheSafeIdentifier(for: currentUser?.userId ?? "anonymous")
+        return serverPart + "." + userPart
     }
 
     var isAuthenticated: Bool {
@@ -480,6 +516,57 @@ final class AppSettingsStore: ObservableObject {
         return host
     }
 
+    private var normalizedCurrentServerURL: String? {
+        Self.normalizeServerURLString(trimmedServerURLString)
+    }
+
+    private func restoreScopedSessionForCurrentServer() {
+        guard let currentServerURL = normalizedCurrentServerURL else {
+            sessionToken = nil
+            currentUser = nil
+            isUsingLocalMockSession = false
+            requiresBiometricUnlock = false
+            return
+        }
+
+        guard let scopedSession = scopedSessions[currentServerURL] else {
+            sessionToken = nil
+            currentUser = nil
+            isUsingLocalMockSession = false
+            requiresBiometricUnlock = false
+            return
+        }
+
+        sessionToken = scopedSession.sessionToken
+        currentUser = scopedSession.currentUser
+        isUsingLocalMockSession = scopedSession.isUsingLocalMockSession
+        if biometricUnlockEnabled {
+            requiresBiometricUnlock = true
+        }
+    }
+
+    private func persistCurrentScopedSession() {
+        guard let currentServerURL = normalizedCurrentServerURL else {
+            return
+        }
+
+        if let sessionToken, !sessionToken.isEmpty, let currentUser {
+            scopedSessions[currentServerURL] = ScopedServerSession(
+                sessionToken: sessionToken,
+                currentUser: currentUser,
+                isUsingLocalMockSession: isUsingLocalMockSession
+            )
+        } else {
+            scopedSessions.removeValue(forKey: currentServerURL)
+        }
+
+        if let data = try? JSONEncoder().encode(scopedSessions) {
+            UserDefaults.standard.set(data, forKey: Self.scopedSessionsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.scopedSessionsKey)
+        }
+    }
+
     private static func normalizeServerURLString(_ rawValue: String?) -> String? {
         guard let rawValue else { return nil }
         let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -494,5 +581,15 @@ final class AppSettingsStore: ObservableObject {
             components.path += "/"
         }
         return components.url?.absoluteString
+    }
+
+    private static func cacheSafeIdentifier(for rawValue: String) -> String {
+        let cleaned = rawValue.replacingOccurrences(
+            of: "[^A-Za-z0-9]+",
+            with: "_",
+            options: .regularExpression
+        )
+        let trimmed = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return trimmed.isEmpty ? "default" : trimmed
     }
 }

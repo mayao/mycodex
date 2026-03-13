@@ -100,7 +100,7 @@ struct HoldingDetailScreen: View {
             await viewModel.load(
                 symbol: symbol,
                 using: client,
-                cacheNamespace: settings.currentUser?.userId,
+                cacheNamespace: settings.cacheNamespace,
                 force: force,
                 intent: intent
             )
@@ -115,7 +115,7 @@ struct HoldingDetailScreen: View {
             await viewModel.refreshAI(
                 symbol: symbol,
                 using: client,
-                cacheNamespace: settings.currentUser?.userId,
+                cacheNamespace: settings.cacheNamespace,
                 force: force
             )
         } catch {

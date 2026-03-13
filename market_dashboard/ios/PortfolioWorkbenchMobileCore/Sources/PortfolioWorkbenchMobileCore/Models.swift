@@ -99,6 +99,16 @@ public struct BasicMessagePayload: Codable, Sendable {
     public let message: String
 }
 
+public struct MobileServerDiscoveryPayload: Codable, Sendable, Equatable {
+    public let service: String
+    public let appName: String
+    public let bindHost: String
+    public let port: Int
+    public let suggestedBaseUrl: String?
+    public let detectedLanIp: String?
+    public let availablePaths: [String]
+}
+
 public struct MobileDashboardPayload: Codable, Sendable {
     public let generatedAt: String
     public let analysisDateCn: String

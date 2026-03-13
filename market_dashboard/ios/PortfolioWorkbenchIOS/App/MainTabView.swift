@@ -64,7 +64,7 @@ struct MainTabView: View {
     }
 
     private func bootstrap() async {
-        dashboardStore.setSessionUserID(settings.currentUser?.userId)
+        dashboardStore.setSessionUserID(settings.cacheNamespace)
         do {
             let client = try await settings.makeValidatedClient()
             await dashboardStore.prime(using: client)
@@ -105,7 +105,7 @@ struct MainTabView: View {
             await HoldingDetailViewModel.prefetch(
                 symbols: orderedHoldingSymbols,
                 using: client,
-                cacheNamespace: settings.currentUser?.userId
+                cacheNamespace: settings.cacheNamespace
             )
         } catch {
             // Keep prefetch silent; on-demand loading still handles failures.

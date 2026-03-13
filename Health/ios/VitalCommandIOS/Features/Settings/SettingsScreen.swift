@@ -9,6 +9,10 @@ struct SettingsScreen: View {
     @State private var syncStatus: SyncStatusResponse?
     @State private var isSyncing = false
     @State private var syncError: String?
+    @State private var serverStatuses: [String: Bool] = [:]
+    @State private var checkingServers: Set<String> = []
+
+    private let tealColor = Color(hex: "#0f766e") ?? .teal
 
     var body: some View {
         Form {
@@ -58,12 +62,23 @@ struct SettingsScreen: View {
                     .foregroundStyle(.secondary)
             }
 
+            // Server address section with status
             Section("服务地址") {
-                TextField("http://10.8.140.209:3000/", text: $settings.serverURLString)
-                    .appURLTextEntry()
+                HStack {
+                    TextField("http://10.8.140.209:3000/", text: $settings.serverURLString)
+                        .appURLTextEntry()
 
-                Button("模拟器使用本机地址 127.0.0.1:3000") {
-                    settings.serverURLString = "http://127.0.0.1:3000/"
+                    if checkingServers.contains(settings.trimmedServerURLString) {
+                        ProgressView().scaleEffect(0.7)
+                    } else if let reachable = serverStatuses[settings.trimmedServerURLString] {
+                        Circle()
+                            .fill(reachable ? .green : .red)
+                            .frame(width: 10, height: 10)
+                    }
+                }
+
+                Button("检测连接") {
+                    Task { await checkServer(settings.trimmedServerURLString) }
                 }
 
                 Button("保存当前服务器") {
@@ -75,34 +90,35 @@ struct SettingsScreen: View {
                     .foregroundStyle(.secondary)
             }
 
-            if !settings.savedServers.isEmpty {
-                Section("已保存的服务器") {
-                    ForEach(settings.savedServers) { server in
-                        Button {
-                            settings.serverURLString = server.url
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(server.name)
-                                        .font(.subheadline.weight(.medium))
-                                    Text(server.url)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if settings.trimmedServerURLString == server.url {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
+            // Quick server switching
+            Section("快速切换") {
+                // Built-in servers
+                serverSwitchRow(name: "主服务器 (209)", url: "http://10.8.140.209:3000/")
+                serverSwitchRow(name: "备用服务器 (16)", url: "http://10.8.144.16:3001/")
+
+                // Saved servers (excluding built-in ones)
+                ForEach(settings.savedServers.filter { saved in
+                    saved.url != "http://10.8.140.209:3000/" && saved.url != "http://10.8.144.16:3001/"
+                }) { server in
+                    serverSwitchRow(name: server.name, url: server.url)
+                }
+                .onDelete { indexSet in
+                    let filtered = settings.savedServers.filter { saved in
+                        saved.url != "http://10.8.140.209:3000/" && saved.url != "http://10.8.144.16:3001/"
                     }
-                    .onDelete { indexSet in
-                        for index in indexSet {
-                            settings.removeSavedServer(settings.savedServers[index])
-                        }
+                    for index in indexSet {
+                        settings.removeSavedServer(filtered[index])
                     }
+                }
+
+                Button {
+                    Task { await checkAllServers() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                        Text("检测所有服务器")
+                    }
+                    .font(.subheadline)
                 }
             }
 
@@ -262,7 +278,10 @@ struct SettingsScreen: View {
         }
         .onAppear {
             discovery.startScanning()
-            Task { await loadSyncStatus() }
+            Task {
+                await loadSyncStatus()
+                await checkAllServers()
+            }
         }
         .onDisappear { discovery.stopScanning() }
         .navigationTitle("设置")
@@ -273,6 +292,89 @@ struct SettingsScreen: View {
             }
         } message: {
             Text("退出后需要重新验证身份登录")
+        }
+    }
+
+    // MARK: - Server switch row
+
+    @ViewBuilder
+    private func serverSwitchRow(name: String, url: String) -> some View {
+        Button {
+            settings.serverURLString = url
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(name)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.primary)
+                    Text(url)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+
+                // Connection status
+                if checkingServers.contains(url) {
+                    ProgressView().scaleEffect(0.6)
+                } else if let reachable = serverStatuses[url] {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(reachable ? .green : .red)
+                            .frame(width: 8, height: 8)
+                        Text(reachable ? "在线" : "离线")
+                            .font(.caption2)
+                            .foregroundStyle(reachable ? .green : .red)
+                    }
+                }
+
+                // Active indicator
+                if settings.trimmedServerURLString == url {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(tealColor)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Server health check
+
+    private func checkServer(_ urlString: String) async {
+        checkingServers.insert(urlString)
+        defer { checkingServers.remove(urlString) }
+
+        let healthURL = urlString.hasSuffix("/")
+            ? urlString + "api/health"
+            : urlString + "/api/health"
+
+        guard let url = URL(string: healthURL) else {
+            serverStatuses[urlString] = false
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+        request.httpMethod = "GET"
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            let reachable = (response as? HTTPURLResponse).map { (200...499).contains($0.statusCode) } ?? false
+            serverStatuses[urlString] = reachable
+        } catch {
+            serverStatuses[urlString] = false
+        }
+    }
+
+    private func checkAllServers() async {
+        let urls = Set(
+            ["http://10.8.140.209:3000/", "http://10.8.144.16:3001/"]
+            + settings.savedServers.map(\.url)
+            + [settings.trimmedServerURLString]
+        )
+        await withTaskGroup(of: Void.self) { group in
+            for url in urls {
+                group.addTask { await checkServer(url) }
+            }
         }
     }
 

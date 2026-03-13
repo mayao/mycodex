@@ -262,7 +262,7 @@ async function callLLMForSuggestions(
  */
 function parseLLMSuggestions(rawContent: string): HealthPlanSuggestionOutput {
   // Strip markdown code fences
-  let jsonStr = rawContent
+  const jsonStr = rawContent
     .replace(/^```(?:json)?\s*/m, "")
     .replace(/\s*```\s*$/m, "")
     .trim();
@@ -750,15 +750,15 @@ export async function getPlanDashboard(
   const unacceptedSuggestions = suggestions.filter((s) => !acceptedSuggestionIds.has(s.id));
 
   return {
-    plan_items: planItems,
-    paused_items: pausedItems,
+    planItems: planItems,
+    pausedItems: pausedItems,
     suggestions: unacceptedSuggestions,
-    today_checks: todayChecks,
+    todayChecks: todayChecks,
     stats: {
-      active_count: planItems.length,
-      today_completed: todayCompleted,
-      today_total: planItems.length,
-      week_completion_rate: weekStats.total > 0 ? weekStats.completed / weekStats.total : 0
+      activeCount: planItems.length,
+      todayCompleted: todayCompleted,
+      todayTotal: planItems.length,
+      weekCompletionRate: weekStats.total > 0 ? weekStats.completed / weekStats.total : 0
     }
   };
 }
