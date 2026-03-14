@@ -7,6 +7,108 @@ public enum MobileTone: String, Codable, Sendable {
     case neutral
 }
 
+public enum AIProviderKind: String, Codable, Sendable, CaseIterable, Identifiable {
+    case anthropic
+    case kimi
+    case gemini
+
+    public var id: String { rawValue }
+}
+
+public struct AIProviderRequestConfiguration: Codable, Sendable, Equatable {
+    public let provider: AIProviderKind
+    public let model: String?
+    public let apiKey: String?
+    public let baseURL: String?
+
+    public init(
+        provider: AIProviderKind,
+        model: String? = nil,
+        apiKey: String? = nil,
+        baseURL: String? = nil
+    ) {
+        self.provider = provider
+        self.model = model
+        self.apiKey = apiKey
+        self.baseURL = baseURL
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider
+        case model
+        case apiKey = "api_key"
+        case baseURL = "base_url"
+    }
+}
+
+public struct AIRequestConfiguration: Codable, Sendable, Equatable {
+    public let primaryProvider: AIProviderKind
+    public let enableFallbacks: Bool
+    public let providers: [AIProviderRequestConfiguration]
+
+    public init(
+        primaryProvider: AIProviderKind,
+        enableFallbacks: Bool,
+        providers: [AIProviderRequestConfiguration]
+    ) {
+        self.primaryProvider = primaryProvider
+        self.enableFallbacks = enableFallbacks
+        self.providers = providers
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case primaryProvider = "primary_provider"
+        case enableFallbacks = "enable_fallbacks"
+        case providers
+    }
+}
+
+public struct AIServiceProviderStatus: Codable, Sendable, Equatable, Identifiable {
+    public let provider: AIProviderKind
+    public let label: String
+    public let model: String?
+    public let baseURL: String?
+    public let preset: String?
+    public let credentialSource: String
+    public let accessState: String
+    public let accessMessage: String
+    public let checkedAt: String?
+    public let latencyMs: Int?
+
+    public var id: AIProviderKind { provider }
+
+    private enum CodingKeys: String, CodingKey {
+        case provider
+        case label
+        case model
+        case baseURL = "baseUrl"
+        case preset
+        case credentialSource
+        case accessState
+        case accessMessage
+        case checkedAt
+        case latencyMs
+    }
+}
+
+public struct AIServiceStatusPayload: Codable, Sendable, Equatable {
+    public let primaryProvider: AIProviderKind?
+    public let enableFallbacks: Bool
+    public let providerOrder: [AIProviderKind]
+    public let usesServiceConfig: Bool
+    public let providers: [AIServiceProviderStatus]
+    public let note: String
+
+    private enum CodingKeys: String, CodingKey {
+        case primaryProvider
+        case enableFallbacks
+        case providerOrder
+        case usesServiceConfig
+        case providers
+        case note
+    }
+}
+
 public struct MobileUser: Codable, Sendable, Equatable {
     public let userId: String
     public let displayName: String

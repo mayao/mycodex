@@ -105,7 +105,7 @@ struct LoginScreen: View {
             }
 
             VStack(spacing: 6) {
-                Text("Vital Command")
+                Text("Health AI")
                     .font(.title.weight(.bold))
                     .foregroundColor(darkText)
 
@@ -326,7 +326,14 @@ struct LoginScreen: View {
     private func directLogin() async {
         errorMessage = nil
         isLoggingIn = true
-        await performDeviceLogin()
+        // Try server login first; if it fails, enter offline mode
+        do {
+            try await authManager.deviceAutoLogin(using: settings)
+        } catch {
+            // Server unreachable — enter offline / cached mode anyway
+            authManager.enterOfflineMode()
+        }
+        isLoggingIn = false
     }
 
     private func performDeviceLogin() async {
@@ -378,7 +385,7 @@ struct LoginServerConfigSheet: View {
     private var currentServerSection: some View {
         Section("当前服务器") {
             HStack {
-                TextField("http://10.8.140.209:3000/", text: $editingURL)
+                TextField("http://192.168.31.193:3000/", text: $editingURL)
                     .appURLTextEntry()
 
                 if checkingServers.contains(editingURL) {
@@ -410,7 +417,7 @@ struct LoginServerConfigSheet: View {
 
     private var quickSwitchSection: some View {
         Section("快速切换") {
-            serverRow(name: "主服务器", url: "http://10.8.140.209:3000/")
+            serverRow(name: "主服务器", url: "http://192.168.31.193:3000/")
             serverRow(name: "备用服务器", url: "http://10.8.144.16:3001/")
 
             ForEach(settings.savedServers) { server in
@@ -517,7 +524,7 @@ struct LoginServerConfigSheet: View {
 
     private func checkAllServers() async {
         let urls = Set(
-            ["http://10.8.140.209:3000/", "http://10.8.144.16:3001/"]
+            ["http://192.168.31.193:3000/", "http://10.8.144.16:3001/"]
             + settings.savedServers.map(\.url)
         )
         await withTaskGroup(of: Void.self) { group in

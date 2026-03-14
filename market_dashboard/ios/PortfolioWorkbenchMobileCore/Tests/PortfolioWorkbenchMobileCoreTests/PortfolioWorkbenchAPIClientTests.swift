@@ -393,6 +393,94 @@ final class PortfolioWorkbenchAPIClientTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.value(forHTTPHeaderField: "Authorization"), "Bearer session-token")
     }
 
+    func testAddsAIConfigurationHeaderToRequests() async throws {
+        let session = MockSession(
+            statusCode: 200,
+            body: """
+            {
+              "generated_at": "2026-03-10T12:00:00.000Z",
+              "analysis_date_cn": "2026年3月10日",
+              "action_blocks": [],
+              "ai_updated_at": "2026-03-10T12:00:00.000Z",
+              "ai_engine_label": "Kimi moonshot-v1-8k",
+              "ai_status_message": "AI 洞察已刷新。"
+            }
+            """
+        )
+        let client = PortfolioWorkbenchAPIClient(
+            configuration: AppServerConfiguration(
+                baseURL: URL(string: "http://localhost:8008/")!,
+                aiRequestConfiguration: AIRequestConfiguration(
+                    primaryProvider: .anthropic,
+                    enableFallbacks: true,
+                    providers: [
+                        AIProviderRequestConfiguration(
+                            provider: .anthropic,
+                            model: "claude-sonnet-4-5-20250929",
+                            apiKey: "anthropic-key"
+                        ),
+                        AIProviderRequestConfiguration(
+                            provider: .kimi,
+                            model: "moonshot-v1-8k",
+                            apiKey: "kimi-key"
+                        )
+                    ]
+                )
+            ),
+            session: session
+        )
+
+        _ = try await client.fetchDashboardAI(refresh: true)
+
+        let encodedHeader = try XCTUnwrap(session.lastRequest?.value(forHTTPHeaderField: "X-MyInvAI-AI-Config"))
+        let decodedData = try XCTUnwrap(Data(base64Encoded: encodedHeader))
+        let decoded = try JSONDecoder().decode(AIRequestConfiguration.self, from: decodedData)
+        XCTAssertEqual(decoded.primaryProvider, .anthropic)
+        XCTAssertTrue(decoded.enableFallbacks)
+        XCTAssertEqual(decoded.providers.count, 2)
+        XCTAssertEqual(decoded.providers.last?.provider, .kimi)
+    }
+
+    func testFetchesAIServiceStatus() async throws {
+        let session = MockSession(
+            statusCode: 200,
+            body: """
+            {
+              "primary_provider": "kimi",
+              "enable_fallbacks": true,
+              "provider_order": ["kimi", "anthropic", "gemini"],
+              "uses_service_config": true,
+              "note": "App 端仅切换 provider 与模型，真正的 API Key 由服务端托管。",
+              "providers": [
+                {
+                  "provider": "kimi",
+                  "label": "Kimi",
+                  "model": "kimi-for-coding",
+                  "base_url": "https://api.kimi.com/coding/v1",
+                  "preset": "kimi_coding",
+                  "credential_source": "service_config",
+                  "access_state": "ready",
+                  "access_message": "服务端已配置，可发起访问。",
+                  "checked_at": null,
+                  "latency_ms": null
+                }
+              ]
+            }
+            """
+        )
+        let client = PortfolioWorkbenchAPIClient(
+            configuration: AppServerConfiguration(baseURL: URL(string: "http://localhost:8008/")!),
+            session: session
+        )
+
+        let payload = try await client.fetchAIServiceStatus()
+
+        XCTAssertEqual(payload.primaryProvider, .kimi)
+        XCTAssertEqual(payload.providerOrder.first, .kimi)
+        XCTAssertEqual(payload.providers.first?.preset, "kimi_coding")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/mobile/ai-service-status")
+    }
+
     func testBuildsOwnerDevLoginRequest() async throws {
         let session = MockSession(
             statusCode: 200,

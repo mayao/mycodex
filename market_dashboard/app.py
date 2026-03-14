@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import cgi
 import ipaddress
 import json
@@ -30,7 +31,7 @@ try:
         resolve_portfolio_user_id,
         serialize_user,
     )
-    from ai_insight_model import generate_chat_reply
+    from ai_insight_model import generate_chat_reply, get_ai_service_status
     from mobile_api import (
         build_mobile_ai_chat_context,
         build_mobile_dashboard_ai_payload,
@@ -63,7 +64,7 @@ except ModuleNotFoundError:
         resolve_portfolio_user_id,
         serialize_user,
     )
-    from market_dashboard.ai_insight_model import generate_chat_reply
+    from market_dashboard.ai_insight_model import generate_chat_reply, get_ai_service_status
     from market_dashboard.mobile_api import (
         build_mobile_ai_chat_context,
         build_mobile_dashboard_ai_payload,
@@ -94,6 +95,7 @@ AI_CONTEXT_TTL_SECONDS = 10 * 60
 AI_CONTEXT_MAX_ENTRIES = 8
 AI_CONTEXT_CACHE: dict[str, dict[str, Any]] = {}
 AI_CONTEXT_LOCK = Lock()
+MOBILE_AI_CONFIG_HEADER = "X-MyInvAI-AI-Config"
 
 
 def load_html() -> str:
@@ -159,11 +161,25 @@ def _attach_deferred_ai_context(payload: dict[str, Any]) -> dict[str, Any]:
     return response_payload
 
 
+def _read_mobile_ai_request_config(handler: BaseHTTPRequestHandler) -> dict[str, Any] | None:
+    raw_header = str(handler.headers.get(MOBILE_AI_CONFIG_HEADER, "") or "").strip()
+    if not raw_header:
+        return None
+    try:
+        padded = raw_header + "=" * (-len(raw_header) % 4)
+        decoded = base64.b64decode(padded.encode("utf-8")).decode("utf-8")
+        payload = json.loads(decoded)
+        return payload if isinstance(payload, dict) else None
+    except Exception:
+        return None
+
+
 def _build_mobile_dashboard_with_fallback(
     force_refresh: bool,
     include_live: bool = True,
     *,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         return build_mobile_dashboard_payload(
@@ -172,6 +188,7 @@ def _build_mobile_dashboard_with_fallback(
             allow_cached_fallback=True,
             include_ai=False,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
     except Exception:
         return build_mobile_dashboard_payload(
@@ -180,6 +197,7 @@ def _build_mobile_dashboard_with_fallback(
             allow_cached_fallback=True,
             include_ai=False,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
 
 
@@ -187,18 +205,21 @@ def _build_mobile_dashboard_ai_with_fallback(
     force_refresh: bool,
     *,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         return build_mobile_dashboard_ai_payload(
             force_refresh=force_refresh,
             allow_cached_fallback=True,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
     except Exception:
         return build_mobile_dashboard_ai_payload(
             force_refresh=False,
             allow_cached_fallback=True,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
 
 
@@ -208,6 +229,7 @@ def _build_stock_detail_with_fallback(
     share_mode: bool,
     *,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         return build_stock_detail_payload(
@@ -217,6 +239,7 @@ def _build_stock_detail_with_fallback(
             allow_cached_fallback=True,
             share_mode=share_mode,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
     except Exception:
         return build_stock_detail_payload(
@@ -226,6 +249,7 @@ def _build_stock_detail_with_fallback(
             allow_cached_fallback=True,
             share_mode=share_mode,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
 
 
@@ -235,6 +259,7 @@ def _build_stock_detail_ai_with_fallback(
     share_mode: bool,
     *,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         return build_mobile_stock_detail_ai_payload(
@@ -243,6 +268,7 @@ def _build_stock_detail_ai_with_fallback(
             allow_cached_fallback=True,
             share_mode=share_mode,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
     except Exception:
         return build_mobile_stock_detail_ai_payload(
@@ -251,6 +277,7 @@ def _build_stock_detail_ai_with_fallback(
             allow_cached_fallback=True,
             share_mode=share_mode,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
 
 
@@ -260,6 +287,7 @@ def _build_mobile_ai_chat_context_with_fallback(
     symbol: str | None = None,
     force_refresh: bool = False,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     try:
         return build_mobile_ai_chat_context(
@@ -268,6 +296,7 @@ def _build_mobile_ai_chat_context_with_fallback(
             force_refresh=force_refresh,
             allow_cached_fallback=True,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
     except Exception:
         return build_mobile_ai_chat_context(
@@ -276,6 +305,7 @@ def _build_mobile_ai_chat_context_with_fallback(
             force_refresh=False,
             allow_cached_fallback=True,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
 
 
@@ -296,6 +326,7 @@ def _build_mobile_discovery_payload(handler: BaseHTTPRequestHandler) -> dict[str
             "/api/mobile/discovery",
             "/api/mobile/auth/device/bootstrap",
             "/api/mobile/dashboard",
+            "/api/mobile/ai-service-status",
             "/api/mobile/stock-detail",
             "/api/mobile/upload-statement",
         ],
@@ -439,11 +470,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             force_refresh = "refresh=1" in self.path
             fast_mode = (query.get("fast") or ["0"])[0].lower() in {"1", "true", "yes"}
+            ai_request_config = _read_mobile_ai_request_config(self)
             try:
                 payload = _build_mobile_dashboard_with_fallback(
                     force_refresh=force_refresh,
                     include_live=not fast_mode,
                     user_id=self._portfolio_user_id_for_session(session),
+                    ai_request_config=ai_request_config,
                 )
             except Exception as exc:  # noqa: BLE001
                 self._send_json({"error": f"移动端数据生成失败：{exc}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -455,15 +488,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if session is None:
                 return
             force_refresh = "refresh=1" in self.path
+            ai_request_config = _read_mobile_ai_request_config(self)
             try:
                 payload = _build_mobile_dashboard_ai_with_fallback(
                     force_refresh=force_refresh,
                     user_id=self._portfolio_user_id_for_session(session),
+                    ai_request_config=ai_request_config,
                 )
             except Exception as exc:  # noqa: BLE001
                 self._send_json({"error": f"移动端 AI 洞察生成失败：{exc}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
                 return
             self._send_json(payload)
+            return
+        if path == "/api/mobile/ai-service-status":
+            session = self._require_mobile_session()
+            if session is None:
+                return
+            ai_request_config = _read_mobile_ai_request_config(self)
+            self._send_json(get_ai_service_status(ai_request_config=ai_request_config))
             return
         if path == "/api/share-data":
             force_refresh = "refresh=1" in self.path
@@ -487,12 +529,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 if session is None:
                     return
                 session_user_id = self._portfolio_user_id_for_session(session)
+            ai_request_config = _read_mobile_ai_request_config(self) if path == "/api/mobile/stock-detail" else None
             try:
                 payload = _build_stock_detail_with_fallback(
                     symbol=symbol,
                     force_refresh="refresh=1" in self.path,
                     share_mode=share_mode,
                     user_id=session_user_id,
+                    ai_request_config=ai_request_config,
                 )
             except KeyError:
                 self._send_json({"error": f"未找到股票 {symbol} 的详情。"}, status=HTTPStatus.NOT_FOUND)
@@ -512,12 +556,14 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if not symbol:
                 self._send_json({"error": "缺少股票代码。"}, status=HTTPStatus.BAD_REQUEST)
                 return
+            ai_request_config = _read_mobile_ai_request_config(self)
             try:
                 payload = _build_stock_detail_ai_with_fallback(
                     symbol=symbol,
                     force_refresh="refresh=1" in self.path,
                     share_mode=share_mode,
                     user_id=self._portfolio_user_id_for_session(session),
+                    ai_request_config=ai_request_config,
                 )
             except KeyError:
                 self._send_json({"error": f"未找到股票 {symbol} 的详情。"}, status=HTTPStatus.NOT_FOUND)
@@ -748,14 +794,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "持仓对话缺少股票代码。"}, status=HTTPStatus.BAD_REQUEST)
             return
 
+        ai_request_config = _read_mobile_ai_request_config(self)
         try:
             context_payload = _build_mobile_ai_chat_context_with_fallback(
                 context_type=context_type,
                 symbol=symbol,
                 force_refresh=False,
                 user_id=self._portfolio_user_id_for_session(session),
+                ai_request_config=ai_request_config,
             )
-            reply_payload = generate_chat_reply(context_payload, messages)
+            reply_payload = generate_chat_reply(context_payload, messages, ai_request_config=ai_request_config)
         except KeyError:
             self._send_json({"error": f"未找到股票 {symbol} 的详情。"}, status=HTTPStatus.NOT_FOUND)
             return

@@ -6,68 +6,71 @@ struct LoginScreen: View {
 
     @State private var isSubmitting = false
     @State private var statusMessage: String?
+    @State private var isShowingServerSwitcher = false
+    @State private var serverDraft = ""
 
     var body: some View {
         AppBackdrop {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(spacing: 18) {
+                    Spacer(minLength: 24)
                     headerSection
-                    serverSection
-                    deviceAccountSection
+                    accessSection
+                    serverAccessory
+                    if let statusMessage, !statusMessage.isEmpty {
+                        statusBanner
+                    }
+                    Spacer(minLength: 12)
                 }
-                .padding(16)
-                .padding(.top, 24)
+                .padding(18)
+                .frame(maxWidth: 520)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 20)
                 .padding(.bottom, 32)
             }
+        }
+        .sheet(isPresented: $isShowingServerSwitcher) {
+            serverSwitcherSheet
+        }
+        .task(id: settings.trimmedServerURLString) {
+            await settings.restoreDeviceSessionIfPossible()
         }
     }
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(BrokerPalette.panelStrong.opacity(0.96))
+                    .frame(width: 92, height: 92)
+
+                Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(BrokerPalette.cyan)
+            }
+
             Text("MyInvAI")
-                .font(.system(size: 34, weight: .heavy, design: .rounded))
+                .font(.system(size: 32, weight: .heavy, design: .rounded))
                 .foregroundStyle(BrokerPalette.ink)
-            Text("使用当前设备登录，直接进入你的个人投资数据。首次启用会自动完成账户绑定，后续可用本机解锁继续进入。")
+            Text("打开你的投资组合、持仓详情和 AI 判断。")
                 .font(.subheadline)
                 .foregroundStyle(BrokerPalette.muted)
-
-            HStack(spacing: 8) {
-                TagBadge(text: "设备登录", tint: BrokerPalette.cyan)
-                TagBadge(text: settings.supportsBiometricUnlock ? settings.biometryType.displayName : "本机解锁", tint: BrokerPalette.teal)
-                TagBadge(text: "个人数据", tint: BrokerPalette.gold)
-            }
+                .multilineTextAlignment(.center)
         }
+        .frame(maxWidth: .infinity)
     }
 
-    private var serverSection: some View {
-        SectionPanel(title: "服务地址", subtitle: "请填写当前可访问的数据服务地址。真机使用时建议填写局域网地址。") {
+    private var accessSection: some View {
+        SectionPanel(title: "进入应用", subtitle: accessSubtitle) {
             VStack(alignment: .leading, spacing: 12) {
-                TextField("http://192.168.1.10:8008/", text: $settings.serverURLString)
-                    .appURLTextEntry()
-                    .padding(14)
-                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-
-                Text("如果无法同步数据，请确认这里填写的是可访问地址，并且数据服务已经启动。")
-                    .font(.footnote)
-                    .foregroundStyle(BrokerPalette.muted)
-            }
-        }
-    }
-
-    private var deviceAccountSection: some View {
-        SectionPanel(
-            title: "进入应用",
-            subtitle: settings.hasProvisionedDeviceAccount
-                ? "当前 iPhone 已绑定你的设备账户，可直接继续。"
-                : "首次使用时会自动为当前设备完成登录绑定。"
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                LabelValueRow(label: "设备名称", value: settings.deviceAccountProfile.deviceLabel)
-                if let assignedUserID = settings.deviceAccountProfile.assignedUserID, !assignedUserID.isEmpty {
-                    LabelValueRow(label: "账户编号", value: assignedUserID)
-                }
-                if let defaultPassword = settings.deviceAccountProfile.defaultPassword, !defaultPassword.isEmpty {
-                    LabelValueRow(label: "备用密码", value: defaultPassword)
+                if settings.isRestoringDeviceSession {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .tint(BrokerPalette.cyan)
+                        Text("正在恢复当前设备的专属会话…")
+                            .font(.footnote)
+                            .foregroundStyle(BrokerPalette.muted)
+                    }
                 }
 
                 HStack(spacing: 10) {
@@ -75,11 +78,11 @@ struct LoginScreen: View {
                         Task { await loginWithDevice(requireLocalAuthentication: false) }
                     } label: {
                         HStack {
-                            if isSubmitting {
+                            if isSubmitting || settings.isRestoringDeviceSession {
                                 ProgressView()
                                     .tint(Color.black)
                             } else {
-                                Image(systemName: settings.hasProvisionedDeviceAccount ? "iphone.gen3" : "person.crop.rectangle.stack")
+                                Image(systemName: settings.hasProvisionedDeviceAccount ? "iphone.gen3" : "person.crop.circle.badge.plus")
                             }
                             Text(deviceLoginButtonTitle)
                         }
@@ -88,45 +91,255 @@ struct LoginScreen: View {
                     .buttonStyle(.borderedProminent)
                     .tint(BrokerPalette.cyan)
                     .foregroundStyle(Color.black)
-                    .disabled(isSubmitting)
+                    .disabled(isSubmitting || settings.isRestoringDeviceSession)
 
                     if settings.supportsBiometricUnlock && settings.hasProvisionedDeviceAccount {
                         Button {
                             Task { await loginWithDevice(requireLocalAuthentication: true) }
                         } label: {
-                            Text("\(settings.biometryType.displayName) 登录")
+                            Text("\(settings.biometryType.displayName) 继续")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)
                         .tint(BrokerPalette.teal)
-                        .disabled(isSubmitting)
+                        .disabled(isSubmitting || settings.isRestoringDeviceSession)
                     }
                 }
 
-                Text(biometricHint)
+                Text(deviceAccessHint)
                     .font(.footnote)
                     .foregroundStyle(BrokerPalette.muted)
-
-                if let statusMessage, !statusMessage.isEmpty {
-                    Text(statusMessage)
-                        .font(.footnote)
-                        .foregroundStyle(statusMessage.contains("失败") || statusMessage.contains("无效") ? BrokerPalette.red : BrokerPalette.teal)
-                }
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private var deviceLoginButtonTitle: String {
-        settings.hasProvisionedDeviceAccount ? "继续进入" : "启用并进入"
+    private var serverAccessory: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("服务器")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(BrokerPalette.muted)
+                Text(serverDisplayName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BrokerPalette.ink)
+                Text(settings.trimmedServerURLString)
+                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                    .foregroundStyle(BrokerPalette.muted)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            Button {
+                serverDraft = settings.trimmedServerURLString
+                isShowingServerSwitcher = true
+            } label: {
+                Text("切换服务器")
+            }
+            .buttonStyle(.bordered)
+            .tint(BrokerPalette.teal)
+
+            if !isUsingDefaultServer {
+                Button {
+                    settings.selectServerURL(
+                        preferredDefaultServerURL,
+                        name: "默认服务器",
+                        rememberSelection: true
+                    )
+                    statusMessage = "已切换到默认服务器。"
+                } label: {
+                    Text("默认")
+                }
+                .buttonStyle(.bordered)
+                .tint(BrokerPalette.cyan)
+            }
+        }
+        .padding(.horizontal, 2)
     }
 
-    private var biometricHint: String {
+    private var statusBanner: some View {
+        Text(statusMessage ?? "")
+            .font(.footnote)
+            .foregroundStyle(statusColor)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var deviceLoginButtonTitle: String {
+        if settings.isRestoringDeviceSession {
+            return "正在恢复"
+        }
+        return settings.hasProvisionedDeviceAccount ? "继续进入" : "启用并进入"
+    }
+
+    private var accessSubtitle: String {
+        if settings.isRestoringDeviceSession {
+            return "已检测到当前设备，正在尝试恢复之前的专属会话。"
+        }
+        return settings.hasProvisionedDeviceAccount
+            ? "当前设备已绑定，可直接继续进入。"
+            : "首次使用会为当前设备创建一个专属账户。"
+    }
+
+    private var deviceAccessHint: String {
         if settings.supportsBiometricUnlock {
             return settings.biometricUnlockEnabled
                 ? "已开启 \(settings.biometryType.displayName) 本机解锁。"
-                : "登录成功后可直接启用 \(settings.biometryType.displayName) 本机解锁。"
+                : "登录成功后可启用 \(settings.biometryType.displayName) 本机解锁。"
         }
         return "当前设备未检测到可用的 Face ID / Touch ID，仍可直接使用设备登录。"
+    }
+
+    private var isUsingDefaultServer: Bool {
+        settings.trimmedServerURLString == preferredDefaultServerURL
+    }
+
+    private var preferredDefaultServerURL: String {
+        settings.suggestedBuildServerURLString ?? AppSettingsStore.defaultServerURLString
+    }
+
+    private var serverDisplayName: String {
+        if isUsingDefaultServer {
+            return "默认服务器"
+        }
+        guard let host = URL(string: settings.trimmedServerURLString)?.host,
+              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return "自定义服务器"
+        }
+        return host
+    }
+
+    private var statusColor: Color {
+        let message = statusMessage ?? ""
+        return message.contains("失败") || message.contains("错误") || message.contains("无效")
+            ? BrokerPalette.red
+            : BrokerPalette.teal
+    }
+
+    private var serverSwitcherSheet: some View {
+        NavigationStack {
+            AppBackdrop {
+                ScrollView {
+                    VStack(spacing: 16) {
+                        SectionPanel(title: "服务器地址", subtitle: "默认地址已经预填，也可以切到其他服务器。") {
+                            VStack(alignment: .leading, spacing: 12) {
+                                TextField(preferredDefaultServerURL, text: $serverDraft)
+                                    .appURLTextEntry()
+                                    .padding(14)
+                                    .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                                HStack(spacing: 10) {
+                                    Button {
+                                        serverDraft = preferredDefaultServerURL
+                                    } label: {
+                                        Text("填入默认地址")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(BrokerPalette.teal)
+
+                                    Button {
+                                        applyServerDraft()
+                                    } label: {
+                                        Text("保存并使用")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(BrokerPalette.cyan)
+                                    .foregroundStyle(Color.black)
+                                }
+                            }
+                        }
+
+                        if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                            SectionPanel(title: "本机测试地址", subtitle: "当前构建已注入你这台 Mac 的最新局域网 IP。") {
+                                Button {
+                                    settings.selectServerURL(suggestedBuildURL, name: "本机测试地址", rememberSelection: true)
+                                    statusMessage = "已切换到本机测试地址。"
+                                    isShowingServerSwitcher = false
+                                } label: {
+                                    HStack(alignment: .top, spacing: 12) {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            Text("当前构建本机地址")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(BrokerPalette.ink)
+                                            Text(suggestedBuildURL)
+                                                .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                                .foregroundStyle(BrokerPalette.muted)
+                                                .multilineTextAlignment(.leading)
+                                        }
+
+                                        Spacer()
+
+                                        if settings.trimmedServerURLString == suggestedBuildURL {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(BrokerPalette.cyan)
+                                        }
+                                    }
+                                    .padding(14)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        if !settings.savedServers.isEmpty {
+                            SectionPanel(title: "最近服务器", subtitle: "点一下即可切换。") {
+                                VStack(spacing: 10) {
+                                    ForEach(settings.savedServers) { server in
+                                        Button {
+                                            settings.selectServerURL(server.url, name: server.name, rememberSelection: true)
+                                            statusMessage = "已切换到 \(server.name)。"
+                                            isShowingServerSwitcher = false
+                                        } label: {
+                                            HStack(alignment: .top, spacing: 12) {
+                                                VStack(alignment: .leading, spacing: 4) {
+                                                    Text(server.name)
+                                                        .font(.subheadline.weight(.semibold))
+                                                        .foregroundStyle(BrokerPalette.ink)
+                                                    Text(server.url)
+                                                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                                        .foregroundStyle(BrokerPalette.muted)
+                                                        .multilineTextAlignment(.leading)
+                                                }
+
+                                                Spacer()
+
+                                                if settings.trimmedServerURLString == server.url {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .foregroundStyle(BrokerPalette.cyan)
+                                                }
+                                            }
+                                            .padding(14)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle("切换服务器")
+            .appInlineNavigationTitle()
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("关闭") {
+                        isShowingServerSwitcher = false
+                    }
+                    .tint(BrokerPalette.cyan)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     private func loginWithDevice(requireLocalAuthentication: Bool) async {
@@ -138,6 +351,12 @@ struct LoginScreen: View {
                 ? "设备已完成绑定。\(hasPassword ? "备用密码已保存，可在设置页查看。" : "")"
                 : (requireLocalAuthentication ? "已通过 \(settings.biometryType.displayName) 登录。" : (response.message ?? "登录成功。"))
         }
+    }
+
+    private func applyServerDraft() {
+        settings.selectServerURL(serverDraft, rememberSelection: true)
+        statusMessage = "已切换到 \(settings.trimmedServerURLString)"
+        isShowingServerSwitcher = false
     }
 
     private func withBusyState(_ operation: @escaping () async throws -> Void) async {

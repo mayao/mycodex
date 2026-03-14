@@ -64,6 +64,7 @@ private struct ScopedServerSession: Codable {
 
 @MainActor
 final class AppSettingsStore: ObservableObject {
+    static let defaultServerURLString = "http://10.8.144.16:8008/"
     static let defaultServerURLInfoKey = "PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL"
     static let autoMockLoginInfoKey = "PORTFOLIO_WORKBENCH_AUTO_MOCK_LOGIN"
     static let autoOwnerLoginInfoKey = "PORTFOLIO_WORKBENCH_AUTO_OWNER_LOGIN"
@@ -72,22 +73,33 @@ final class AppSettingsStore: ObservableObject {
     static let scopedSessionsKey = "portfolio-workbench-ios.scoped-sessions"
     static let savedServersKey = "portfolio-workbench-ios.saved-servers"
     static let hideSensitiveAmountsKey = "portfolio-workbench-ios.hide-sensitive-amounts"
+    static let aiSettingsKey = "portfolio-workbench-ios.ai-settings"
     static let sessionTokenKey = "portfolio-workbench-ios.session-token"
     static let currentUserKey = "portfolio-workbench-ios.current-user"
     static let localMockSessionKey = "portfolio-workbench-ios.local-mock-session"
     static let biometricUnlockEnabledKey = "portfolio-workbench-ios.biometric-unlock-enabled"
+    static let automaticDeviceRestoreSuppressedKey = "portfolio-workbench-ios.device-restore-suppressed"
     private static let sessionValidationInterval: TimeInterval = 90
 
     private let identityStore: DeviceAccountIdentityStore
+    private let aiCredentialStore: AIProviderCredentialStore
+    private let bundledDefaultServerURLString: String?
     private var scopedSessions: [String: ScopedServerSession]
     private var lastSessionValidationAt: Date?
     private var lastValidatedServerURLString: String?
+    private var automaticRestoreAttemptServerURLString: String?
+    private var automaticDeviceRestoreSuppressed: Bool {
+        didSet {
+            UserDefaults.standard.set(automaticDeviceRestoreSuppressed, forKey: Self.automaticDeviceRestoreSuppressedKey)
+        }
+    }
 
     @Published var serverURLString: String {
         didSet {
             UserDefaults.standard.set(serverURLString, forKey: Self.serverURLKey)
             lastSessionValidationAt = nil
             lastValidatedServerURLString = nil
+            automaticRestoreAttemptServerURLString = nil
             restoreScopedSessionForCurrentServer()
         }
     }
@@ -103,6 +115,15 @@ final class AppSettingsStore: ObservableObject {
     @Published var hideSensitiveAmounts: Bool {
         didSet {
             UserDefaults.standard.set(hideSensitiveAmounts, forKey: Self.hideSensitiveAmountsKey)
+        }
+    }
+    @Published private(set) var aiSettingsProfile: AppAISettingsProfile {
+        didSet {
+            if let data = try? JSONEncoder().encode(aiSettingsProfile) {
+                UserDefaults.standard.set(data, forKey: Self.aiSettingsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.aiSettingsKey)
+            }
         }
     }
     @Published var sessionToken: String? {
@@ -143,17 +164,24 @@ final class AppSettingsStore: ObservableObject {
     }
     @Published private(set) var requiresBiometricUnlock: Bool
     @Published private(set) var biometryType: DeviceBiometryType
+    @Published private(set) var isRestoringDeviceSession: Bool
 
-    init(identityStore: DeviceAccountIdentityStore = .shared) {
+    init(
+        identityStore: DeviceAccountIdentityStore = .shared,
+        aiCredentialStore: AIProviderCredentialStore = .shared
+    ) {
         self.identityStore = identityStore
+        self.aiCredentialStore = aiCredentialStore
 
         let bundledDefaultURL =
             (Bundle.main.object(forInfoDictionaryKey: Self.defaultServerURLInfoKey) as? String)?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedBundledDefaultURL = Self.normalizeServerURLString(bundledDefaultURL)
+        self.bundledDefaultServerURLString = normalizedBundledDefaultURL
         let initialServerURL =
             Self.normalizeServerURLString(UserDefaults.standard.string(forKey: Self.serverURLKey))
-            ?? Self.normalizeServerURLString(bundledDefaultURL)
-            ?? "http://127.0.0.1:8008/"
+            ?? normalizedBundledDefaultURL
+            ?? Self.defaultServerURLString
         self.serverURLString = initialServerURL
         if let data = UserDefaults.standard.data(forKey: Self.scopedSessionsKey),
            let decoded = try? JSONDecoder().decode([String: ScopedServerSession].self, from: data) {
@@ -168,6 +196,12 @@ final class AppSettingsStore: ObservableObject {
             self.savedServers = []
         }
         self.hideSensitiveAmounts = UserDefaults.standard.bool(forKey: Self.hideSensitiveAmountsKey)
+        if let data = UserDefaults.standard.data(forKey: Self.aiSettingsKey),
+           let decoded = try? JSONDecoder().decode(AppAISettingsProfile.self, from: data) {
+            self.aiSettingsProfile = Self.migrateLegacyDefaultAIProfileIfNeeded(decoded, credentialStore: aiCredentialStore)
+        } else {
+            self.aiSettingsProfile = .default
+        }
         let legacySessionToken = UserDefaults.standard.string(forKey: Self.sessionTokenKey)
         let legacyIsUsingLocalMockSession = UserDefaults.standard.bool(forKey: Self.localMockSessionKey)
         let legacyCurrentUser: MobileUser? =
@@ -190,6 +224,9 @@ final class AppSettingsStore: ObservableObject {
         self.biometricUnlockEnabled = UserDefaults.standard.object(forKey: Self.biometricUnlockEnabledKey) as? Bool ?? false
         self.requiresBiometricUnlock = false
         self.biometryType = .none
+        self.automaticRestoreAttemptServerURLString = nil
+        self.automaticDeviceRestoreSuppressed = UserDefaults.standard.bool(forKey: Self.automaticDeviceRestoreSuppressedKey)
+        self.isRestoringDeviceSession = false
 
         let environment = ProcessInfo.processInfo.environment
         let autoMockLogin = environment[Self.autoMockLoginInfoKey]?.lowercased()
@@ -200,6 +237,7 @@ final class AppSettingsStore: ObservableObject {
             self.sessionToken = nil
             self.currentUser = nil
             self.isUsingLocalMockSession = false
+            self.automaticDeviceRestoreSuppressed = false
         }
 
         let hasPersistedMockSession =
@@ -246,8 +284,12 @@ final class AppSettingsStore: ObservableObject {
 
     var cacheNamespace: String {
         let serverPart = Self.cacheSafeIdentifier(for: normalizedCurrentServerURL ?? trimmedServerURLString)
-        let userPart = Self.cacheSafeIdentifier(for: currentUser?.userId ?? "anonymous")
+        let userPart = Self.cacheSafeIdentifier(for: effectiveDataIdentity)
         return serverPart + "." + userPart
+    }
+
+    var suggestedBuildServerURLString: String? {
+        bundledDefaultServerURLString
     }
 
     var isAuthenticated: Bool {
@@ -261,6 +303,58 @@ final class AppSettingsStore: ObservableObject {
     var hasProvisionedDeviceAccount: Bool {
         (deviceAccountProfile.assignedUserID?.isEmpty == false)
             || (deviceAccountProfile.defaultPassword?.isEmpty == false)
+    }
+
+    var aiPrimaryProvider: AppAIProvider {
+        aiSettingsProfile.primaryProvider
+    }
+
+    var aiFallbacksEnabled: Bool {
+        aiSettingsProfile.enableFallbacks
+    }
+
+    func aiModelIdentifier(for provider: AppAIProvider) -> String {
+        aiSettingsProfile.profile(for: provider).modelIdentifier
+    }
+
+    func aiAPIKey(for provider: AppAIProvider) -> String {
+        aiCredentialStore.loadAPIKey(for: provider) ?? ""
+    }
+
+    func hasAIAPIKey(for provider: AppAIProvider) -> Bool {
+        aiCredentialStore.loadAPIKey(for: provider) != nil
+    }
+
+    func setAIPrimaryProvider(_ provider: AppAIProvider) {
+        aiSettingsProfile.primaryProvider = provider
+    }
+
+    func setAIFallbacksEnabled(_ isEnabled: Bool) {
+        aiSettingsProfile.enableFallbacks = isEnabled
+    }
+
+    func setAIModelIdentifier(_ value: String, for provider: AppAIProvider) {
+        aiSettingsProfile = aiSettingsProfile.updatingModel(value, for: provider)
+    }
+
+    func setAIAPIKey(_ value: String, for provider: AppAIProvider) {
+        aiCredentialStore.persistAPIKey(value, for: provider)
+        objectWillChange.send()
+    }
+
+    func aiFallbackProviderSummary() -> String {
+        let configuredProviders = AppAIProvider.allCases.filter { provider in
+            provider != aiSettingsProfile.primaryProvider && hasAIAPIKey(for: provider)
+        }
+        return configuredProviders.map(\.displayName).joined(separator: " -> ")
+    }
+
+    private var effectiveDataIdentity: String {
+        let resolved =
+            currentUser?.userId
+            ?? deviceAccountProfile.assignedUserID
+            ?? deviceAccountProfile.installationID
+        return resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "anonymous" : resolved
     }
 
     func refreshBiometryAvailability() {
@@ -306,6 +400,8 @@ final class AppSettingsStore: ObservableObject {
         requiresBiometricUnlock = false
         lastSessionValidationAt = .now
         lastValidatedServerURLString = trimmedServerURLString
+        automaticRestoreAttemptServerURLString = nil
+        automaticDeviceRestoreSuppressed = false
     }
 
     func activateLocalMockPhoneSession(phoneNumber: String = PortfolioWorkbenchLocalMock.mockPhoneNumber) {
@@ -316,6 +412,8 @@ final class AppSettingsStore: ObservableObject {
         requiresBiometricUnlock = false
         lastSessionValidationAt = .now
         lastValidatedServerURLString = trimmedServerURLString
+        automaticRestoreAttemptServerURLString = nil
+        automaticDeviceRestoreSuppressed = false
     }
 
     func activateLocalMockWeChatSession(displayName: String? = nil) {
@@ -326,6 +424,8 @@ final class AppSettingsStore: ObservableObject {
         requiresBiometricUnlock = false
         lastSessionValidationAt = .now
         lastValidatedServerURLString = trimmedServerURLString
+        automaticRestoreAttemptServerURLString = nil
+        automaticDeviceRestoreSuppressed = false
     }
 
     func updateCurrentUser(_ user: MobileUser) {
@@ -344,6 +444,40 @@ final class AppSettingsStore: ObservableObject {
         requiresBiometricUnlock = false
         lastSessionValidationAt = nil
         lastValidatedServerURLString = nil
+    }
+
+    func logoutCurrentSession() {
+        automaticDeviceRestoreSuppressed = true
+        clearAuthentication()
+    }
+
+    func restoreDeviceSessionIfPossible() async {
+        guard !isAuthenticated, !isUsingLocalMockSession, !isRestoringDeviceSession else {
+            return
+        }
+        guard hasProvisionedDeviceAccount, !automaticDeviceRestoreSuppressed else {
+            return
+        }
+
+        let currentURL = trimmedServerURLString
+        guard automaticRestoreAttemptServerURLString != currentURL else {
+            return
+        }
+
+        automaticRestoreAttemptServerURLString = currentURL
+        isRestoringDeviceSession = true
+        defer { isRestoringDeviceSession = false }
+
+        do {
+            let client = try makeNetworkClient()
+            let payload = try await client.bootstrapDeviceAccount(
+                deviceID: deviceAccountProfile.installationID,
+                deviceName: Self.currentDeviceLabel
+            )
+            updateAuthenticatedSession(payload)
+        } catch {
+            // Keep the login screen visible; the user can still switch server or log in manually.
+        }
     }
 
     func loginWithDeviceAccount(requireLocalAuthentication: Bool = false) async throws -> MobileSessionPayload {
@@ -392,6 +526,7 @@ final class AppSettingsStore: ObservableObject {
             return
         }
         try await authenticateLocalUser(reason: "解锁你的投资账户与个人持仓数据")
+        try await validateAuthenticatedSessionIfNeeded(force: true)
         requiresBiometricUnlock = false
     }
 
@@ -405,21 +540,22 @@ final class AppSettingsStore: ObservableObject {
         return try makeNetworkClient()
     }
 
-    func makeValidatedClient(forceSessionCheck: Bool = false) async throws -> PortfolioWorkbenchAPIClient {
+    func makeValidatedClient(forceSessionCheck: Bool = true) async throws -> PortfolioWorkbenchAPIClient {
         let client = try makeClient()
         try await validateAuthenticatedSessionIfNeeded(using: client, force: forceSessionCheck)
-        return client
+        return try makeClient()
     }
 
     func makeNetworkClient() throws -> PortfolioWorkbenchAPIClient {
         guard let url = URL(string: trimmedServerURLString), url.scheme?.hasPrefix("http") == true else {
-            throw PortfolioWorkbenchAPIClientError.transport("请填写可访问的服务地址，例如 http://192.168.1.10:8008/")
+            throw PortfolioWorkbenchAPIClientError.transport("请填写可访问的服务地址，例如 \(Self.defaultServerURLString)")
         }
 
         return PortfolioWorkbenchAPIClient(
             configuration: AppServerConfiguration(
                 baseURL: url,
-                sessionToken: sessionToken
+                sessionToken: sessionToken,
+                aiRequestConfiguration: currentAIRequestConfiguration()
             )
         )
     }
@@ -447,11 +583,35 @@ final class AppSettingsStore: ObservableObject {
             lastValidatedServerURLString = currentURL
         } catch let error as PortfolioWorkbenchAPIClientError {
             if case let .server(statusCode, _) = error, statusCode == 401 {
+                if await renewDeviceSessionIfPossible(using: networkClient) {
+                    return
+                }
                 clearAuthentication()
             }
             throw error
         } catch {
             throw error
+        }
+    }
+
+    private func renewDeviceSessionIfPossible(using client: PortfolioWorkbenchAPIClient? = nil) async -> Bool {
+        guard hasProvisionedDeviceAccount || currentUser?.authProvider == "device" else {
+            return false
+        }
+
+        do {
+            let networkClient = try (client ?? makeNetworkClient())
+            let payload = try await networkClient.bootstrapDeviceAccount(
+                deviceID: deviceAccountProfile.installationID,
+                deviceName: Self.currentDeviceLabel
+            )
+            updateAuthenticatedSession(payload)
+            if supportsBiometricUnlock {
+                biometricUnlockEnabled = true
+            }
+            return true
+        } catch {
+            return false
         }
     }
 
@@ -479,6 +639,45 @@ final class AppSettingsStore: ObservableObject {
         }
         next.lastProvisionedAt = .now
         deviceAccountProfile = next
+    }
+
+    private func currentAIRequestConfiguration() -> AIRequestConfiguration? {
+        let providers = AppAIProvider.allCases.map { provider in
+            return AIProviderRequestConfiguration(
+                provider: provider.kind,
+                model: aiModelIdentifier(for: provider)
+            )
+        }
+
+        return AIRequestConfiguration(
+            primaryProvider: aiSettingsProfile.primaryProvider.kind,
+            enableFallbacks: aiSettingsProfile.enableFallbacks,
+            providers: providers
+        )
+    }
+
+    private static func migrateLegacyDefaultAIProfileIfNeeded(
+        _ profile: AppAISettingsProfile,
+        credentialStore: AIProviderCredentialStore
+    ) -> AppAISettingsProfile {
+        let matchesLegacyDefaults =
+            profile.primaryProvider == .kimi
+            && profile.enableFallbacks
+            && AppAIProvider.allCases.allSatisfy { provider in
+                profile.profile(for: provider).modelIdentifier == provider.defaultModelIdentifier
+            }
+
+        let hasAnyStoredKey = AppAIProvider.allCases.contains { provider in
+            credentialStore.loadAPIKey(for: provider) != nil
+        }
+
+        guard matchesLegacyDefaults, !hasAnyStoredKey else {
+            return profile
+        }
+
+        var migrated = profile
+        migrated.primaryProvider = .anthropic
+        return migrated
     }
 
     private func authenticateLocalUser(reason: String) async throws {

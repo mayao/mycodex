@@ -8,14 +8,25 @@ import time
 from hashlib import sha1
 from typing import Any
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import Request, urlopen
+
+try:
+    from service_ai_config import infer_kimi_preset, load_service_ai_request_config
+except ModuleNotFoundError:
+    from market_dashboard.service_ai_config import infer_kimi_preset, load_service_ai_request_config
 
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+KIMI_API_BASE_URL = "https://api.moonshot.cn/v1"
+GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 REQUEST_TIMEOUT_SECONDS = 40.0
 AI_CACHE_TTL_SECONDS = 900
 AI_CACHE: dict[str, Any] = {"key": "", "timestamp": 0.0, "payload": None}
 AI_LOCK = threading.Lock()
+AI_PROVIDER_STATUS: dict[str, dict[str, Any]] = {}
+AI_PROVIDER_STATUS_LOCK = threading.Lock()
+DEFAULT_PROVIDER_ORDER = ("anthropic", "kimi", "gemini")
 DEFAULT_ANTHROPIC_MODELS = (
     "claude-sonnet-4-20250514",
     "claude-sonnet-4-5-20250929",
@@ -23,10 +34,35 @@ DEFAULT_ANTHROPIC_MODELS = (
     "claude-haiku-4-5-20251001",
     "claude-3-haiku-20240307",
 )
+DEFAULT_KIMI_MODELS = (
+    "kimi-for-coding",
+    "moonshot-v1-8k",
+    "moonshot-v1-32k",
+    "moonshot-v1-128k",
+)
+DEFAULT_GEMINI_MODELS = (
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+)
 
 
-def _cache_key(payload: dict[str, Any], preferred_model: str | None, mode: str) -> str:
-    raw = json.dumps({"payload": payload, "preferred_model": preferred_model, "mode": mode}, ensure_ascii=False, sort_keys=True)
+def _cache_key(
+    payload: dict[str, Any],
+    preferred_model: str | None,
+    mode: str,
+    ai_request_config: dict[str, Any] | None = None,
+) -> str:
+    normalized_request_config = _resolved_ai_request_config(ai_request_config)
+    raw = json.dumps(
+        {
+            "payload": payload,
+            "preferred_model": preferred_model,
+            "mode": mode,
+            "ai_request_config": normalized_request_config,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
     return sha1(raw.encode("utf-8")).hexdigest()
 
 
@@ -203,27 +239,320 @@ def _salvage_stock_detail_output(text: str) -> dict[str, Any] | None:
     return salvaged
 
 
-def _candidate_models(preferred_model: str | None) -> list[str]:
+def _normalize_provider_name(value: str | None) -> str | None:
+    normalized = str(value or "").strip().lower()
+    aliases = {
+        "anthropic": "anthropic",
+        "claude": "anthropic",
+        "kimi": "kimi",
+        "moonshot": "kimi",
+        "gemini": "gemini",
+        "google": "gemini",
+    }
+    return aliases.get(normalized)
+
+
+def _provider_label(provider: str) -> str:
+    if provider == "anthropic":
+        return "Claude"
+    if provider == "kimi":
+        return "Kimi"
+    if provider == "gemini":
+        return "Gemini"
+    return provider
+
+
+def _trimmed_string(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _single_model_or_candidates(
+    configured_model: str | None,
+    candidate_builder: Any,
+) -> list[str]:
+    trimmed = _trimmed_string(configured_model)
+    if trimmed:
+        return [trimmed]
+    return candidate_builder(None)
+
+
+def _coerce_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _normalize_ai_request_config(ai_request_config: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(ai_request_config, dict):
+        return {"primary_provider": None, "enable_fallbacks": True, "providers": {}}
+
+    providers: dict[str, dict[str, Any]] = {}
+    for item in ai_request_config.get("providers") or []:
+        if not isinstance(item, dict):
+            continue
+        provider = _normalize_provider_name(item.get("provider"))
+        if not provider:
+            continue
+        providers[provider] = {
+            "provider": provider,
+            "api_key": _trimmed_string(item.get("api_key")),
+            "model": _trimmed_string(item.get("model")),
+            "base_url": _trimmed_string(item.get("base_url")),
+            "preset": _trimmed_string(item.get("preset")),
+        }
+
+    return {
+        "primary_provider": _normalize_provider_name(ai_request_config.get("primary_provider")),
+        "enable_fallbacks": _coerce_bool(ai_request_config.get("enable_fallbacks"), default=True),
+        "providers": providers,
+    }
+
+
+def _resolved_ai_request_config(ai_request_config: dict[str, Any] | None) -> dict[str, Any]:
+    request_source = ai_request_config if isinstance(ai_request_config, dict) else None
+    request_config = _normalize_ai_request_config(request_source)
+    service_config = _normalize_ai_request_config(load_service_ai_request_config())
+
+    provider_names: list[str] = []
+    for provider in [
+        *DEFAULT_PROVIDER_ORDER,
+        *(service_config.get("providers") or {}).keys(),
+        *(request_config.get("providers") or {}).keys(),
+    ]:
+        normalized_provider = _normalize_provider_name(provider)
+        if not normalized_provider or normalized_provider in provider_names:
+            continue
+        provider_names.append(normalized_provider)
+
+    providers: dict[str, dict[str, Any]] = {}
+    for provider in provider_names:
+        service_provider = (service_config.get("providers") or {}).get(provider) or {}
+        request_provider = (request_config.get("providers") or {}).get(provider) or {}
+        providers[provider] = {
+            "provider": provider,
+            "api_key": _trimmed_string(request_provider.get("api_key")) or _trimmed_string(service_provider.get("api_key")),
+            "model": _trimmed_string(request_provider.get("model")) or _trimmed_string(service_provider.get("model")),
+            "base_url": _trimmed_string(request_provider.get("base_url")) or _trimmed_string(service_provider.get("base_url")),
+            "preset": _trimmed_string(request_provider.get("preset")) or _trimmed_string(service_provider.get("preset")),
+        }
+
+    primary_provider = request_config.get("primary_provider") or service_config.get("primary_provider")
+    enable_fallbacks = (
+        _coerce_bool(request_source.get("enable_fallbacks"), default=service_config.get("enable_fallbacks", True))
+        if request_source is not None
+        else service_config.get("enable_fallbacks", True)
+    )
+
+    return {
+        "primary_provider": primary_provider,
+        "enable_fallbacks": enable_fallbacks,
+        "providers": providers,
+    }
+
+
+def _candidate_models(
+    preferred_model: str | None,
+    *,
+    env_names: tuple[str, ...],
+    candidate_env_names: tuple[str, ...],
+    defaults: tuple[str, ...],
+) -> list[str]:
     seen: set[str] = set()
     ordered: list[str] = []
-    raw_candidates = (
-        os.getenv("MARKET_DASHBOARD_AI_MODEL_CANDIDATES")
-        or os.getenv("ANTHROPIC_MODEL_CANDIDATES")
-        or ""
-    )
-    values = [
-        preferred_model,
-        os.getenv("MARKET_DASHBOARD_AI_MODEL"),
-        os.getenv("ANTHROPIC_MODEL"),
-        *[item.strip() for item in raw_candidates.split(",") if item.strip()],
-        *DEFAULT_ANTHROPIC_MODELS,
-    ]
+    raw_candidates = ""
+    for env_name in candidate_env_names:
+        raw_candidates = os.getenv(env_name) or raw_candidates
+        if raw_candidates:
+            break
+    env_models = [os.getenv(env_name) for env_name in env_names]
+    values = [preferred_model, *env_models, *[item.strip() for item in raw_candidates.split(",") if item.strip()], *defaults]
     for value in values:
         if not value or value in seen:
             continue
         seen.add(value)
         ordered.append(value)
     return ordered
+
+
+def _anthropic_candidate_models(preferred_model: str | None) -> list[str]:
+    return _candidate_models(
+        preferred_model,
+        env_names=("MARKET_DASHBOARD_AI_MODEL", "ANTHROPIC_MODEL"),
+        candidate_env_names=("MARKET_DASHBOARD_AI_MODEL_CANDIDATES", "ANTHROPIC_MODEL_CANDIDATES"),
+        defaults=DEFAULT_ANTHROPIC_MODELS,
+    )
+
+
+def _kimi_candidate_models(preferred_model: str | None) -> list[str]:
+    return _candidate_models(
+        preferred_model,
+        env_names=("KIMI_MODEL", "MOONSHOT_MODEL"),
+        candidate_env_names=("KIMI_MODEL_CANDIDATES", "MOONSHOT_MODEL_CANDIDATES"),
+        defaults=DEFAULT_KIMI_MODELS,
+    )
+
+
+def _gemini_candidate_models(preferred_model: str | None) -> list[str]:
+    return _candidate_models(
+        preferred_model,
+        env_names=("GEMINI_MODEL",),
+        candidate_env_names=("GEMINI_MODEL_CANDIDATES",),
+        defaults=DEFAULT_GEMINI_MODELS,
+    )
+
+
+def _configured_provider_order(ai_request_config: dict[str, Any] | None) -> list[str]:
+    normalized = _resolved_ai_request_config(ai_request_config)
+    configured_primary = normalized.get("primary_provider") or _normalize_provider_name(os.getenv("MARKET_DASHBOARD_AI_PROVIDER")) or "anthropic"
+    ordered = [configured_primary]
+    if normalized.get("enable_fallbacks", True):
+        ordered.extend(DEFAULT_PROVIDER_ORDER)
+
+    seen: set[str] = set()
+    result: list[str] = []
+    for provider in ordered:
+        normalized_provider = _normalize_provider_name(provider)
+        if not normalized_provider or normalized_provider in seen:
+            continue
+        seen.add(normalized_provider)
+        result.append(normalized_provider)
+    return result
+
+
+def _provider_status_snapshot(provider: str) -> dict[str, Any] | None:
+    with AI_PROVIDER_STATUS_LOCK:
+        payload = AI_PROVIDER_STATUS.get(provider)
+        return dict(payload) if payload else None
+
+
+def _record_provider_status(
+    provider: str,
+    *,
+    label: str,
+    state: str,
+    message: str,
+    model: str | None = None,
+    base_url: str | None = None,
+    latency_ms: int | None = None,
+) -> None:
+    with AI_PROVIDER_STATUS_LOCK:
+        AI_PROVIDER_STATUS[provider] = {
+            "provider": provider,
+            "label": label,
+            "state": state,
+            "message": message,
+            "model": _trimmed_string(model),
+            "base_url": _trimmed_string(base_url),
+            "latency_ms": latency_ms,
+            "checked_at": _now_iso(),
+        }
+
+
+def _provider_api_key_from_environment(provider: str) -> str:
+    if provider == "anthropic":
+        return _trimmed_string(os.getenv("ANTHROPIC_API_KEY"))
+    if provider == "kimi":
+        return _trimmed_string(os.getenv("KIMI_API_KEY")) or _trimmed_string(os.getenv("MOONSHOT_API_KEY"))
+    if provider == "gemini":
+        return _trimmed_string(os.getenv("GEMINI_API_KEY"))
+    return ""
+
+
+def _provider_credential_source(provider: str, ai_request_config: dict[str, Any] | None = None) -> str:
+    request_config = _normalize_ai_request_config(ai_request_config)
+    service_config = _normalize_ai_request_config(load_service_ai_request_config())
+    request_provider = (request_config.get("providers") or {}).get(provider) or {}
+    service_provider = (service_config.get("providers") or {}).get(provider) or {}
+    if _trimmed_string(request_provider.get("api_key")):
+        return "request"
+    if _trimmed_string(service_provider.get("api_key")):
+        return "service_config"
+    if _provider_api_key_from_environment(provider):
+        return "environment"
+    return "missing"
+
+
+def _provider_runtime_settings(
+    provider: str,
+    *,
+    ai_request_config: dict[str, Any] | None,
+    preferred_model: str | None = None,
+) -> dict[str, Any] | None:
+    normalized_request_config = _resolved_ai_request_config(ai_request_config)
+    request_provider = (normalized_request_config.get("providers") or {}).get(provider) or {}
+
+    if provider == "anthropic":
+        api_key = _trimmed_string(request_provider.get("api_key")) or _trimmed_string(os.getenv("ANTHROPIC_API_KEY"))
+        if not api_key:
+            return None
+        configured_model = _trimmed_string(request_provider.get("model")) or _trimmed_string(preferred_model)
+        candidate_models = _single_model_or_candidates(configured_model, _anthropic_candidate_models)
+        configured_model = configured_model or _trimmed_string(os.getenv("MARKET_DASHBOARD_AI_MODEL")) or _trimmed_string(os.getenv("ANTHROPIC_MODEL"))
+        return {
+            "provider": provider,
+            "label": _provider_label(provider),
+            "api_key": api_key,
+            "candidate_models": candidate_models,
+            "configured_model": configured_model,
+            "base_url": ANTHROPIC_API_URL,
+        }
+
+    if provider == "kimi":
+        api_key = (
+            _trimmed_string(request_provider.get("api_key"))
+            or _trimmed_string(os.getenv("KIMI_API_KEY"))
+            or _trimmed_string(os.getenv("MOONSHOT_API_KEY"))
+        )
+        if not api_key:
+            return None
+        configured_model = _trimmed_string(request_provider.get("model")) or _trimmed_string(preferred_model)
+        candidate_models = _single_model_or_candidates(configured_model, _kimi_candidate_models)
+        configured_model = configured_model or _trimmed_string(os.getenv("KIMI_MODEL")) or _trimmed_string(os.getenv("MOONSHOT_MODEL"))
+        preset = infer_kimi_preset(
+            request_provider.get("preset"),
+            base_url=request_provider.get("base_url"),
+            model=configured_model,
+        )
+        base_url = (
+            _trimmed_string(request_provider.get("base_url"))
+            or _trimmed_string(os.getenv("KIMI_BASE_URL"))
+            or _trimmed_string(os.getenv("MOONSHOT_BASE_URL"))
+            or KIMI_API_BASE_URL
+        )
+        return {
+            "provider": provider,
+            "label": _provider_label(provider),
+            "api_key": api_key,
+            "candidate_models": candidate_models,
+            "configured_model": configured_model,
+            "base_url": base_url.rstrip("/"),
+            "preset": preset,
+        }
+
+    if provider == "gemini":
+        api_key = _trimmed_string(request_provider.get("api_key")) or _trimmed_string(os.getenv("GEMINI_API_KEY"))
+        if not api_key:
+            return None
+        configured_model = _trimmed_string(request_provider.get("model")) or _trimmed_string(preferred_model)
+        candidate_models = _single_model_or_candidates(configured_model, _gemini_candidate_models)
+        configured_model = configured_model or _trimmed_string(os.getenv("GEMINI_MODEL"))
+        base_url = _trimmed_string(request_provider.get("base_url")) or _trimmed_string(os.getenv("GEMINI_BASE_URL")) or GEMINI_API_BASE_URL
+        return {
+            "provider": provider,
+            "label": _provider_label(provider),
+            "api_key": api_key,
+            "candidate_models": candidate_models,
+            "configured_model": configured_model,
+            "base_url": base_url.rstrip("/"),
+        }
+
+    return None
 
 
 def _dashboard_system_prompt() -> str:
@@ -299,9 +628,372 @@ def _stock_detail_user_prompt(payload: dict[str, Any]) -> str:
     )
 
 
-def _call_anthropic_json(
+def _extract_anthropic_text(response_payload: dict[str, Any]) -> str:
+    content = response_payload.get("content") or []
+    return "\n".join(
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    ).strip()
+
+
+def _extract_openai_compatible_text(response_payload: dict[str, Any]) -> str:
+    choices = response_payload.get("choices") or []
+    if not choices:
+        return ""
+    message = (choices[0] or {}).get("message") or {}
+    content = message.get("content") or ""
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, dict):
+                text = item.get("text") or item.get("content") or ""
+                if text:
+                    parts.append(str(text))
+            elif item:
+                parts.append(str(item))
+        return "\n".join(parts).strip()
+    return str(content).strip()
+
+
+def _extract_gemini_text(response_payload: dict[str, Any]) -> str:
+    candidates = response_payload.get("candidates") or []
+    if not candidates:
+        return ""
+    content = (candidates[0] or {}).get("content") or {}
+    parts = content.get("parts") or []
+    texts = [str(part.get("text") or "").strip() for part in parts if isinstance(part, dict)]
+    return "\n".join(item for item in texts if item).strip()
+
+
+def _build_openai_chat_completions_url(base_url: str) -> str:
+    normalized = base_url.rstrip("/")
+    if normalized.endswith("/chat/completions"):
+        return normalized
+    return normalized + "/chat/completions"
+
+
+def _request_anthropic_response(
     *,
-    payload: dict[str, Any],
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+) -> tuple[str, str, int]:
+    request_body = json.dumps(
+        {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "system": system_prompt,
+            "messages": messages,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = Request(
+        ANTHROPIC_API_URL,
+        data=request_body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    started_at = time.time()
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    text = _extract_anthropic_text(response_payload)
+    latency_ms = int((time.time() - started_at) * 1000)
+    return text, str(response_payload.get("model") or model), latency_ms
+
+
+def _request_openai_compatible_response(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+) -> tuple[str, str, int]:
+    request_messages: list[dict[str, str]] = []
+    if system_prompt:
+        request_messages.append({"role": "system", "content": system_prompt})
+    request_messages.extend(messages)
+    request_body = json.dumps(
+        {
+            "model": model,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "messages": request_messages,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = Request(
+        _build_openai_chat_completions_url(base_url),
+        data=request_body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
+    )
+    started_at = time.time()
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    text = _extract_openai_compatible_text(response_payload)
+    latency_ms = int((time.time() - started_at) * 1000)
+    return text, str(response_payload.get("model") or model), latency_ms
+
+
+def _request_gemini_response(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+) -> tuple[str, str, int]:
+    request_messages = [
+        {
+            "role": "model" if message.get("role") == "assistant" else "user",
+            "parts": [{"text": message.get("content") or ""}],
+        }
+        for message in messages
+        if message.get("content")
+    ]
+    request_body = {
+        "contents": request_messages,
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": max_tokens,
+        },
+    }
+    if system_prompt:
+        request_body["systemInstruction"] = {"parts": [{"text": system_prompt}]}
+    request = Request(
+        f"{base_url.rstrip('/')}/models/{quote(model, safe='')}:generateContent?key={quote(api_key, safe='')}",
+        data=json.dumps(request_body, ensure_ascii=False).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    started_at = time.time()
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    text = _extract_gemini_text(response_payload)
+    latency_ms = int((time.time() - started_at) * 1000)
+    return text, model, latency_ms
+
+
+def _request_provider_response(
+    *,
+    provider_settings: dict[str, Any],
+    model: str,
+    system_prompt: str,
+    messages: list[dict[str, str]],
+    max_tokens: int,
+    temperature: float,
+) -> tuple[str, str, int]:
+    provider = provider_settings["provider"]
+    if provider == "anthropic":
+        return _request_anthropic_response(
+            api_key=provider_settings["api_key"],
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    if provider == "kimi":
+        return _request_openai_compatible_response(
+            base_url=provider_settings["base_url"],
+            api_key=provider_settings["api_key"],
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    if provider == "gemini":
+        return _request_gemini_response(
+            base_url=provider_settings["base_url"],
+            api_key=provider_settings["api_key"],
+            model=model,
+            system_prompt=system_prompt,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    raise ValueError(f"unsupported provider: {provider}")
+
+
+def _success_note(
+    *,
+    provider_settings: dict[str, Any],
+    entrypoint: str,
+    initial_provider: str | None,
+    configured_model: str | None,
+    salvage_used: bool = False,
+) -> str:
+    fallback_prefix = ""
+    if initial_provider and initial_provider != provider_settings["provider"]:
+        fallback_prefix = f"首选 {_provider_label(initial_provider)} 不可用，已自动切换到 {provider_settings['label']}。"
+
+    if entrypoint == "chat":
+        body = (
+            f"自由对话当前走 {provider_settings['label']}。"
+            if configured_model
+            else f"未显式配置 {provider_settings['label']} 模型名，系统已自动尝试可用候选。"
+        )
+    else:
+        body = (
+            f"先用本地结构化框架整理上下文，再由 {provider_settings['label']} 生成深度诊断与执行建议。"
+            if configured_model
+            else f"未显式配置 {provider_settings['label']} 模型名，系统已自动尝试可用候选。"
+        )
+    if salvage_used:
+        body += " 模型已返回结果，原始 JSON 存在轻微格式问题，系统已自动容错解析。"
+    return (fallback_prefix + body).strip()
+
+
+def _no_external_provider_result(entrypoint: str) -> dict[str, Any]:
+    note = "未检测到可用的大模型密钥，已回退为本地结构化规则引擎。" if entrypoint == "json" else "未检测到可用的大模型密钥，无法发起自由对话。"
+    return {
+        "ok": False,
+        "engine": {
+            "mode": "rules",
+            "provider": "local",
+            "model": None,
+            "label": "本地规则引擎",
+            "note": note,
+        },
+    }
+
+
+def _provider_error_detail(raw_error: str) -> str:
+    lowered = raw_error.lower()
+    if any(token in lowered for token in ("timed out", "timeout", "deadline exceeded")):
+        return "请求超时，远程服务器到模型服务的外网链路可能不通。"
+    if any(token in lowered for token in ("name or service not known", "temporary failure in name resolution", "nodename nor servname")):
+        return "域名解析失败，远程服务器当前可能无法访问对应模型域名。"
+    if any(token in lowered for token in ("unauthorized", "forbidden", "invalid_api_key", "invalid x-api-key", "authentication")):
+        return "鉴权失败，请检查当前模型的 API Key 是否正确。"
+    if any(token in lowered for token in ("connection refused", "network is unreachable", "connection reset", "ssl")):
+        return "网络连接失败，远程服务器到模型服务的链路异常。"
+    return raw_error[:140] if raw_error else "访问失败。"
+
+
+def _provider_failure_result(errors: list[str], entrypoint: str) -> dict[str, Any]:
+    note = "外部大模型调用失败，已自动回退为本地规则引擎。" if entrypoint == "json" else "外部大模型调用失败，当前无法继续自由对话。"
+    if errors:
+        first_error = str(errors[0]).strip()
+        provider_label, _, raw_error = first_error.partition(":")
+        provider_label = provider_label.strip()
+        raw_error = raw_error.strip()
+        detail = _provider_error_detail(raw_error)
+        if provider_label:
+            note = f"{note} 最近失败：{provider_label}，{detail}"
+        else:
+            note = f"{note} 最近失败：{detail}"
+    return {
+        "ok": False,
+        "engine": {
+            "mode": "rules",
+            "provider": "local",
+            "model": None,
+            "label": "本地规则引擎",
+            "note": note,
+            "errors": errors,
+        },
+    }
+
+
+def get_ai_service_status(ai_request_config: dict[str, Any] | None = None) -> dict[str, Any]:
+    resolved = _resolved_ai_request_config(ai_request_config)
+    service_config = _normalize_ai_request_config(load_service_ai_request_config())
+    provider_order = _configured_provider_order(ai_request_config)
+    provider_names: list[str] = []
+    for provider in [*provider_order, *DEFAULT_PROVIDER_ORDER, *(resolved.get("providers") or {}).keys()]:
+        normalized_provider = _normalize_provider_name(provider)
+        if not normalized_provider or normalized_provider in provider_names:
+            continue
+        provider_names.append(normalized_provider)
+
+    providers_payload: list[dict[str, Any]] = []
+    for provider in provider_names:
+        runtime = _provider_runtime_settings(provider, ai_request_config=ai_request_config)
+        provider_config = (resolved.get("providers") or {}).get(provider) or {}
+        service_provider = (service_config.get("providers") or {}).get(provider) or {}
+        cached_status = _provider_status_snapshot(provider) or {}
+        effective_model = (
+            _trimmed_string(provider_config.get("model"))
+            or _trimmed_string(cached_status.get("model"))
+            or (runtime.get("configured_model") if runtime else "")
+            or ((runtime.get("candidate_models") or [""])[0] if runtime else "")
+        )
+        effective_base_url = (
+            _trimmed_string(provider_config.get("base_url"))
+            or _trimmed_string(cached_status.get("base_url"))
+            or (runtime.get("base_url") if runtime else "")
+        )
+        preset = _trimmed_string(provider_config.get("preset")) or (
+            infer_kimi_preset(
+                service_provider.get("preset"),
+                base_url=effective_base_url,
+                model=effective_model,
+            )
+            if provider == "kimi"
+            else ""
+        )
+        if cached_status:
+            access_state = str(cached_status.get("state") or "ready")
+            access_message = str(cached_status.get("message") or "服务端已配置，可发起访问。").strip()
+            checked_at = cached_status.get("checked_at")
+            latency_ms = cached_status.get("latency_ms")
+        elif runtime is None:
+            access_state = "missing_key"
+            access_message = "服务端未配置可用 API Key。"
+            checked_at = None
+            latency_ms = None
+        else:
+            access_state = "ready"
+            access_message = "服务端已配置，可发起访问。"
+            checked_at = None
+            latency_ms = None
+
+        providers_payload.append(
+            {
+                "provider": provider,
+                "label": _provider_label(provider),
+                "model": effective_model or None,
+                "base_url": effective_base_url or None,
+                "preset": preset or None,
+                "credential_source": _provider_credential_source(provider, ai_request_config=ai_request_config),
+                "access_state": access_state,
+                "access_message": access_message,
+                "checked_at": checked_at,
+                "latency_ms": latency_ms,
+            }
+        )
+
+    return {
+        "primary_provider": resolved.get("primary_provider"),
+        "enable_fallbacks": resolved.get("enable_fallbacks", True),
+        "provider_order": provider_order,
+        "uses_service_config": load_service_ai_request_config() is not None,
+        "providers": providers_payload,
+        "note": "App 端仅切换 provider 与模型，真正的 API Key 由服务端托管。",
+    }
+
+
+def _call_llm_json(
+    *,
     preferred_model: str | None,
     system_prompt: str,
     user_prompt: str,
@@ -309,206 +1001,188 @@ def _call_anthropic_json(
     temperature: float,
     max_model_attempts: int | None = None,
     salvage_parser: Any | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {
-            "ok": False,
-            "engine": {
-                "mode": "rules",
-                "provider": "local",
-                "model": None,
-                "label": "本地规则引擎",
-                "note": "未检测到外部大模型密钥，已回退为本地结构化规则引擎。",
-            },
-        }
-
-    configured_model = preferred_model or os.getenv("MARKET_DASHBOARD_AI_MODEL") or os.getenv("ANTHROPIC_MODEL")
+    provider_order = _configured_provider_order(ai_request_config)
+    initial_provider = provider_order[0] if provider_order else None
     errors: list[str] = []
-    candidate_models = _candidate_models(preferred_model)
-    if max_model_attempts is not None:
-        candidate_models = candidate_models[:max_model_attempts]
-    for model in candidate_models:
-        request_body = json.dumps(
-            {
-                "model": model,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "system": system_prompt,
-                "messages": [{"role": "user", "content": user_prompt}],
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-        request = Request(
-            ANTHROPIC_API_URL,
-            data=request_body,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            },
+    has_external_provider = False
+
+    for provider in provider_order:
+        provider_settings = _provider_runtime_settings(
+            provider,
+            ai_request_config=ai_request_config,
+            preferred_model=preferred_model if provider == initial_provider else None,
         )
-        try:
-            started_at = time.time()
-            with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                response_payload = json.loads(response.read().decode("utf-8"))
-            content = response_payload.get("content") or []
-            text = "\n".join(
-                block.get("text", "")
-                for block in content
-                if isinstance(block, dict) and block.get("type") == "text"
-            ).strip()
-            cleaned_text = _clean_json_text(text)
+        if not provider_settings:
+            continue
+        has_external_provider = True
+        candidate_models = provider_settings["candidate_models"]
+        if max_model_attempts is not None:
+            candidate_models = candidate_models[:max_model_attempts]
+
+        for model in candidate_models:
             try:
-                parsed = json.loads(cleaned_text)
-            except json.JSONDecodeError:
-                if salvage_parser:
+                text, resolved_model, latency_ms = _request_provider_response(
+                    provider_settings=provider_settings,
+                    model=model,
+                    system_prompt=system_prompt,
+                    messages=[{"role": "user", "content": user_prompt}],
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                cleaned_text = _clean_json_text(text)
+                salvage_used = False
+                try:
+                    parsed = json.loads(cleaned_text)
+                except json.JSONDecodeError:
+                    if not salvage_parser:
+                        raise
                     parsed = salvage_parser(cleaned_text)
-                    if parsed:
-                        return {
-                            "ok": True,
-                            "parsed": parsed,
-                            "engine": {
-                                "mode": "llm",
-                                "provider": "anthropic",
-                                "model": response_payload.get("model") or model,
-                                "label": f"Anthropic {response_payload.get('model') or model}",
-                                "latency_ms": int((time.time() - started_at) * 1000),
-                                "note": "外部大模型已返回结果，原始 JSON 存在轻微格式问题，系统已自动容错解析。",
-                            },
-                        }
-                raise
-            return {
-                "ok": True,
-                "parsed": parsed,
-                "engine": {
-                    "mode": "llm",
-                    "provider": "anthropic",
-                    "model": response_payload.get("model") or model,
-                    "label": f"Anthropic {response_payload.get('model') or model}",
-                    "latency_ms": int((time.time() - started_at) * 1000),
-                    "note": (
-                        "先用本地结构化框架整理上下文，再由外部大模型生成深度诊断与执行建议。"
-                        if configured_model
-                        else "未显式配置模型名，系统已自动探测可用 Claude 模型并生成深度诊断。"
-                    ),
-                },
-            }
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError, Exception) as exc:
-            errors.append(f"{model}: {exc}")
+                    if not parsed:
+                        raise
+                    salvage_used = True
+                success_note = _success_note(
+                    provider_settings=provider_settings,
+                    entrypoint="json",
+                    initial_provider=initial_provider,
+                    configured_model=provider_settings.get("configured_model"),
+                    salvage_used=salvage_used,
+                )
+                _record_provider_status(
+                    provider_settings["provider"],
+                    label=provider_settings["label"],
+                    state="success",
+                    message=success_note,
+                    model=resolved_model,
+                    base_url=provider_settings.get("base_url"),
+                    latency_ms=latency_ms,
+                )
 
-    return {
-        "ok": False,
-        "engine": {
-            "mode": "rules",
-            "provider": "local",
-            "model": None,
-            "label": "本地规则引擎",
-            "note": "外部大模型调用失败，已自动回退为本地规则引擎。",
-            "errors": errors,
-        },
-    }
+                return {
+                    "ok": True,
+                    "parsed": parsed,
+                    "engine": {
+                        "mode": "llm",
+                        "provider": provider_settings["provider"],
+                        "model": resolved_model,
+                        "label": f"{provider_settings['label']} {resolved_model}",
+                        "latency_ms": latency_ms,
+                        "note": success_note,
+                    },
+                }
+            except (HTTPError, URLError, TimeoutError, json.JSONDecodeError, ValueError, OSError, Exception) as exc:
+                _record_provider_status(
+                    provider_settings["provider"],
+                    label=provider_settings["label"],
+                    state="error",
+                    message=f"{provider_settings['label']} 访问失败：{_provider_error_detail(str(exc))}",
+                    model=model,
+                    base_url=provider_settings.get("base_url"),
+                )
+                errors.append(f"{provider_settings['label']} {model}: {exc}")
+
+    if not has_external_provider:
+        return _no_external_provider_result("json")
+    return _provider_failure_result(errors, "json")
 
 
-def _call_anthropic_text(
+def _call_llm_text(
     *,
     preferred_model: str | None,
     system_prompt: str,
     messages: list[dict[str, str]],
     max_tokens: int,
     temperature: float,
+    max_model_attempts: int | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {
-            "ok": False,
-            "engine": {
-                "mode": "rules",
-                "provider": "local",
-                "model": None,
-                "label": "本地规则引擎",
-                "note": "未检测到外部大模型密钥，无法发起自由对话。",
-            },
-        }
-
-    configured_model = preferred_model or os.getenv("MARKET_DASHBOARD_AI_MODEL") or os.getenv("ANTHROPIC_MODEL")
+    provider_order = _configured_provider_order(ai_request_config)
+    initial_provider = provider_order[0] if provider_order else None
     errors: list[str] = []
-    for model in _candidate_models(preferred_model):
-        request_body = json.dumps(
-            {
-                "model": model,
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-                "system": system_prompt,
-                "messages": messages,
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-        request = Request(
-            ANTHROPIC_API_URL,
-            data=request_body,
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "x-api-key": api_key,
-                "anthropic-version": "2023-06-01",
-            },
+    has_external_provider = False
+
+    for provider in provider_order:
+        provider_settings = _provider_runtime_settings(
+            provider,
+            ai_request_config=ai_request_config,
+            preferred_model=preferred_model if provider == initial_provider else None,
         )
-        try:
-            started_at = time.time()
-            with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
-                response_payload = json.loads(response.read().decode("utf-8"))
-            content = response_payload.get("content") or []
-            text = "\n".join(
-                block.get("text", "")
-                for block in content
-                if isinstance(block, dict) and block.get("type") == "text"
-            ).strip()
-            if not text:
-                raise ValueError("empty response")
-            return {
-                "ok": True,
-                "reply": text,
-                "engine": {
-                    "mode": "llm",
-                    "provider": "anthropic",
-                    "model": response_payload.get("model") or model,
-                    "label": f"Anthropic {response_payload.get('model') or model}",
-                    "latency_ms": int((time.time() - started_at) * 1000),
-                    "note": (
-                        "自由对话走当前已配置的大模型。"
-                        if configured_model
-                        else "未显式配置模型名，系统已自动探测可用 Claude 模型。"
-                    ),
-                },
-            }
-        except (HTTPError, URLError, TimeoutError, ValueError, OSError, Exception) as exc:
-            errors.append(f"{model}: {exc}")
+        if not provider_settings:
+            continue
+        has_external_provider = True
+        candidate_models = provider_settings["candidate_models"]
+        if max_model_attempts is not None:
+            candidate_models = candidate_models[:max_model_attempts]
+        for model in candidate_models:
+            try:
+                text, resolved_model, latency_ms = _request_provider_response(
+                    provider_settings=provider_settings,
+                    model=model,
+                    system_prompt=system_prompt,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                )
+                if not text:
+                    raise ValueError("empty response")
+                success_note = _success_note(
+                    provider_settings=provider_settings,
+                    entrypoint="chat",
+                    initial_provider=initial_provider,
+                    configured_model=provider_settings.get("configured_model"),
+                )
+                _record_provider_status(
+                    provider_settings["provider"],
+                    label=provider_settings["label"],
+                    state="success",
+                    message=success_note,
+                    model=resolved_model,
+                    base_url=provider_settings.get("base_url"),
+                    latency_ms=latency_ms,
+                )
+                return {
+                    "ok": True,
+                    "reply": text,
+                    "engine": {
+                        "mode": "llm",
+                        "provider": provider_settings["provider"],
+                        "model": resolved_model,
+                        "label": f"{provider_settings['label']} {resolved_model}",
+                        "latency_ms": latency_ms,
+                        "note": success_note,
+                    },
+                }
+            except (HTTPError, URLError, TimeoutError, ValueError, OSError, Exception) as exc:
+                _record_provider_status(
+                    provider_settings["provider"],
+                    label=provider_settings["label"],
+                    state="error",
+                    message=f"{provider_settings['label']} 访问失败：{_provider_error_detail(str(exc))}",
+                    model=model,
+                    base_url=provider_settings.get("base_url"),
+                )
+                errors.append(f"{provider_settings['label']} {model}: {exc}")
 
-    return {
-        "ok": False,
-        "engine": {
-            "mode": "rules",
-            "provider": "local",
-            "model": None,
-            "label": "本地规则引擎",
-            "note": "外部大模型调用失败，当前无法继续自由对话。",
-            "errors": errors,
-        },
-    }
+    if not has_external_provider:
+        return _no_external_provider_result("chat")
+    return _provider_failure_result(errors, "chat")
 
 
-def _call_dashboard_overlay(payload: dict[str, Any], preferred_model: str | None = None) -> dict[str, Any]:
-    raw = _call_anthropic_json(
-        payload=payload,
+def _call_dashboard_overlay(
+    payload: dict[str, Any],
+    preferred_model: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    raw = _call_llm_json(
         preferred_model=preferred_model,
         system_prompt=_dashboard_system_prompt(),
         user_prompt=_dashboard_user_prompt(payload),
         max_tokens=1600,
         temperature=0.2,
-        max_model_attempts=None,
+        max_model_attempts=1,
         salvage_parser=None,
+        ai_request_config=ai_request_config,
     )
     if not raw.get("ok"):
         return raw
@@ -525,9 +1199,12 @@ def _call_dashboard_overlay(payload: dict[str, Any], preferred_model: str | None
     }
 
 
-def _call_stock_detail_overlay(payload: dict[str, Any], preferred_model: str | None = None) -> dict[str, Any]:
-    raw = _call_anthropic_json(
-        payload=payload,
+def _call_stock_detail_overlay(
+    payload: dict[str, Any],
+    preferred_model: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    raw = _call_llm_json(
         preferred_model=preferred_model,
         system_prompt=_stock_detail_system_prompt(),
         user_prompt=_stock_detail_user_prompt(payload),
@@ -535,6 +1212,7 @@ def _call_stock_detail_overlay(payload: dict[str, Any], preferred_model: str | N
         temperature=0.05,
         max_model_attempts=1,
         salvage_parser=_salvage_stock_detail_output,
+        ai_request_config=ai_request_config,
     )
     if not raw.get("ok"):
         return raw
@@ -609,6 +1287,7 @@ def generate_chat_reply(
     context_payload: dict[str, Any],
     messages: list[dict[str, Any]] | None,
     preferred_model: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_messages = _normalize_chat_messages(messages)
     if not normalized_messages:
@@ -624,7 +1303,7 @@ def generate_chat_reply(
         }
 
     context_intro = json.dumps(context_payload, ensure_ascii=False, sort_keys=True)
-    anthropic_messages = [
+    llm_messages = [
         {
             "role": "user",
             "content": (
@@ -639,12 +1318,14 @@ def generate_chat_reply(
         },
         *normalized_messages,
     ]
-    raw = _call_anthropic_text(
+    raw = _call_llm_text(
         preferred_model=preferred_model,
         system_prompt=_chat_system_prompt(context_payload),
-        messages=anthropic_messages,
+        messages=llm_messages,
         max_tokens=1400,
         temperature=0.2,
+        max_model_attempts=1,
+        ai_request_config=ai_request_config,
     )
     if raw.get("ok"):
         return {
@@ -660,14 +1341,18 @@ def generate_chat_reply(
     }
 
 
-def generate_ai_overlay(payload: dict[str, Any], preferred_model: str | None = None) -> dict[str, Any]:
-    key = _cache_key(payload, preferred_model, "dashboard")
+def generate_ai_overlay(
+    payload: dict[str, Any],
+    preferred_model: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    key = _cache_key(payload, preferred_model, "dashboard", ai_request_config=ai_request_config)
     with AI_LOCK:
         cached = AI_CACHE.get("payload")
         if cached and AI_CACHE.get("key") == key and (time.time() - AI_CACHE.get("timestamp", 0.0)) < AI_CACHE_TTL_SECONDS:
             return cached
 
-    result = _call_dashboard_overlay(payload, preferred_model=preferred_model)
+    result = _call_dashboard_overlay(payload, preferred_model=preferred_model, ai_request_config=ai_request_config)
     with AI_LOCK:
         AI_CACHE["key"] = key
         AI_CACHE["timestamp"] = time.time()
@@ -675,14 +1360,18 @@ def generate_ai_overlay(payload: dict[str, Any], preferred_model: str | None = N
     return result
 
 
-def generate_stock_detail_overlay(payload: dict[str, Any], preferred_model: str | None = None) -> dict[str, Any]:
-    key = _cache_key(payload, preferred_model, "stock_detail")
+def generate_stock_detail_overlay(
+    payload: dict[str, Any],
+    preferred_model: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    key = _cache_key(payload, preferred_model, "stock_detail", ai_request_config=ai_request_config)
     with AI_LOCK:
         cached = AI_CACHE.get("payload")
         if cached and AI_CACHE.get("key") == key and (time.time() - AI_CACHE.get("timestamp", 0.0)) < AI_CACHE_TTL_SECONDS:
             return cached
 
-    result = _call_stock_detail_overlay(payload, preferred_model=preferred_model)
+    result = _call_stock_detail_overlay(payload, preferred_model=preferred_model, ai_request_config=ai_request_config)
     with AI_LOCK:
         AI_CACHE["key"] = key
         AI_CACHE["timestamp"] = time.time()

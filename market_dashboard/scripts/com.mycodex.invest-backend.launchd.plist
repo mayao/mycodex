@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.mycodex.invest-backend</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Applications/Xcode.app/Contents/Developer/usr/bin/python3</string>
+		<string>/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/app.py</string>
+		<string>--public</string>
+		<string>--port</string>
+		<string>8008</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>/Users/xmly</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PYTHONUNBUFFERED</key>
+		<string>1</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Users/xmly/Library/Logs/com.mycodex.invest-backend.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Users/xmly/Library/Logs/com.mycodex.invest-backend.stderr.log</string>
+</dict>
+</plist>

@@ -42,7 +42,7 @@ struct BiometricUnlockScreen: View {
                         .disabled(isUnlocking)
 
                         Button {
-                            settings.clearAuthentication()
+                            settings.logoutCurrentSession()
                         } label: {
                             Text("退出当前账号")
                                 .frame(maxWidth: .infinity)

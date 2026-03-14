@@ -1,4 +1,6 @@
 .DS_Store
 **/.build/
 **/.swiftpm/
-VitalCommandIOS.xcodeproj/
+# Only ignore user-specific xcodeproj data, keep project.pbxproj for build number tracking
+VitalCommandIOS.xcodeproj/project.xcworkspace/xcuserdata/
+VitalCommandIOS.xcodeproj/xcuserdata/

@@ -619,6 +619,7 @@ def build_mobile_dashboard_payload(
     allow_cached_fallback: bool = True,
     include_ai: bool = False,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = build_dashboard_payload(
         force_refresh=force_refresh,
@@ -626,6 +627,7 @@ def build_mobile_dashboard_payload(
         allow_cached_fallback=allow_cached_fallback,
         include_ai=include_ai,
         user_id=user_id,
+        ai_request_config=ai_request_config,
     )
     summary = payload["summary"]
     notes_by_symbol = {item["symbol"]: item for item in payload["brief"]["holding_notes"]}
@@ -789,6 +791,7 @@ def build_mobile_dashboard_ai_payload(
     force_refresh: bool = False,
     allow_cached_fallback: bool = True,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     snapshot = build_dashboard_payload(
         force_refresh=force_refresh,
@@ -796,8 +799,9 @@ def build_mobile_dashboard_ai_payload(
         allow_cached_fallback=allow_cached_fallback,
         include_ai=False,
         user_id=user_id,
+        ai_request_config=ai_request_config,
     )
-    ai_payload = build_dashboard_ai_payload_from_snapshot(snapshot)
+    ai_payload = build_dashboard_ai_payload_from_snapshot(snapshot, ai_request_config=ai_request_config)
     ai_insights = ai_payload.get("ai_insights") or {}
     return {
         "generated_at": ai_payload["generated_at"],
@@ -805,7 +809,11 @@ def build_mobile_dashboard_ai_payload(
         "action_blocks": _build_mobile_action_blocks(snapshot["brief"]["priority_actions"], ai_insights),
         "ai_updated_at": ai_payload["generated_at"],
         "ai_engine_label": (ai_insights.get("engine") or {}).get("label"),
-        "ai_status_message": (ai_payload.get("ai_status") or {}).get("message") or "AI 洞察已刷新。",
+        "ai_status_message": (
+            ((ai_insights.get("engine") or {}).get("note"))
+            or (ai_payload.get("ai_status") or {}).get("message")
+            or "AI 洞察已刷新。"
+        ),
     }
 
 
@@ -815,6 +823,7 @@ def build_mobile_stock_detail_ai_payload(
     allow_cached_fallback: bool = True,
     share_mode: bool = False,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload = build_stock_detail_payload(
         symbol=symbol,
@@ -823,6 +832,7 @@ def build_mobile_stock_detail_ai_payload(
         allow_cached_fallback=allow_cached_fallback,
         share_mode=share_mode,
         user_id=user_id,
+        ai_request_config=ai_request_config,
     )
     return {
         "generated_at": payload["generated_at"],
@@ -832,7 +842,7 @@ def build_mobile_stock_detail_ai_payload(
         "bear_case": payload["bear_case"],
         "watchlist": payload["watchlist"],
         "action_plan": payload["action_plan"],
-        "ai_status_message": "AI 洞察已刷新。",
+        "ai_status_message": (((payload.get("methodology") or {}).get("ai_engine") or {}).get("note")) or "AI 洞察已刷新。",
     }
 
 
@@ -843,6 +853,7 @@ def build_mobile_ai_chat_context(
     force_refresh: bool = False,
     allow_cached_fallback: bool = True,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_context = (context_type or "dashboard").strip().lower()
     if normalized_context == "holding":
@@ -855,6 +866,7 @@ def build_mobile_ai_chat_context(
             allow_cached_fallback=allow_cached_fallback,
             share_mode=False,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
         return {
             "context_type": "holding",
@@ -888,6 +900,7 @@ def build_mobile_ai_chat_context(
         allow_cached_fallback=allow_cached_fallback,
         include_ai=False,
         user_id=user_id,
+        ai_request_config=ai_request_config,
     )
     holding_notes = payload["brief"]["holding_notes"]
     return {

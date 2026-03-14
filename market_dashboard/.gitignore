@@ -8,6 +8,8 @@ venv/
 # Runtime data
 user_store.json
 *.session
+config/service_ai_config.json
+config/service_ai_config.local.json
 
 # Xcode
 xcuserdata/

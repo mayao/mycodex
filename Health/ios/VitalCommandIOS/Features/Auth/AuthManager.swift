@@ -79,6 +79,14 @@ final class AuthManager: ObservableObject {
         login(token: response.token, user: response.user)
     }
 
+    // MARK: - Offline mode
+
+    /// Allow user to enter app in offline/cached mode when server is unreachable
+    func enterOfflineMode() {
+        isAuthenticated = true
+        isLoading = false
+    }
+
     // MARK: - Face ID / Touch ID
 
     static var biometricType: LABiometryType {

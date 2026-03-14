@@ -371,14 +371,80 @@ REFERENCE_FRAMEWORK = [
 ]
 
 
+def _normalized_symbol_alias(value: str | None) -> str:
+    return re.sub(r"\s+", "", str(value or "").strip().upper())
+
+
+def _build_symbol_lookup_aliases() -> dict[str, str]:
+    aliases: dict[str, str] = {}
+
+    def register(alias: str | None, symbol: str) -> None:
+        normalized_alias = _normalized_symbol_alias(alias)
+        if normalized_alias:
+            aliases.setdefault(normalized_alias, symbol)
+
+    known_symbols = set(ASSET_BY_SYMBOL) | set(HOLDING_META_OVERRIDES)
+    for symbol in sorted(known_symbols):
+        asset = ASSET_BY_SYMBOL.get(symbol, {})
+        canonical_symbol = SYMBOL_META_ALIASES.get(symbol, symbol)
+        register(symbol, canonical_symbol)
+        register(canonical_symbol, canonical_symbol)
+        register(REVERSE_SYMBOL_META_ALIASES.get(symbol), canonical_symbol)
+        register(asset.get("quote_code"), canonical_symbol)
+        if canonical_symbol.endswith(".HK"):
+            digits = canonical_symbol.split(".", 1)[0]
+            register(digits, canonical_symbol)
+            register(digits.lstrip("0") or "0", canonical_symbol)
+
+    for alias, canonical_symbol in SYMBOL_META_ALIASES.items():
+        register(alias, canonical_symbol)
+        register(canonical_symbol, canonical_symbol)
+
+    return aliases
+
+
+SYMBOL_LOOKUP_ALIASES = _build_symbol_lookup_aliases()
+
+
+def canonicalize_symbol(symbol: str) -> str:
+    normalized = _normalized_symbol_alias(symbol)
+    if not normalized:
+        return ""
+
+    hk_match = re.fullmatch(r"0*(\d{1,5})\.HK", normalized)
+    if hk_match:
+        normalized = f"{hk_match.group(1).zfill(5)}.HK"
+    elif re.fullmatch(r"\d{1,5}", normalized):
+        normalized = f"{normalized.zfill(5)}.HK"
+
+    normalized = SYMBOL_META_ALIASES.get(normalized, normalized)
+    return SYMBOL_LOOKUP_ALIASES.get(normalized, normalized)
+
+
 def symbol_variants(symbol: str) -> list[str]:
-    variants = [symbol]
-    canonical = SYMBOL_META_ALIASES.get(symbol, symbol)
-    if canonical not in variants:
-        variants.append(canonical)
-    reverse_alias = REVERSE_SYMBOL_META_ALIASES.get(symbol)
-    if reverse_alias and reverse_alias not in variants:
-        variants.append(reverse_alias)
+    variants: list[str] = []
+    raw = str(symbol or "").strip()
+
+    def register(candidate: str | None) -> None:
+        if candidate and candidate not in variants:
+            variants.append(candidate)
+
+    canonical = canonicalize_symbol(raw)
+    normalized_raw = _normalized_symbol_alias(raw)
+
+    register(raw)
+    register(normalized_raw)
+    register(canonical)
+    register(SYMBOL_META_ALIASES.get(normalized_raw))
+    register(REVERSE_SYMBOL_META_ALIASES.get(normalized_raw))
+    register(REVERSE_SYMBOL_META_ALIASES.get(canonical))
+    register(SYMBOL_LOOKUP_ALIASES.get(normalized_raw))
+
+    if canonical.endswith(".HK"):
+        digits = canonical.split(".", 1)[0]
+        register(digits)
+        register(digits.lstrip("0") or "0")
+
     return variants
 
 
@@ -387,6 +453,12 @@ def lookup_symbol_value(mapping: dict[str, Any], symbol: str, default: Any = Non
         if candidate in mapping:
             return mapping[candidate]
     return default
+
+
+def symbol_matches(left: str | None, right: str | None) -> bool:
+    left_canonical = canonicalize_symbol(left or "")
+    right_canonical = canonicalize_symbol(right or "")
+    return bool(left_canonical and right_canonical and left_canonical == right_canonical)
 
 
 def fundamental_label(score: int | None) -> str:
@@ -1917,8 +1989,12 @@ def build_rule_position_actions(focus_holdings: list[dict[str, Any]]) -> list[di
     return actions
 
 
-def enhance_ai_insights(rule_based: dict[str, Any], diagnostic_payload: dict[str, Any]) -> dict[str, Any]:
-    overlay = generate_ai_overlay(diagnostic_payload)
+def enhance_ai_insights(
+    rule_based: dict[str, Any],
+    diagnostic_payload: dict[str, Any],
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    overlay = generate_ai_overlay(diagnostic_payload, ai_request_config=ai_request_config)
     merged = {
         **rule_based,
         "engine": overlay.get("engine") or fallback_ai_engine_meta(),
@@ -1988,8 +2064,12 @@ def build_default_stock_detail_ai(
     }
 
 
-def enhance_stock_detail_ai(default_ai: dict[str, Any], diagnostic_payload: dict[str, Any]) -> dict[str, Any]:
-    overlay = generate_stock_detail_overlay(diagnostic_payload)
+def enhance_stock_detail_ai(
+    default_ai: dict[str, Any],
+    diagnostic_payload: dict[str, Any],
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    overlay = generate_stock_detail_overlay(diagnostic_payload, ai_request_config=ai_request_config)
     merged = {**default_ai, "engine": overlay.get("engine") or fallback_ai_engine_meta()}
     if overlay.get("ok"):
         for key in ["headline", "deep_summary", "executive_summary", "sections", "bull_case", "bear_case", "watchlist", "action_plan"]:
@@ -2006,6 +2086,7 @@ def build_ai_insights(
     total_financing_hkd: float,
     total_derivative_notional_hkd: float,
     macro_topics: list[dict[str, Any]],
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     trade_snapshot = build_trade_behavior_snapshot(trades, holdings)
     holding_by_symbol = {item["symbol"]: item for item in holdings}
@@ -2291,7 +2372,7 @@ def build_ai_insights(
             "playbook": rule_based["playbook"],
         },
     }
-    return enhance_ai_insights(rule_based, diagnostic_payload)
+    return enhance_ai_insights(rule_based, diagnostic_payload, ai_request_config=ai_request_config)
 
 
 def refresh_holding_market_state(
@@ -2419,6 +2500,7 @@ def build_stock_detail_payload(
     allow_cached_fallback: bool = True,
     share_mode: bool = False,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     dashboard = build_dashboard_payload(
         force_refresh=force_refresh,
@@ -2432,7 +2514,7 @@ def build_stock_detail_payload(
         (
             item
             for item in dashboard["holdings"]
-            if item["symbol"] in symbol_variants(symbol) or symbol in symbol_variants(item["symbol"])
+            if symbol_matches(item["symbol"], symbol)
         ),
         None,
     )
@@ -2472,13 +2554,13 @@ def build_stock_detail_payload(
     related_trades = [
         item
         for item in dashboard["trades"]
-        if item["symbol"] in symbol_variants(target["symbol"]) or target["symbol"] in symbol_variants(item["symbol"])
+        if symbol_matches(item.get("symbol"), target["symbol"])
     ]
     related_derivatives = [
         item
         for item in dashboard["derivatives"]
-        if item["symbol"] in symbol_variants(target["symbol"])
-        or any(underlying in symbol_variants(target["symbol"]) for underlying in item.get("underlyings", []))
+        if symbol_matches(item.get("symbol"), target["symbol"])
+        or any(symbol_matches(underlying, target["symbol"]) for underlying in item.get("underlyings", []))
     ]
     demo_holdings_by_symbol = {item["symbol"]: item for item in demoize_top_holdings(dashboard["holdings"])}
     target_demo = demo_holdings_by_symbol.get(target["symbol"], {})
@@ -2735,7 +2817,7 @@ def build_stock_detail_payload(
         ],
     }
     if not include_live:
-        detail_ai = enhance_stock_detail_ai(detail_ai, detail_ai_payload)
+        detail_ai = enhance_stock_detail_ai(detail_ai, detail_ai_payload, ai_request_config=ai_request_config)
     if share_mode:
         detail_ai = sanitize_stock_detail_ai_for_share(detail_ai)
     price_cards = [
@@ -3458,6 +3540,7 @@ def build_dashboard_payload(
     include_ai: bool = True,
     user_id: str | None = None,
     refresh_portfolio: bool = False,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     portfolio = load_real_portfolio(
         force_refresh=force_refresh and refresh_portfolio,
@@ -3532,6 +3615,7 @@ def build_dashboard_payload(
             portfolio["total_financing_hkd"],
             total_derivative_notional_hkd,
             macro_topics,
+            ai_request_config=ai_request_config,
         )
         if include_ai
         else empty_ai_insights()
@@ -3682,7 +3766,10 @@ def build_dashboard_payload(
     }
 
 
-def build_dashboard_ai_payload_from_snapshot(snapshot_payload: dict[str, Any]) -> dict[str, Any]:
+def build_dashboard_ai_payload_from_snapshot(
+    snapshot_payload: dict[str, Any],
+    ai_request_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     summary = snapshot_payload.get("summary") or {}
     macro = snapshot_payload.get("macro") or {}
     holdings = snapshot_payload.get("holdings") or []
@@ -3698,6 +3785,7 @@ def build_dashboard_ai_payload_from_snapshot(snapshot_payload: dict[str, Any]) -
             float(summary.get("total_financing_hkd") or 0.0),
             float(summary.get("total_derivative_notional_hkd") or 0.0),
             macro.get("topics") or [],
+            ai_request_config=ai_request_config,
         )
         if holdings
         else empty_ai_insights()

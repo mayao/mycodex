@@ -517,12 +517,11 @@ def get_import_center_payload(user_id: str) -> dict[str, Any]:
     )
     return {
         "user": serialize_user(user),
-        "brokers": BROKER_CAPABILITIES,
+        "brokers": [],
         "statement_templates": get_statement_import_templates(),
         "notes": [
-            "当前版本以设备账号和结单导入为主，登录后会直接进入你的个人投资数据。",
+            "当前版本只保留稳定可用的结单导入能力，不再展示未落地的券商在线接入配置说明。",
+            "上传新的 PDF 结单后，服务会自动重建组合快照与账户视图。",
             "如果 iPhone 支持 Face ID 或 Touch ID，可以把它作为本机解锁入口。",
-            "券商自动同步仍需要额外配置，现阶段最稳定的方式仍是结单导入。",
-            "短信和微信登录保留为后续能力，本版以个人自用和稳定同步为先。",
         ],
     }

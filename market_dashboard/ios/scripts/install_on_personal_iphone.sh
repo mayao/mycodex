@@ -44,6 +44,15 @@ detect_lan_ip() {
   ifconfig | awk '/inet / && $2 != "127.0.0.1" && $2 !~ /^169\.254\./ {print $2; exit}'
 }
 
+if [[ -z "$SERVER_URL" ]]; then
+  DETECTED_LAN_IP="$(detect_lan_ip || true)"
+  if [[ -n "$DETECTED_LAN_IP" ]]; then
+    SERVER_URL="http://$DETECTED_LAN_IP:$PORT/"
+  else
+    SERVER_URL="http://10.8.144.16:$PORT/"
+  fi
+fi
+
 should_generate_project() {
   case "$SKIP_XCODEGEN" in
     1|true|TRUE|yes|YES)
@@ -82,13 +91,6 @@ if ! has_xcode_account; then
   echo "For immediate local testing, use:"
   echo "  ./scripts/install_on_simulator.sh"
   exit 1
-fi
-
-if [[ -z "$SERVER_URL" ]]; then
-  DETECTED_LAN_IP="$(detect_lan_ip || true)"
-  if [[ -n "$DETECTED_LAN_IP" ]]; then
-    SERVER_URL="http://$DETECTED_LAN_IP:$PORT/"
-  fi
 fi
 
 if [[ -z "$DEVICE_DESTINATION_ID" ]]; then

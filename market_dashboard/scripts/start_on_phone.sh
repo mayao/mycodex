@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+APP_ENTRY="$APP_DIR/app.py"
 PORT="${PORT:-8008}"
 
 detect_lan_ip() {
@@ -41,4 +42,10 @@ else
   echo "If needed, set LAN_IP manually before running this script."
 fi
 
-exec python3 app.py --public --port "$PORT"
+if [[ ! -r "$APP_ENTRY" ]]; then
+  echo "Backend entry is not readable: $APP_ENTRY" >&2
+  exit 1
+fi
+
+export PYTHONUNBUFFERED=1
+exec python3 "$APP_ENTRY" --public --port "$PORT"

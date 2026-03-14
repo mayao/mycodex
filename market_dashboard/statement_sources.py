@@ -171,6 +171,18 @@ def _load_manifest_entries() -> list[dict[str, Any]]:
                 "path": str(Path(raw_path).expanduser()),
                 "uploaded_at": raw.get("uploaded_at"),
                 "uploaded_file_name": raw.get("uploaded_file_name") or Path(raw_path).name,
+                "uploaded_media_type": str(raw.get("uploaded_media_type") or "").strip() or None,
+                "parser_mode": str(raw.get("parser_mode") or "").strip() or None,
+                "parse_status": str(raw.get("parse_status") or "").strip() or None,
+                "parse_issue": str(raw.get("parse_issue") or "").strip() or None,
+                "parsed_payload_path": (
+                    str(Path(raw.get("parsed_payload_path")).expanduser())
+                    if str(raw.get("parsed_payload_path") or "").strip()
+                    else None
+                ),
+                "detected_broker": str(raw.get("detected_broker") or "").strip() or None,
+                "detected_statement_type": str(raw.get("detected_statement_type") or "").strip() or None,
+                "last_parsed_at": raw.get("last_parsed_at"),
             }
         )
     return normalized_entries
@@ -199,6 +211,14 @@ def get_uploaded_statement_overrides(user_id: str | None = None) -> dict[str, di
             "source_mode": "upload",
             "uploaded_at": entry.get("uploaded_at"),
             "uploaded_file_name": entry.get("uploaded_file_name") or Path(entry["path"]).name,
+            "uploaded_media_type": entry.get("uploaded_media_type"),
+            "parser_mode": entry.get("parser_mode"),
+            "parse_status": entry.get("parse_status"),
+            "parse_issue": entry.get("parse_issue"),
+            "parsed_payload_path": entry.get("parsed_payload_path"),
+            "detected_broker": entry.get("detected_broker"),
+            "detected_statement_type": entry.get("detected_statement_type"),
+            "last_parsed_at": entry.get("last_parsed_at"),
         }
     return overrides
 
@@ -220,16 +240,24 @@ def get_statement_sources(user_id: str | None = None) -> list[dict[str, Any]]:
     for entry in entries:
         account_id = entry["account_id"]
         base = source_map.get(account_id, {})
-        source_map[account_id] = {
-            **base,
-            "account_id": account_id,
-            "broker": entry["broker"],
-            "type": entry["type"],
-            "path": entry["path"],
-            "source_mode": "upload",
-            "uploaded_at": entry.get("uploaded_at"),
-            "uploaded_file_name": entry.get("uploaded_file_name") or Path(entry["path"]).name,
-        }
+            source_map[account_id] = {
+                **base,
+                "account_id": account_id,
+                "broker": entry["broker"],
+                "type": entry["type"],
+                "path": entry["path"],
+                "source_mode": "upload",
+                "uploaded_at": entry.get("uploaded_at"),
+                "uploaded_file_name": entry.get("uploaded_file_name") or Path(entry["path"]).name,
+                "uploaded_media_type": entry.get("uploaded_media_type"),
+                "parser_mode": entry.get("parser_mode"),
+                "parse_status": entry.get("parse_status"),
+                "parse_issue": entry.get("parse_issue"),
+                "parsed_payload_path": entry.get("parsed_payload_path"),
+                "detected_broker": entry.get("detected_broker"),
+                "detected_statement_type": entry.get("detected_statement_type"),
+                "last_parsed_at": entry.get("last_parsed_at"),
+            }
 
     if normalized_user_id == OWNER_USER_ID:
         ordered_ids = [item["account_id"] for item in DEFAULT_STATEMENT_SOURCES]
@@ -263,9 +291,25 @@ def register_uploaded_statement(
     user_id: str | None = None,
     broker: str | None = None,
     statement_type: str | None = None,
+    uploaded_media_type: str | None = None,
+    parser_mode: str | None = None,
+    parse_status: str | None = None,
+    parse_issue: str | None = None,
+    parsed_payload_path: str | None = None,
+    detected_broker: str | None = None,
+    detected_statement_type: str | None = None,
+    last_parsed_at: str | None = None,
 ) -> dict[str, Any]:
     normalized_user_id = _normalize_user_id(user_id)
     template_by_type = _statement_template_by_type()
+    previous_entry = next(
+        (
+            entry
+            for entry in _load_manifest_entries()
+            if entry.get("user_id") == normalized_user_id and entry.get("account_id") == account_id
+        ),
+        None,
+    )
     existing_source = (
         get_statement_source_by_account(account_id, user_id=normalized_user_id)
         if account_id
@@ -303,6 +347,18 @@ def register_uploaded_statement(
             "path": stored_path,
             "uploaded_at": datetime.now(timezone.utc).isoformat(),
             "uploaded_file_name": uploaded_file_name,
+            "uploaded_media_type": uploaded_media_type or (previous_entry or {}).get("uploaded_media_type"),
+            "parser_mode": parser_mode or (previous_entry or {}).get("parser_mode"),
+            "parse_status": parse_status or (previous_entry or {}).get("parse_status"),
+            "parse_issue": parse_issue if parse_issue is not None else (previous_entry or {}).get("parse_issue"),
+            "parsed_payload_path": (
+                str(Path(parsed_payload_path).expanduser())
+                if parsed_payload_path
+                else (previous_entry or {}).get("parsed_payload_path")
+            ),
+            "detected_broker": detected_broker or (previous_entry or {}).get("detected_broker"),
+            "detected_statement_type": detected_statement_type or (previous_entry or {}).get("detected_statement_type"),
+            "last_parsed_at": last_parsed_at or (previous_entry or {}).get("last_parsed_at"),
         }
     )
     _write_manifest_entries(entries)

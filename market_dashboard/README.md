@@ -35,6 +35,25 @@ cd market_dashboard
 python3 app.py --public
 ```
 
+## Configure Server-Side AI Keys
+
+如果你希望 API Key 跟着项目服务文件走，而不是每台服务器单独配环境变量，可以直接写项目内配置文件：
+
+```bash
+cd market_dashboard
+python3 scripts/configure_ai_service.py
+```
+
+说明：
+
+- 实际配置文件默认写到 `market_dashboard/config/service_ai_config.json`
+- 文件会被后端自动读取，App 端可以只负责切换 provider 和模型 ID
+- Kimi 支持两种预设：
+  - `moonshot`：`https://api.moonshot.cn/v1` + `moonshot-v1-8k`
+  - `kimi_coding`：`https://api.kimi.com/coding/v1` + `kimi-for-coding`
+- 为了避免误提交，真实配置文件已加入 `.gitignore`
+- 仓库里保留了示例文件：`market_dashboard/config/service_ai_config.example.json`
+
 ## Deploy Elsewhere
 
 如果后续要给其他机器、真机或者云端环境使用，这个 Python 后端需要单独运行和部署。

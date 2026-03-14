@@ -58,6 +58,7 @@ http://你的服务器IP:8008/
 - 该机器能运行 Python 3。
 - `market_dashboard/.deps` 目录随代码一起带过去。
 - 要持久化 `uploads/`、`cache/`、`user_store.json`、`uploaded_statement_sources.json`。
+- 如果希望模型 key 跟着项目部署走，建议同时带上 `config/service_ai_config.json`。
 
 ### 方案 B：Docker 容器部署
 
@@ -94,8 +95,40 @@ docker run -d \
 - `cache/` 保存 statement fallback 和中间缓存。
 - `user_store.json` 保存手机号/微信开发态用户与 session。
 - `uploaded_statement_sources.json` 保存“哪个用户的哪个账户当前绑定哪份上传结单”。
+- `config/service_ai_config.json` 可保存 Anthropic / Kimi / Gemini 的服务端模型配置与 API Key。
 
 如果这些不持久化，容器重启后用户会话和导入记录会丢失。
+
+## 服务端 AI 配置文件
+
+推荐直接在项目目录生成：
+
+```bash
+cd market_dashboard
+python3 scripts/configure_ai_service.py
+```
+
+默认输出：
+
+```text
+market_dashboard/config/service_ai_config.json
+```
+
+优先级：
+
+1. App 端传入的 provider / model
+2. `config/service_ai_config.json`
+3. 服务器环境变量
+
+因此如果你把 key 写在服务端配置文件里，iPhone 设置页就可以只负责切换首选模型和模型 ID，不需要重复存一份 key。
+
+注意：
+
+- 当前默认首选建议用 Claude，Gemini 作为额外回退。
+- Kimi 可按服务端预设切两种兼容通道：
+  - `moonshot`：`https://api.moonshot.cn/v1` + `moonshot-v1-8k`
+  - `kimi_coding`：`https://api.kimi.com/coding/v1` + `kimi-for-coding`
+- 如果使用 `Kimi Coding` 的 key，需要切到 `kimi_coding` 预设，不能继续走 Moonshot 兼容地址。
 
 ### 方案 C：云端正式服务
 

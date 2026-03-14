@@ -3,10 +3,16 @@ import Foundation
 public struct AppServerConfiguration: Sendable, Equatable {
     public var baseURL: URL
     public var sessionToken: String?
+    public var aiRequestConfiguration: AIRequestConfiguration?
 
-    public init(baseURL: URL, sessionToken: String? = nil) {
+    public init(
+        baseURL: URL,
+        sessionToken: String? = nil,
+        aiRequestConfiguration: AIRequestConfiguration? = nil
+    ) {
         self.baseURL = baseURL
         self.sessionToken = sessionToken
+        self.aiRequestConfiguration = aiRequestConfiguration
     }
 }
 
@@ -67,6 +73,8 @@ private struct APIErrorEnvelope: Decodable {
     let error: APIError
 }
 
+private let aiConfigHeaderName = "X-MyInvAI-AI-Config"
+
 public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
     public struct AIChatMessage: Encodable, Sendable {
         public let role: String
@@ -118,6 +126,10 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
             query.append(URLQueryItem(name: "refresh", value: "1"))
         }
         return try await send(path: "api/mobile/dashboard-ai", query: query)
+    }
+
+    public func fetchAIServiceStatus() async throws -> AIServiceStatusPayload {
+        try await send(path: "api/mobile/ai-service-status")
     }
 
     public func fetchHoldingDetail(symbol: String, refresh: Bool = false) async throws -> HoldingDetailPayload {
@@ -327,8 +339,18 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         if let token = configuration.sessionToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        if let encodedAIConfiguration = encodeAIRequestConfiguration(configuration.aiRequestConfiguration) {
+            request.setValue(encodedAIConfiguration, forHTTPHeaderField: aiConfigHeaderName)
+        }
         request.timeoutInterval = 45
         return request
+    }
+
+    private func encodeAIRequestConfiguration(_ value: AIRequestConfiguration?) -> String? {
+        guard let value, let data = try? encoder.encode(value) else {
+            return nil
+        }
+        return data.base64EncodedString()
     }
 
     private func makeURL(path: String, query: [URLQueryItem]) -> URL {

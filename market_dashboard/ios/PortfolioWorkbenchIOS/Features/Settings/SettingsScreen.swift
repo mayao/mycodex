@@ -15,6 +15,10 @@ struct SettingsScreen: View {
     @State private var refreshMessage: String?
     @State private var importCenter: ImportCenterPayload?
     @State private var isLoadingImportCenter = false
+    @State private var aiServiceStatus: AIServiceStatusPayload?
+    @State private var isLoadingAIServiceStatus = false
+    @State private var aiModelDrafts: [AppAIProvider: String] = [:]
+    @State private var didLoadAISettings = false
 
     var body: some View {
         NavigationStack {
@@ -23,6 +27,7 @@ struct SettingsScreen: View {
                     LazyVStack(alignment: .leading, spacing: 18) {
                         accountSection
                         connectionSection
+                        aiModelSection
                         updateStatementSection
                         importCenterSection
                         refreshSection
@@ -36,7 +41,9 @@ struct SettingsScreen: View {
             .appInlineNavigationTitle()
             .task {
                 await loadImportCenter()
+                await loadAIServiceStatus()
                 syncSelectedAccountIfNeeded()
+                loadAISettingsIfNeeded()
             }
             .task(id: dashboardAccountSeed) {
                 syncSelectedAccountIfNeeded()
@@ -131,7 +138,7 @@ struct SettingsScreen: View {
     private var connectionSection: some View {
         SectionPanel(title: "服务连接", subtitle: "请填写当前可访问的数据服务地址。真机使用时建议填写局域网地址。") {
             VStack(alignment: .leading, spacing: 14) {
-                TextField("http://192.168.1.10:8008/", text: $settings.serverURLString)
+                TextField(AppSettingsStore.defaultServerURLString, text: $settings.serverURLString)
                     .appURLTextEntry()
                     .focused($isEditingURL)
                     .padding(14)
@@ -184,6 +191,24 @@ struct SettingsScreen: View {
                     }
                     .buttonStyle(.bordered)
                     .tint(BrokerPalette.gold)
+                }
+
+                if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("本机测试地址")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(BrokerPalette.muted)
+
+                        serverRow(
+                            title: "当前构建的本机最新 IP",
+                            subtitle: "\(suggestedBuildURL) · 重新安装 App 时会自动刷新这台 Mac 的局域网地址",
+                            isSelected: settings.trimmedServerURLString == suggestedBuildURL,
+                            tint: BrokerPalette.gold
+                        ) {
+                            settings.selectServerURL(suggestedBuildURL, name: "本机测试地址", rememberSelection: true)
+                            refreshMessage = "已切换到本机测试地址"
+                        }
+                    }
                 }
 
                 if !settings.savedServers.isEmpty {
@@ -252,6 +277,122 @@ struct SettingsScreen: View {
                 }
             }
         }
+    }
+
+    private var aiModelSection: some View {
+        SectionPanel(title: "AI 模型", subtitle: "在 App 里切换 provider 与模型，API Key 统一由服务端托管。") {
+            VStack(alignment: .leading, spacing: 14) {
+                Picker("首选模型", selection: aiPrimaryProviderBinding) {
+                    ForEach(AppAIProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Toggle("首选失败时自动回退", isOn: aiFallbackEnabledBinding)
+                    .tint(BrokerPalette.cyan)
+
+                if let aiServiceStatus {
+                    Text("当前服务端回退顺序：\(providerOrderText(aiServiceStatus.providerOrder))")
+                        .font(.footnote)
+                        .foregroundStyle(BrokerPalette.muted)
+                }
+
+                Text("如果你连的是远程服务器，真正发起大模型请求的是那台服务器。Claude / Gemini 需要远程机具备可出境链路；如果这条链路不稳，优先把首选模型切到 Kimi。")
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("如果服务端已经写入了 AI 服务配置文件，这里只需要切 provider 和模型 ID，不再要求用户在手机里输入 API Key。")
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Kimi 服务端可配置为 Moonshot 通道或 Kimi Coding 兼容通道；当前实际访问状态会显示在每个 provider 卡片里。")
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.gold)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button {
+                    Task { await loadAIServiceStatus() }
+                } label: {
+                    HStack {
+                        if isLoadingAIServiceStatus {
+                            ProgressView()
+                                .tint(Color.black)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        Text(isLoadingAIServiceStatus ? "刷新中" : "刷新服务端模型状态")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(BrokerPalette.gold)
+                .foregroundStyle(Color.black)
+
+                ForEach(AppAIProvider.allCases) { provider in
+                    aiProviderCard(provider)
+                }
+
+                Text(aiServiceStatus?.note ?? "服务端状态读取后，会在这里显示实际生效的模型访问情况。")
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func aiProviderCard(_ provider: AppAIProvider) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(provider.displayName)
+                        .font(.headline)
+                        .foregroundStyle(BrokerPalette.ink)
+                    Text(provider.shortHint)
+                        .font(.footnote)
+                        .foregroundStyle(BrokerPalette.muted)
+                }
+
+                Spacer()
+
+                if settings.aiPrimaryProvider == provider {
+                    TagBadge(text: "首选", tint: BrokerPalette.cyan)
+                }
+                if let status = aiServiceStatus?.providers.first(where: { $0.provider == provider.kind }) {
+                    TagBadge(text: aiAccessStateLabel(status.accessState), tint: aiAccessStateTint(status.accessState))
+                } else {
+                    TagBadge(text: isLoadingAIServiceStatus ? "检查中" : "待刷新", tint: BrokerPalette.gold)
+                }
+            }
+
+            TextField("模型 ID", text: aiModelBinding(for: provider))
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(12)
+                .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .foregroundStyle(BrokerPalette.ink)
+
+            if let status = aiServiceStatus?.providers.first(where: { $0.provider == provider.kind }) {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabelValueRow(label: "服务端 Key", value: credentialSourceLabel(status.credentialSource))
+                    LabelValueRow(label: "访问状态", value: status.accessMessage, valueColor: aiAccessStateTint(status.accessState))
+                    if let preset = status.preset, provider == .kimi {
+                        LabelValueRow(label: "Kimi 通道", value: kimiPresetLabel(preset))
+                    }
+                    if let checkedAt = status.checkedAt, !checkedAt.isEmpty {
+                        LabelValueRow(label: "最近检查", value: checkedAt)
+                    }
+                }
+            } else {
+                Text("服务端状态未加载，刷新后会显示当前 provider 的可访问性与实际通道。")
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.muted)
+            }
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private func serverRow<Trailing: View>(
@@ -360,23 +501,19 @@ struct SettingsScreen: View {
     }
 
     private var importCenterSection: some View {
-        SectionPanel(title: "券商接入", subtitle: "当前版本以稳定同步为先，自动授权能力会按券商支持情况逐步补齐。") {
+        SectionPanel(title: "券商导入", subtitle: "在线直连尚未稳定落地，当前只保留结单导入。") {
             VStack(alignment: .leading, spacing: 14) {
                 if isLoadingImportCenter, importCenter == nil {
                     HStack(spacing: 10) {
                         ProgressView()
                             .tint(BrokerPalette.cyan)
-                        Text("正在读取券商接入能力…")
+                        Text("正在读取导入能力…")
                             .font(.subheadline)
                             .foregroundStyle(BrokerPalette.muted)
                     }
                 }
 
                 if let importCenter {
-                    ForEach(importCenter.brokers) { broker in
-                        brokerCard(broker)
-                    }
-
                     if !importCenter.statementTemplates.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("当前已支持的结单导入模板")
@@ -398,25 +535,27 @@ struct SettingsScreen: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("接入说明")
-                            .font(.headline)
-                            .foregroundStyle(BrokerPalette.ink)
+                    if !importCenter.notes.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("导入说明")
+                                .font(.headline)
+                                .foregroundStyle(BrokerPalette.ink)
 
-                        ForEach(importCenter.notes, id: \.self) { item in
-                            HStack(alignment: .top, spacing: 10) {
-                                Circle()
-                                    .fill(BrokerPalette.cyan)
-                                    .frame(width: 7, height: 7)
-                                    .padding(.top, 6)
-                                Text(item)
-                                    .font(.subheadline)
-                                    .foregroundStyle(BrokerPalette.ink)
+                            ForEach(importCenter.notes, id: \.self) { item in
+                                HStack(alignment: .top, spacing: 10) {
+                                    Circle()
+                                        .fill(BrokerPalette.cyan)
+                                        .frame(width: 7, height: 7)
+                                        .padding(.top, 6)
+                                    Text(item)
+                                        .font(.subheadline)
+                                        .foregroundStyle(BrokerPalette.ink)
+                                }
                             }
                         }
                     }
                 } else {
-                    Text("当前还没拿到券商接入信息。确认服务地址可用后，再刷新一次。")
+                    Text("当前还没拿到券商导入信息。确认服务地址可用后，再刷新一次。")
                         .font(.subheadline)
                         .foregroundStyle(BrokerPalette.muted)
                 }
@@ -495,6 +634,7 @@ struct SettingsScreen: View {
             let client = try await settings.makeValidatedClient(forceSessionCheck: true)
             await dashboardStore.load(using: client, force: true)
             await loadImportCenter()
+            await loadAIServiceStatus()
             refreshMessage = "已连接 \(settings.trimmedServerURLString)"
         } catch {
             refreshMessage = error.localizedDescription
@@ -539,6 +679,24 @@ struct SettingsScreen: View {
         }
     }
 
+    private func loadAIServiceStatus() async {
+        guard settings.isAuthenticated else {
+            aiServiceStatus = nil
+            return
+        }
+
+        isLoadingAIServiceStatus = true
+        defer { isLoadingAIServiceStatus = false }
+
+        do {
+            let client = try await settings.makeValidatedClient()
+            aiServiceStatus = try await client.fetchAIServiceStatus()
+        } catch {
+            aiServiceStatus = nil
+            refreshMessage = error.localizedDescription
+        }
+    }
+
     private func logout() async {
         do {
             let client = try await settings.makeValidatedClient()
@@ -547,7 +705,7 @@ struct SettingsScreen: View {
             refreshMessage = error.localizedDescription
         }
         importCenter = nil
-        settings.clearAuthentication()
+        settings.logoutCurrentSession()
     }
 
     private func toggleBiometricUnlock() async {
@@ -572,6 +730,95 @@ struct SettingsScreen: View {
         dashboardPayload?.accounts.map(\.accountId).joined(separator: "|") ?? "empty"
     }
 
+    private var aiPrimaryProviderBinding: Binding<AppAIProvider> {
+        Binding(
+            get: { settings.aiPrimaryProvider },
+            set: { settings.setAIPrimaryProvider($0) }
+        )
+    }
+
+    private var aiFallbackEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { settings.aiFallbacksEnabled },
+            set: { settings.setAIFallbacksEnabled($0) }
+        )
+    }
+
+    private func aiModelBinding(for provider: AppAIProvider) -> Binding<String> {
+        Binding(
+            get: { aiModelDrafts[provider] ?? settings.aiModelIdentifier(for: provider) },
+            set: { newValue in
+                aiModelDrafts[provider] = newValue
+                settings.setAIModelIdentifier(newValue, for: provider)
+            }
+        )
+    }
+
+    private func providerOrderText(_ providers: [AIProviderKind]) -> String {
+        providers.map { providerDisplayName(for: $0) }.joined(separator: " -> ")
+    }
+
+    private func providerDisplayName(for provider: AIProviderKind) -> String {
+        switch provider {
+        case .anthropic:
+            return "Claude"
+        case .kimi:
+            return "Kimi"
+        case .gemini:
+            return "Gemini"
+        }
+    }
+
+    private func aiAccessStateLabel(_ state: String) -> String {
+        switch state {
+        case "success":
+            return "最近成功"
+        case "ready":
+            return "已配置"
+        case "error":
+            return "最近失败"
+        case "missing_key":
+            return "缺少 Key"
+        default:
+            return "待检查"
+        }
+    }
+
+    private func aiAccessStateTint(_ state: String) -> Color {
+        switch state {
+        case "success", "ready":
+            return BrokerPalette.green
+        case "error":
+            return BrokerPalette.red
+        case "missing_key":
+            return BrokerPalette.gold
+        default:
+            return BrokerPalette.cyan
+        }
+    }
+
+    private func credentialSourceLabel(_ source: String) -> String {
+        switch source {
+        case "service_config":
+            return "服务端配置文件"
+        case "environment":
+            return "服务端环境变量"
+        case "request":
+            return "当前请求"
+        default:
+            return "未配置"
+        }
+    }
+
+    private func kimiPresetLabel(_ preset: String) -> String {
+        switch preset {
+        case "kimi_coding":
+            return "Kimi Coding 兼容通道"
+        default:
+            return "Moonshot 通道"
+        }
+    }
+
     private func syncSelectedAccountIfNeeded() {
         guard let payload = dashboardPayload, !payload.accounts.isEmpty else {
             selectedAccountID = ""
@@ -581,6 +828,16 @@ struct SettingsScreen: View {
             return
         }
         selectedAccountID = payload.accounts[0].accountId
+    }
+
+    private func loadAISettingsIfNeeded() {
+        guard !didLoadAISettings else {
+            return
+        }
+        for provider in AppAIProvider.allCases {
+            aiModelDrafts[provider] = settings.aiModelIdentifier(for: provider)
+        }
+        didLoadAISettings = true
     }
 
     private func upload(url: URL) async {

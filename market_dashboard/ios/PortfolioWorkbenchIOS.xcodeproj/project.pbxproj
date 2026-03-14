@@ -23,6 +23,7 @@
 		ABBADE061CB9A09E990A0401 /* HoldingDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EAB2B7C1B84326CC2E0050 /* HoldingDetailViewModel.swift */; };
 		AF43D3456B833F9F52B6DACE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5251B548EE3AE317ACC5E88D /* Assets.xcassets */; };
 		B7411FA3FD54C0827B0F66F2 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDAD06DB4CF1424598BD8309 /* MainTabView.swift */; };
+		B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */; };
 		BA9739AD06A3B37F3E0486C9 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2514C7174B5A98587F947B55 /* SettingsScreen.swift */; };
 		BFC34B2C9DDD91A3D69FEF83 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */; };
 		C75CE6C6183F0411F978311A /* LoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A004A88204862891DF42780 /* LoadState.swift */; };
@@ -64,6 +65,7 @@
 		1BB09CEA48A1F12B05972056 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
 		1D46D61A5E924FA58270BBFA /* PortfolioWorkbenchIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioWorkbenchIOSApp.swift; sourceTree = "<group>"; };
 		2514C7174B5A98587F947B55 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
+		2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderSettings.swift; sourceTree = "<group>"; };
 		33370D7C9C9AF6229D8B2000 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		3A4A5F31CA9A053ADD1D064E /* PortfolioWorkbenchAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioWorkbenchAPIClient.swift; sourceTree = "<group>"; };
 		462AF149E90AC502ABA6E308 /* PortfolioDashboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDashboardStore.swift; sourceTree = "<group>"; };
@@ -170,6 +172,7 @@
 		6F4352F98FC56D82C697D453 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */,
 				70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */,
 				9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */,
 				DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */,
@@ -347,6 +350,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0D95619F42854426BC1165EA /* AIChatScreen.swift in Sources */,
+				B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */,
 				35AD8E9528C376F3B009AAE5 /* AccountsScreen.swift in Sources */,
 				BFC34B2C9DDD91A3D69FEF83 /* AppSettingsStore.swift in Sources */,
 				F8923F2ED81C8FD1FAF13FE1 /* BiometricUnlockScreen.swift in Sources */,
@@ -503,7 +507,7 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.245.185:8008/";
+				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.144.16:8008/";
 				PRODUCT_BUNDLE_IDENTIFIER = com.bbt2d26l2v.PortfolioWorkbenchIOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -565,7 +569,7 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.245.185:8008/";
+				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.144.16:8008/";
 				PRODUCT_BUNDLE_IDENTIFIER = com.bbt2d26l2v.PortfolioWorkbenchIOS;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;

@@ -65,7 +65,7 @@ struct SettingsScreen: View {
             // Server address section with status
             Section("服务地址") {
                 HStack {
-                    TextField("http://10.8.140.209:3000/", text: $settings.serverURLString)
+                    TextField("http://192.168.31.193:3000/", text: $settings.serverURLString)
                         .appURLTextEntry()
 
                     if checkingServers.contains(settings.trimmedServerURLString) {
@@ -93,18 +93,18 @@ struct SettingsScreen: View {
             // Quick server switching
             Section("快速切换") {
                 // Built-in servers
-                serverSwitchRow(name: "主服务器 (209)", url: "http://10.8.140.209:3000/")
+                serverSwitchRow(name: "主服务器 (193)", url: "http://192.168.31.193:3000/")
                 serverSwitchRow(name: "备用服务器 (16)", url: "http://10.8.144.16:3001/")
 
                 // Saved servers (excluding built-in ones)
                 ForEach(settings.savedServers.filter { saved in
-                    saved.url != "http://10.8.140.209:3000/" && saved.url != "http://10.8.144.16:3001/"
+                    saved.url != "http://192.168.31.193:3000/" && saved.url != "http://10.8.144.16:3001/"
                 }) { server in
                     serverSwitchRow(name: server.name, url: server.url)
                 }
                 .onDelete { indexSet in
                     let filtered = settings.savedServers.filter { saved in
-                        saved.url != "http://10.8.140.209:3000/" && saved.url != "http://10.8.144.16:3001/"
+                        saved.url != "http://192.168.31.193:3000/" && saved.url != "http://10.8.144.16:3001/"
                     }
                     for index in indexSet {
                         settings.removeSavedServer(filtered[index])
@@ -367,7 +367,7 @@ struct SettingsScreen: View {
 
     private func checkAllServers() async {
         let urls = Set(
-            ["http://10.8.140.209:3000/", "http://10.8.144.16:3001/"]
+            ["http://192.168.31.193:3000/", "http://10.8.144.16:3001/"]
             + settings.savedServers.map(\.url)
             + [settings.trimmedServerURLString]
         )

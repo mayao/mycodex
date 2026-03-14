@@ -4,7 +4,7 @@ import VitalCommandMobileCore
 
 @MainActor
 final class AppSettingsStore: ObservableObject {
-    static let defaultLANServerURL = "http://10.8.140.209:3000/"
+    static let defaultLANServerURL = "http://192.168.31.193:3000/"
     static let defaultSimulatorServerURL = "http://127.0.0.1:3000/"
     @Published var serverURLString: String {
         didSet {
