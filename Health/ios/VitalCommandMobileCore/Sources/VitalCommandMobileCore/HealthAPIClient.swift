@@ -133,6 +133,10 @@ public final class HealthAPIClient: @unchecked Sendable {
         try await sendJSON(path: "api/healthkit/sync", body: input)
     }
 
+    public func fetchDocumentInsights(type: String) async throws -> DocumentInsightResponse {
+        try await send(path: "api/ai/insights?type=\(type)")
+    }
+
     public func chatWithAI(_ input: AIChatRequest) async throws -> AIChatResponse {
         try await sendJSON(path: "api/ai/chat", body: input)
     }

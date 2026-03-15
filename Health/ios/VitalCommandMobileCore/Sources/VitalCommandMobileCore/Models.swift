@@ -997,3 +997,28 @@ public struct SyncTriggerResponse: Codable, Sendable {
     public let peers: [SyncPeer]
     public let recentLogs: [SyncLogEntry]
 }
+
+// MARK: - Document AI Insights
+
+public struct InsightItem: Codable, Sendable, Identifiable {
+    public let id: String
+    public let title: String
+    public let detail: String
+    public let action: String?
+    public let severity: String   // "high" | "medium" | "low" | "positive"
+    public let relatedMetrics: [String]?
+}
+
+public struct DocumentInsightResponse: Codable, Sendable {
+    public let documentType: String  // "medical_exam" | "genetic"
+    public let hasData: Bool
+    public let summary: String
+    public let urgentItems: [InsightItem]
+    public let attentionItems: [InsightItem]
+    public let positiveItems: [InsightItem]
+    public let recommendations: [String]
+    public let provider: String
+    public let model: String
+    public let disclaimer: String
+    public let generatedAt: String
+}

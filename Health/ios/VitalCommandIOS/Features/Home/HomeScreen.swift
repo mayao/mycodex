@@ -7,6 +7,8 @@ struct HomeScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
     @StateObject private var viewModel = HomeViewModel()
     @State private var activeSheet: HomeSheetDestination?
+    @State private var showMedicalExamInsight = false
+    @State private var showGeneticInsight = false
 
     var body: some View {
         NavigationStack {
@@ -66,18 +68,62 @@ struct HomeScreen: View {
                                 )
                             }
                             if !hasGene {
-                                uploadPromptCard(
-                                    title: "基因健康维度",
-                                    message: "上传基因检测报告后，可解锁遗传背景分析和个性化健康建议。",
-                                    icon: "allergens"
-                                )
+                                Button { showGeneticInsight = true } label: {
+                                    uploadPromptCard(
+                                        title: "基因健康维度",
+                                        message: "上传基因检测报告后，可解锁遗传背景分析和个性化健康建议。",
+                                        icon: "allergens"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            } else {
+                                Button { showGeneticInsight = true } label: {
+                                    HStack {
+                                        Image(systemName: "allergens")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.teal)
+                                        Text("查看基因健康洞察分析")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(.teal)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.teal.opacity(0.6))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(Color.teal.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
                             }
                             if !hasAnnualExam && hasAIOverview {
-                                uploadPromptCard(
-                                    title: "年度体检报告",
-                                    message: "上传体检报告可追踪关键指标的年度变化趋势。",
-                                    icon: "heart.text.clipboard"
-                                )
+                                Button { showMedicalExamInsight = true } label: {
+                                    uploadPromptCard(
+                                        title: "年度体检报告",
+                                        message: "上传体检报告可追踪关键指标的年度变化趋势。",
+                                        icon: "heart.text.clipboard"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            } else if hasAnnualExam {
+                                Button { showMedicalExamInsight = true } label: {
+                                    HStack {
+                                        Image(systemName: "heart.text.clipboard")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.teal)
+                                        Text("查看体检报告 AI 洞察分析")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(.teal)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption.weight(.semibold))
+                                            .foregroundStyle(.teal.opacity(0.6))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 10)
+                                    .background(Color.teal.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
                             }
                             if !hasReports && hasAIOverview {
                                 uploadPromptCard(
@@ -124,6 +170,20 @@ struct HomeScreen: View {
         }
         .sheet(item: $activeSheet) { destination in
             detailSheet(for: destination)
+        }
+        .sheet(isPresented: $showMedicalExamInsight) {
+            DocumentInsightSheet(
+                title: "体检报告洞察分析",
+                insightType: "medical_exam",
+                settings: settings
+            )
+        }
+        .sheet(isPresented: $showGeneticInsight) {
+            DocumentInsightSheet(
+                title: "基因健康洞察分析",
+                insightType: "genetic",
+                settings: settings
+            )
         }
     }
 
@@ -3014,6 +3074,227 @@ private struct ReminderCapsuleCard: View {
             return "中"
         case .high:
             return "高"
+        }
+    }
+}
+
+// MARK: - Document Insight Sheet
+
+private struct DocumentInsightSheet: View {
+    let title: String
+    let insightType: String
+    @ObservedObject var settings: AppSettingsStore
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var result: DocumentInsightResponse?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if isLoading {
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .scaleEffect(1.4)
+                        Text("AI 正在分析您的健康数据…")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text("通常需要 15-30 秒")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let error = errorMessage {
+                    VStack(spacing: 16) {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.largeTitle)
+                            .foregroundStyle(.orange)
+                        Text("分析暂时不可用")
+                            .font(.headline)
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button("重试") {
+                            Task { await loadInsights() }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.teal)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if let result = result {
+                    insightContent(result)
+                }
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") { dismiss() }
+                }
+            }
+        }
+        .task { await loadInsights() }
+    }
+
+    @ViewBuilder
+    private func insightContent(_ data: DocumentInsightResponse) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+
+                // Summary card
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("AI 综合分析", systemImage: "brain.head.profile")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.teal)
+                    Text(data.summary)
+                        .font(.subheadline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.teal.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                // Urgent items
+                if !data.urgentItems.isEmpty {
+                    sectionHeader("需立即关注", icon: "exclamationmark.circle.fill", color: .red)
+                    ForEach(data.urgentItems) { item in
+                        InsightItemCard(item: item, accentColor: .red)
+                    }
+                }
+
+                // Attention items
+                if !data.attentionItems.isEmpty {
+                    sectionHeader("需要关注", icon: "eye.circle.fill", color: .orange)
+                    ForEach(data.attentionItems) { item in
+                        InsightItemCard(item: item, accentColor: .orange)
+                    }
+                }
+
+                // Positive items
+                if !data.positiveItems.isEmpty {
+                    sectionHeader("好消息", icon: "checkmark.circle.fill", color: .green)
+                    ForEach(data.positiveItems) { item in
+                        InsightItemCard(item: item, accentColor: .green)
+                    }
+                }
+
+                // Recommendations
+                if !data.recommendations.isEmpty {
+                    sectionHeader("行动建议", icon: "lightbulb.fill", color: .teal)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(data.recommendations.enumerated()), id: \.offset) { index, rec in
+                            HStack(alignment: .top, spacing: 10) {
+                                Text("\(index + 1)")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 20, height: 20)
+                                    .background(Color.teal, in: Circle())
+                                Text(rec)
+                                    .font(.subheadline)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Color.teal.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+
+                // Disclaimer
+                if !data.disclaimer.isEmpty {
+                    Text(data.disclaimer)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 4)
+                }
+
+                // Provider info
+                HStack {
+                    Spacer()
+                    Text("由 \(data.provider) / \(data.model) 生成")
+                        .font(.caption2)
+                        .foregroundStyle(.quaternary)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.appGroupedBackground)
+    }
+
+    @ViewBuilder
+    private func sectionHeader(_ text: String, icon: String, color: Color) -> some View {
+        Label(text, systemImage: icon)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.top, 4)
+    }
+
+    private func loadInsights() async {
+        isLoading = true
+        errorMessage = nil
+        do {
+            let client = try settings.makeClient()
+            result = try await client.fetchDocumentInsights(type: insightType)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+}
+
+private struct InsightItemCard: View {
+    let item: InsightItem
+    let accentColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top) {
+                Text(item.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                if let action = item.action {
+                    Text(action)
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(accentColor.opacity(0.12), in: Capsule())
+                        .foregroundStyle(accentColor)
+                }
+            }
+            Text(item.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if let metrics = item.relatedMetrics, !metrics.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(metrics, id: \.self) { metric in
+                        Text(metric)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(accentColor.opacity(0.08), in: Capsule())
+                            .foregroundStyle(accentColor.opacity(0.7))
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .background(accentColor.opacity(0.04), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(accentColor.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private var severityText: String {
+        switch item.severity {
+        case "high": return "紧急"
+        case "medium": return "关注"
+        case "low": return "提示"
+        default: return "积极"
         }
     }
 }
