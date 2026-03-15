@@ -7,17 +7,17 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/bin/bash</string>
-		<string>/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/scripts/start_on_phone.sh</string>
+		<string>/Users/xmly/Projects/MyCodex/market_dashboard/scripts/start_on_phone.sh</string>
 	</array>
 	<key>WorkingDirectory</key>
-		<string>/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard</string>
+		<string>/Users/xmly/Projects/MyCodex/market_dashboard</string>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
 	<true/>
 	<key>StandardOutPath</key>
-		<string>/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/output/invest-backend.stdout.log</string>
+		<string>/Users/xmly/Projects/MyCodex/market_dashboard/output/invest-backend.stdout.log</string>
 	<key>StandardErrorPath</key>
-		<string>/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/output/invest-backend.stderr.log</string>
+		<string>/Users/xmly/Projects/MyCodex/market_dashboard/output/invest-backend.stderr.log</string>
 </dict>
 </plist>

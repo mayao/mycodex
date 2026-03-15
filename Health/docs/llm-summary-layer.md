@@ -37,7 +37,7 @@ LLM 层只能读取结构化输入：
 
 实现位置：
 
-- [prompt-templates.ts](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/src/server/llm/prompt-templates.ts)
+- [prompt-templates.ts](Health/src/server/llm/prompt-templates.ts)
 
 ## 输出结构
 

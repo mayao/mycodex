@@ -58,7 +58,7 @@ python3 scripts/configure_ai_service.py
 
 如果后续要给其他机器、真机或者云端环境使用，这个 Python 后端需要单独运行和部署。
 
-最小部署说明见 [docs/deployment.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/market_dashboard/docs/deployment.md)。
+最小部署说明见 [docs/deployment.md](docs/deployment.md)。
 
 ## Validate
 ```bash
@@ -83,7 +83,7 @@ cd market_dashboard/ios
   - `GET /api/mobile/stock-detail?symbol=...`
   - `POST /api/mobile/upload-statement`
 
-工程说明见 [ios/README.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/market_dashboard/ios/README.md)。
+工程说明见 [ios/README.md](ios/README.md)。
 
 如果你要直接安装 iOS 客户端：
 

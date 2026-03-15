@@ -45,4 +45,4 @@ npm run dev:lan
 - 独立移动端代码: `ios/VitalCommandIOS/`
 - 共享移动端适配层: `ios/VitalCommandMobileCore/`
 
-详细说明见 [ios-client-architecture.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/docs/ios-client-architecture.md)。
+详细说明见 [ios-client-architecture.md](Health/docs/ios-client-architecture.md)。

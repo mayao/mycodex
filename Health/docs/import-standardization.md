@@ -92,18 +92,18 @@
 
 位于：
 
-- [samples/import/annual_exam_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/annual_exam_sample.csv)
-- [samples/import/blood_test_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/blood_test_sample.csv)
-- [samples/import/body_scale_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/body_scale_sample.csv)
-- [samples/import/activity_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/activity_sample.csv)
-- [samples/import/activity_invalid_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/activity_invalid_sample.csv)
+- [samples/import/annual_exam_sample.csv](Health/samples/import/annual_exam_sample.csv)
+- [samples/import/blood_test_sample.csv](Health/samples/import/blood_test_sample.csv)
+- [samples/import/body_scale_sample.csv](Health/samples/import/body_scale_sample.csv)
+- [samples/import/activity_sample.csv](Health/samples/import/activity_sample.csv)
+- [samples/import/activity_invalid_sample.csv](Health/samples/import/activity_invalid_sample.csv)
 
 模板文件位于：
 
-- [samples/import/templates/annual_exam_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/annual_exam_template.csv)
-- [samples/import/templates/blood_test_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/blood_test_template.csv)
-- [samples/import/templates/body_scale_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/body_scale_template.csv)
-- [samples/import/templates/activity_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/activity_template.csv)
+- [samples/import/templates/annual_exam_template.csv](Health/samples/import/templates/annual_exam_template.csv)
+- [samples/import/templates/blood_test_template.csv](Health/samples/import/templates/blood_test_template.csv)
+- [samples/import/templates/body_scale_template.csv](Health/samples/import/templates/body_scale_template.csv)
+- [samples/import/templates/activity_template.csv](Health/samples/import/templates/activity_template.csv)
 
 ## 导入结果接口
 

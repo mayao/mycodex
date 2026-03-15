@@ -32,7 +32,7 @@
 
 参考文档：
 
-- [docs/import-standardization.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/docs/import-standardization.md)
+- [docs/import-standardization.md](docs/import-standardization.md)
 
 ### 阶段 4: 规则分析引擎
 
@@ -45,7 +45,7 @@
 
 参考文档：
 
-- [docs/rule-analysis-engine.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/docs/rule-analysis-engine.md)
+- [docs/rule-analysis-engine.md](docs/rule-analysis-engine.md)
 
 ### 阶段 5: LLM 洞察层
 
@@ -60,7 +60,7 @@ LLM 输入只来自结构化 insights。当前支持：
 
 参考文档：
 
-- [docs/llm-summary-layer.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/docs/llm-summary-layer.md)
+- [docs/llm-summary-layer.md](docs/llm-summary-layer.md)
 
 ### 阶段 6 / 7: 首页与报告页
 
@@ -93,7 +93,7 @@ LLM 输入只来自结构化 insights。当前支持：
 
 参考文档：
 
-- [docs/privacy-security.md](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/docs/privacy-security.md)
+- [docs/privacy-security.md](docs/privacy-security.md)
 
 ## 技术栈
 
@@ -218,18 +218,18 @@ HEALTH_LOG_LEVEL=error
 
 导入样例：
 
-- [samples/import/annual_exam_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/annual_exam_sample.csv)
-- [samples/import/blood_test_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/blood_test_sample.csv)
-- [samples/import/body_scale_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/body_scale_sample.csv)
-- [samples/import/activity_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/activity_sample.csv)
-- [samples/import/activity_invalid_sample.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/activity_invalid_sample.csv)
+- [samples/import/annual_exam_sample.csv](samples/import/annual_exam_sample.csv)
+- [samples/import/blood_test_sample.csv](samples/import/blood_test_sample.csv)
+- [samples/import/body_scale_sample.csv](samples/import/body_scale_sample.csv)
+- [samples/import/activity_sample.csv](samples/import/activity_sample.csv)
+- [samples/import/activity_invalid_sample.csv](samples/import/activity_invalid_sample.csv)
 
 导入模板：
 
-- [samples/import/templates/annual_exam_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/annual_exam_template.csv)
-- [samples/import/templates/blood_test_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/blood_test_template.csv)
-- [samples/import/templates/body_scale_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/body_scale_template.csv)
-- [samples/import/templates/activity_template.csv](/Users/xmly/Library/Mobile%20Documents/com~apple~CloudDocs/MyCodex/Health/samples/import/templates/activity_template.csv)
+- [samples/import/templates/annual_exam_template.csv](samples/import/templates/annual_exam_template.csv)
+- [samples/import/templates/blood_test_template.csv](samples/import/templates/blood_test_template.csv)
+- [samples/import/templates/body_scale_template.csv](samples/import/templates/body_scale_template.csv)
+- [samples/import/templates/activity_template.csv](samples/import/templates/activity_template.csv)
 
 ## 隐私与安全
 

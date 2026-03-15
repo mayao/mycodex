@@ -7,7 +7,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/Applications/Xcode.app/Contents/Developer/usr/bin/python3</string>
-		<string>/Users/xmly/Library/Mobile Documents/com~apple~CloudDocs/MyCodex/market_dashboard/app.py</string>
+		<string>/Users/xmly/Projects/MyCodex/market_dashboard/app.py</string>
 		<string>--public</string>
 		<string>--port</string>
 		<string>8008</string>
