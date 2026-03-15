@@ -27,6 +27,7 @@ struct ReportsScreen: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
                             reportHeader
+                            planProgressSection
 
                             ForEach(viewModel.visibleReports) { report in
                                 NavigationLink {
@@ -58,8 +59,63 @@ struct ReportsScreen: View {
         do {
             let client = try settings.makeClient()
             await viewModel.load(using: client)
+            await viewModel.loadPlanProgress(using: client)
         } catch {
             viewModel.setError(error.localizedDescription)
+        }
+    }
+
+    @ViewBuilder
+    private var planProgressSection: some View {
+        if viewModel.isLoadingPlanProgress {
+            SectionCard(title: "本周计划进度", subtitle: nil) {
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            }
+        } else if let progress = viewModel.planProgress {
+            SectionCard(title: "本周计划进度", subtitle: "\(progress.periodStart) — \(progress.periodEnd)") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("整体完成率")
+                            .font(.subheadline.weight(.medium))
+                        Spacer()
+                        Text("\(Int(progress.overallRate * 100))%")
+                            .font(.headline.weight(.bold))
+                            .foregroundStyle(progress.overallRate >= 0.8 ? .green : progress.overallRate >= 0.5 ? .orange : .red)
+                    }
+
+                    ProgressView(value: progress.overallRate)
+                        .tint(progress.overallRate >= 0.8 ? .green : progress.overallRate >= 0.5 ? .orange : .red)
+
+                    if !progress.aiNudge.isEmpty {
+                        Text(progress.aiNudge)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 4)
+                    }
+
+                    if !progress.items.isEmpty {
+                        Divider()
+                        ForEach(progress.items) { item in
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(item.title)
+                                        .font(.caption.weight(.semibold))
+                                        .lineLimit(1)
+                                    Text(item.dataBackedNote)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Text("\(item.completedDays)/\(item.expectedDays)")
+                                    .font(.caption.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(item.completionRate >= 0.8 ? .green : item.completionRate >= 0.5 ? .orange : .red)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

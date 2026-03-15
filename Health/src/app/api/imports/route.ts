@@ -20,7 +20,8 @@ const supportedImporters = new Set<ImporterKey>([
   "annual_exam",
   "blood_test",
   "body_scale",
-  "activity"
+  "activity",
+  "genetic"
 ]);
 
 function toSafeFilename(filename: string): string {

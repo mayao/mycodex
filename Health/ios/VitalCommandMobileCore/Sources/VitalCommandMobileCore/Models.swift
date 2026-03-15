@@ -52,6 +52,7 @@ public enum ImporterKey: String, Codable, CaseIterable, Sendable, Identifiable {
     case bloodTest = "blood_test"
     case bodyScale = "body_scale"
     case activity
+    case genetic
 
     public var id: String { rawValue }
 }
@@ -996,6 +997,47 @@ public struct SyncTriggerResponse: Codable, Sendable {
     public let serverId: String
     public let peers: [SyncPeer]
     public let recentLogs: [SyncLogEntry]
+}
+
+// MARK: - AI Model Status
+
+public struct AIModelProviderStatus: Codable, Sendable, Identifiable {
+    public let name: String
+    public let label: String
+    public let isConfigured: Bool
+    public let isPrimary: Bool
+    public let model: String?
+    public var id: String { name }
+}
+
+public struct AIModelStatusResponse: Codable, Sendable {
+    public let providers: [AIModelProviderStatus]
+    public let activeProvider: String?
+}
+
+public struct SuggestedQuestionsResponse: Codable, Sendable {
+    public let questions: [String]
+    public let generatedAt: String
+}
+
+public struct PlanItemProgress: Codable, Sendable, Identifiable {
+    public var id: String { planItemId }
+    public let planItemId: String
+    public let title: String
+    public let dimension: String
+    public let frequency: String
+    public let expectedDays: Int
+    public let completedDays: Int
+    public let completionRate: Double
+    public let dataBackedNote: String
+}
+
+public struct PlanProgressReport: Codable, Sendable {
+    public let periodStart: String
+    public let periodEnd: String
+    public let items: [PlanItemProgress]
+    public let overallRate: Double
+    public let aiNudge: String
 }
 
 // MARK: - Document AI Insights

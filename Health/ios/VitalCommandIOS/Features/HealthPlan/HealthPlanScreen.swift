@@ -10,6 +10,7 @@ struct HealthPlanScreen: View {
     @State private var planItemToEdit: HealthPlanItem?
     @State private var enableReminder = true
     @State private var enableCalendar = true
+    @State private var showAcceptToast = false
 
     var body: some View {
         NavigationStack {
@@ -47,6 +48,22 @@ struct HealthPlanScreen: View {
             }
             .navigationTitle("健康计划")
             .appInlineNavigationTitle()
+        }
+        .overlay(alignment: .top) {
+            if showAcceptToast {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Text("计划已成功添加！")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 4)
+                .padding(.top, 16)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .task(id: settings.dashboardReloadKey) {
             await reload()
@@ -101,6 +118,10 @@ struct HealthPlanScreen: View {
                         if let item = await viewModel.acceptSuggestion(request, using: client) {
                             acceptedPlanItem = item
                             showPostAcceptOptions = true
+                            withAnimation { showAcceptToast = true }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                                withAnimation { showAcceptToast = false }
+                            }
                         }
                     }
                 }

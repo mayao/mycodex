@@ -6,6 +6,8 @@ import VitalCommandMobileCore
 final class ReportsViewModel: ObservableObject {
     @Published private(set) var state: LoadState<ReportsIndexData> = .idle
     @Published var selectedKind: ReportKind = .weekly
+    @Published private(set) var planProgress: PlanProgressReport?
+    @Published private(set) var isLoadingPlanProgress = false
 
     func setError(_ message: String) {
         state = .failed(message)
@@ -23,6 +25,13 @@ final class ReportsViewModel: ObservableObject {
         } catch {
             state = .failed(error.localizedDescription)
         }
+    }
+
+    func loadPlanProgress(using client: HealthAPIClient) async {
+        guard !isLoadingPlanProgress else { return }
+        isLoadingPlanProgress = true
+        defer { isLoadingPlanProgress = false }
+        planProgress = try? await client.fetchPlanProgress()
     }
 
     var visibleReports: [HealthReportSnapshotRecord] {

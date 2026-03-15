@@ -318,7 +318,7 @@ async function callGeminiForInsights(
   return { text, model };
 }
 
-async function callLLMWithFallbacks(
+export async function callLLMWithFallbacks(
   prompt: string
 ): Promise<{ text: string; provider: string; model: string }> {
   const env = getAppEnv();

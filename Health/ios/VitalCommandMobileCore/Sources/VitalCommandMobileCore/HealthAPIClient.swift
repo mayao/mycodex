@@ -257,6 +257,18 @@ public final class HealthAPIClient: @unchecked Sendable {
         }
     }
 
+    public func fetchModelStatus() async throws -> AIModelStatusResponse {
+        try await send(path: "api/ai/model-status")
+    }
+
+    public func fetchSuggestedQuestions() async throws -> SuggestedQuestionsResponse {
+        try await send(path: "api/ai/suggested-questions")
+    }
+
+    public func fetchPlanProgress() async throws -> PlanProgressReport {
+        try await send(path: "api/health/plan-progress")
+    }
+
     private func makeRequest(path: String, method: String) -> URLRequest {
         let url = configuration.baseURL.appending(path: path)
         var request = URLRequest(url: url)

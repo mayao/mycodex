@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getAppEnv } from "../config/env";
 import { getDatabase } from "../db/sqlite";
 import { getHealthHomePageData } from "./health-home-service";
+import { callLLMWithFallbacks } from "./document-insight-ai-service";
 
 const chatMessageSchema = z.object({
   id: z.string().optional(),
@@ -183,26 +184,17 @@ async function requestOpenAICompatibleReply(
 async function requestProviderReply(
   request: HealthAIChatRequest,
   payload: Awaited<ReturnType<typeof getHealthHomePageData>>
-) {
-  const env = getAppEnv();
-
-  if (!env.HEALTH_LLM_API_KEY) {
+): Promise<{ provider: string; model: string; content: string } | null> {
+  const systemPrompt = buildSystemPrompt(payload);
+  const latestUserMessage = [...request.messages].reverse().find((m) => m.role === "user");
+  const userMessage = latestUserMessage?.content ?? "";
+  const fullPrompt = `${systemPrompt}\n\n用户问题：${userMessage}`;
+  try {
+    const result = await callLLMWithFallbacks(fullPrompt);
+    return { provider: result.provider, model: result.model, content: result.text };
+  } catch {
     return null;
   }
-
-  if (env.HEALTH_LLM_PROVIDER === "anthropic") {
-    const model = env.HEALTH_LLM_MODEL ?? "claude-sonnet-4-20250514";
-    return requestAnthropicReply(request, payload, env.HEALTH_LLM_API_KEY, model);
-  }
-
-  if (env.HEALTH_LLM_PROVIDER === "openai-compatible" && env.HEALTH_LLM_BASE_URL) {
-    const model = env.HEALTH_LLM_MODEL ?? "gpt-4.1-mini";
-    return requestOpenAICompatibleReply(
-      request, payload, env.HEALTH_LLM_API_KEY, env.HEALTH_LLM_BASE_URL, model
-    );
-  }
-
-  return null;
 }
 
 function buildFallbackReply(
@@ -340,4 +332,38 @@ export async function replyWithHealthAI(
     provider: "mock",
     model: "healthai-chat-fallback-v1"
   };
+}
+
+export interface SuggestedQuestionsResponse {
+  questions: string[];
+  generatedAt: string;
+}
+
+export async function getSuggestedQuestions(
+  userId: string,
+  database: DatabaseSync = getDatabase()
+): Promise<SuggestedQuestionsResponse> {
+  const questions: string[] = [];
+  try {
+    const payload = await getHealthHomePageData(database, userId);
+    const attention = (payload.overviewDigest.needsAttention ?? []) as Array<{ text?: string } | string>;
+    for (const item of attention.slice(0, 3)) {
+      const text = typeof item === "string" ? item : (item.text ?? "");
+      if (text.includes("LDL") || text.includes("胆固醇")) questions.push("我的LDL胆固醇偏高，该如何通过饮食改善？");
+      else if (text.includes("血压") || text.includes("收缩压")) questions.push("血压偏高时有哪些生活方式调整建议？");
+      else if (text.includes("血糖") || text.includes("葡萄糖")) questions.push("血糖偏高应该如何控制饮食和运动？");
+      else if (text.includes("体重") || text.includes("BMI")) questions.push("如何制定适合我体型的减重计划？");
+      else if (text.includes("尿酸")) questions.push("尿酸偏高需要注意哪些饮食禁忌？");
+    }
+  } catch { /* ignore */ }
+
+  const fallbacks = [
+    "我整体的健康状况如何，有哪些需要特别关注的？",
+    "如何制定适合我的运动和饮食计划？",
+    "我的基因数据对健康管理有什么指导意义？",
+  ];
+  for (const q of fallbacks) {
+    if (!questions.includes(q) && questions.length < 5) questions.push(q);
+  }
+  return { questions: questions.slice(0, 6), generatedAt: new Date().toISOString() };
 }

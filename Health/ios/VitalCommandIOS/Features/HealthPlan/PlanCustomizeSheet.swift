@@ -11,6 +11,9 @@ struct PlanCustomizeSheet: View {
     @State private var timeHint: String
     @State private var targetValueText: String
     @State private var targetUnit: String
+    @State private var isConfirming = false
+
+    private let timePresets = ["早晨", "午间", "傍晚", "晚间", "自定义"]
 
     init(suggestion: HealthSuggestion? = nil, planItem: HealthPlanItem? = nil, onConfirm: @escaping (PlanFrequency, String, Double?, String?) -> Void) {
         self.suggestion = suggestion
@@ -45,16 +48,57 @@ struct PlanCustomizeSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("频率") {
-                    Picker("执行频率", selection: $frequency) {
-                        Text("每天").tag(PlanFrequency.daily)
-                        Text("每周").tag(PlanFrequency.weekly)
-                        Text("一次性").tag(PlanFrequency.once)
+                Section("执行频率") {
+                    HStack(spacing: 8) {
+                        ForEach([PlanFrequency.daily, .weekly, .once], id: \.self) { freq in
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    frequency = freq
+                                }
+                            } label: {
+                                Text(freq.label)
+                                    .font(.subheadline.weight(.semibold))
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        frequency == freq ? Color.teal : Color(UIColor.secondarySystemBackground),
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    )
+                                    .foregroundStyle(frequency == freq ? Color.white : Color.primary)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .pickerStyle(.segmented)
+                    .padding(.vertical, 4)
                 }
 
                 Section("提醒时间") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(timePresets, id: \.self) { preset in
+                                Button {
+                                    if preset == "自定义" {
+                                        // leave timeHint for manual entry
+                                    } else {
+                                        timeHint = preset
+                                    }
+                                } label: {
+                                    Text(preset)
+                                        .font(.caption.weight(.medium))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(
+                                            timeHint == preset ? Color.teal : Color(UIColor.secondarySystemBackground),
+                                            in: Capsule()
+                                        )
+                                        .foregroundStyle(timeHint == preset ? Color.white : Color.primary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+
                     TextField("如 07:00 或 morning / evening", text: $timeHint)
                 }
 
@@ -78,12 +122,25 @@ struct PlanCustomizeSheet: View {
                     Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("确认") {
+                    Button {
+                        withAnimation(.spring(duration: 0.3)) {
+                            isConfirming = true
+                        }
                         let tv = Double(targetValueText)
                         onConfirm(frequency, timeHint, tv, targetUnit.isEmpty ? nil : targetUnit)
-                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            dismiss()
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isConfirming {
+                                ProgressView().controlSize(.small)
+                            }
+                            Text("确认")
+                        }
                     }
                     .fontWeight(.semibold)
+                    .disabled(isConfirming)
                 }
             }
         }

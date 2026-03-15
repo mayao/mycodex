@@ -1957,6 +1957,7 @@ private struct AIChatScreen: View {
     @State private var errorMessage: String?
     @State private var showHistory = false
     @State private var didLoadHistory = false
+    @State private var remoteSuggestedQuestions: [String] = []
     @StateObject private var speechManager = SpeechRecognizerManager()
     @StateObject private var historyManager = ChatHistoryManager.shared
 
@@ -1964,6 +1965,9 @@ private struct AIChatScreen: View {
     private let darkText = Color(red: 0.05, green: 0.13, blue: 0.2)
 
     private var suggestedQuestions: [String] {
+        if !remoteSuggestedQuestions.isEmpty {
+            return remoteSuggestedQuestions
+        }
         guard let payload else {
             return [
                 "我目前最该关注什么健康指标？",
@@ -2076,6 +2080,12 @@ private struct AIChatScreen: View {
             if !didLoadHistory, let latest = historyManager.conversations.first {
                 loadConversation(latest)
                 didLoadHistory = true
+            }
+            Task {
+                guard let client = try? settings.makeClient() else { return }
+                if let response = try? await client.fetchSuggestedQuestions() {
+                    remoteSuggestedQuestions = response.questions
+                }
             }
         }
         .onChange(of: speechManager.transcript) {
@@ -2205,6 +2215,28 @@ private struct AIChatScreen: View {
 
     private var inputBar: some View {
         VStack(spacing: 8) {
+            if !suggestedQuestions.isEmpty && draft.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(suggestedQuestions, id: \.self) { question in
+                            Button { draft = question } label: {
+                                Text(question)
+                                    .font(.caption.weight(.medium))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .padding(.horizontal, 12).padding(.vertical, 8)
+                                    .frame(maxWidth: 200, alignment: .leading)
+                                    .background(Color.teal.opacity(0.08), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                    .foregroundStyle(Color.teal)
+                                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.teal.opacity(0.2), lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.bottom, 4)
+                }
+            }
+
             HStack(alignment: .bottom, spacing: 10) {
                 // Microphone button
                 Button {

@@ -369,5 +369,14 @@ export const importerSpecs: Record<ImporterSpec["key"], ImporterSpec> = {
         normalizer: "heart_rate"
       }
     ]
+  },
+  genetic: {
+    key: "genetic",
+    sourceType: "genetic_report",
+    sourceName: "基因报告导入",
+    taskType: "genetic_import",
+    sampleTimeAliases: ["sample_time", "日期", "检测日期"],
+    noteAliases: ["notes", "备注"],
+    fieldMappings: []
   }
 };

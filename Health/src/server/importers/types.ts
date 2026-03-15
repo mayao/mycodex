@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export type ImporterKey = "annual_exam" | "blood_test" | "body_scale" | "activity";
+export type ImporterKey = "annual_exam" | "blood_test" | "body_scale" | "activity" | "genetic";
 
 export type UnifiedMetricCategory =
   | "body_composition"

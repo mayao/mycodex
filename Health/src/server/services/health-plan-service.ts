@@ -789,6 +789,70 @@ export interface PlanReviewData {
   ai_comment: string;
 }
 
+export interface PlanProgressReport {
+  periodStart: string;
+  periodEnd: string;
+  items: Array<{
+    planItemId: string;
+    title: string;
+    dimension: string;
+    frequency: string;
+    expectedDays: number;
+    completedDays: number;
+    completionRate: number;
+    dataBackedNote: string;
+  }>;
+  overallRate: number;
+  aiNudge: string;
+}
+
+export function getPlanProgressReport(
+  userId: string,
+  database: DatabaseSync = getDatabase()
+): PlanProgressReport {
+  const today = new Date();
+  const periodEnd = today.toISOString().slice(0, 10);
+  const periodStart = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  let review: PlanReviewData;
+  try {
+    review = getPlanReviewForPeriod(userId, periodStart, periodEnd, database);
+  } catch {
+    return {
+      periodStart,
+      periodEnd,
+      items: [],
+      overallRate: 0,
+      aiNudge: "暂无计划数据，先去「健康计划」页面生成建议并接受吧！"
+    };
+  }
+
+  const items = review.items.map((item) => ({
+    planItemId: item.plan_item_id,
+    title: item.title,
+    dimension: item.dimension,
+    frequency: item.frequency,
+    expectedDays: item.expected_checks,
+    completedDays: item.actual_completed,
+    completionRate: item.completion_rate,
+    dataBackedNote: item.completion_rate >= 0.8 ? "执行良好，继续保持！" : item.completion_rate >= 0.5 ? "完成了一半以上，再努力一把！" : "完成率偏低，尝试降低难度或调整时间。"
+  }));
+
+  const overallRate = Math.round(review.overall_completion_rate * 100) / 100;
+  let aiNudge = "";
+  if (items.length === 0) {
+    aiNudge = "还没有活跃计划，去设置你的健康目标吧！";
+  } else if (overallRate >= 0.8) {
+    aiNudge = "本周执行非常棒！坚持下去，健康就在这些细节里。";
+  } else if (overallRate >= 0.5) {
+    aiNudge = "本周完成了一半以上，保持节奏，慢慢提升！";
+  } else {
+    aiNudge = "本周有些计划未能完成，试着把计划拆小一点，降低门槛！";
+  }
+
+  return { periodStart, periodEnd, items, overallRate, aiNudge };
+}
+
 export function getPlanReviewForPeriod(
   userId: string,
   periodStart: string,

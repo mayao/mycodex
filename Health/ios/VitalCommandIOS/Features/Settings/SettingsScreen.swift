@@ -11,6 +11,8 @@ struct SettingsScreen: View {
     @State private var syncError: String?
     @State private var serverStatuses: [String: Bool] = [:]
     @State private var checkingServers: Set<String> = []
+    @State private var modelStatus: AIModelStatusResponse?
+    @State private var isLoadingModelStatus = false
 
     private let tealColor = Color(hex: "#0f766e") ?? .teal
 
@@ -60,6 +62,58 @@ struct SettingsScreen: View {
                 Text("HealthAI 展示首页结论、趋势、报告和数据同步状态。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+
+            Section("AI 模型状态") {
+                if isLoadingModelStatus {
+                    HStack {
+                        ProgressView().scaleEffect(0.8)
+                        Text("正在检测...").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else if let status = modelStatus {
+                    ForEach(status.providers) { provider in
+                        HStack(spacing: 10) {
+                            Circle()
+                                .fill(provider.isConfigured ? (provider.isPrimary ? Color.green : Color.teal) : Color.gray.opacity(0.4))
+                                .frame(width: 8, height: 8)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text(provider.label)
+                                        .font(.subheadline.weight(.medium))
+                                    if provider.isPrimary && provider.isConfigured {
+                                        Text("主要")
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 2)
+                                            .background(Color.green, in: Capsule())
+                                    }
+                                }
+                                if let model = provider.model {
+                                    Text(model)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("未配置")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: provider.isConfigured ? "checkmark.circle.fill" : "xmark.circle")
+                                .foregroundStyle(provider.isConfigured ? .green : .secondary)
+                        }
+                    }
+                    Button("刷新模型状态") {
+                        Task { await loadModelStatus() }
+                    }
+                    .font(.subheadline)
+                } else {
+                    Button("检测 AI 模型") {
+                        Task { await loadModelStatus() }
+                    }
+                    .font(.subheadline)
+                }
             }
 
             // Server address section with status
@@ -281,6 +335,7 @@ struct SettingsScreen: View {
             Task {
                 await loadSyncStatus()
                 await checkAllServers()
+                await loadModelStatus()
             }
         }
         .onDisappear { discovery.stopScanning() }
@@ -292,6 +347,17 @@ struct SettingsScreen: View {
             }
         } message: {
             Text("退出后需要重新验证身份登录")
+        }
+    }
+
+    // MARK: - AI Model Status
+
+    private func loadModelStatus() async {
+        guard !isLoadingModelStatus else { return }
+        isLoadingModelStatus = true
+        defer { isLoadingModelStatus = false }
+        if let client = try? settings.makeClient(token: authManager.token) {
+            modelStatus = try? await client.fetchModelStatus()
         }
     }
 

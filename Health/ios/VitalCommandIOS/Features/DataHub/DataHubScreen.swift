@@ -14,6 +14,7 @@ struct DataHubScreen: View {
     @State private var lastNotifiedImportTaskID: String?
     @State private var lastNotifiedHealthSyncTaskID: String?
     @State private var showAddDataSheet = false
+    @State private var selectedDataType: DataUploadType? = nil
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -93,49 +94,103 @@ struct DataHubScreen: View {
     // MARK: - Add Data Section
 
     private var addDataSection: some View {
-        SectionCard(title: "添加数据", subtitle: "选择一种方式，快速丰富档案数据、健康数据、就医资料统一管理。") {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 14),
-                    GridItem(.flexible(), spacing: 14)
-                ],
-                spacing: 14
-            ) {
-                DataOptionCard(
-                    icon: "camera.fill",
-                    title: "拍照上传",
-                    subtitle: "拍摄就医资料上传",
-                    gradientColors: [Color(hex: "#3b82f6") ?? .blue, Color(hex: "#2563eb") ?? .blue]
-                ) {
-                    isCameraPresented = true
+        SectionCard(title: "添加数据", subtitle: "选择数据类型，再选择上传方式。") {
+            // Layer 1: Type chips
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(DataUploadType.allCases) { type in
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedDataType = selectedDataType == type ? nil : type
+                            }
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: type.icon)
+                                    .font(.caption.weight(.semibold))
+                                Text(type.rawValue)
+                                    .font(.caption.weight(.semibold))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                selectedDataType == type
+                                    ? Color.teal
+                                    : Color(red: 0.95, green: 0.97, blue: 0.96),
+                                in: Capsule()
+                            )
+                            .foregroundStyle(selectedDataType == type ? Color.white : Color(red: 0.05, green: 0.13, blue: 0.2))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(.horizontal, 2)
+                .padding(.bottom, 4)
+            }
 
-                DataOptionCard(
-                    icon: "photo.on.rectangle",
-                    title: "上传图片",
-                    subtitle: "就医资料图片上传",
-                    gradientColors: [Color(hex: "#8b5cf6") ?? .purple, Color(hex: "#7c3aed") ?? .purple]
+            // Layer 2: Upload method grid (contextual)
+            if let type = selectedDataType {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 14),
+                        GridItem(.flexible(), spacing: 14)
+                    ],
+                    spacing: 14
                 ) {
-                    isPhotoPickerPresented = true
-                }
+                    if type.allowsCamera {
+                        DataOptionCard(
+                            icon: "camera.fill",
+                            title: "拍照上传",
+                            subtitle: "拍摄\(type.rawValue)文档",
+                            gradientColors: [Color(hex: "#3b82f6") ?? .blue, Color(hex: "#2563eb") ?? .blue]
+                        ) {
+                            viewModel.selectedImporter = type.importerKey
+                            isCameraPresented = true
+                        }
+                    }
 
-                DataOptionCard(
-                    icon: "doc.text.fill",
-                    title: "PDF 上传",
-                    subtitle: "选择 PDF 文件上传",
-                    gradientColors: [Color(hex: "#0f766e") ?? .teal, Color(hex: "#0d5263") ?? .cyan]
-                ) {
-                    isImporterPresented = true
-                }
+                    if type.allowsPhoto {
+                        DataOptionCard(
+                            icon: "photo.on.rectangle",
+                            title: "图片上传",
+                            subtitle: "从相册选择图片",
+                            gradientColors: [Color(hex: "#8b5cf6") ?? .purple, Color(hex: "#7c3aed") ?? .purple]
+                        ) {
+                            viewModel.selectedImporter = type.importerKey
+                            isPhotoPickerPresented = true
+                        }
+                    }
 
-                DataOptionCard(
-                    icon: "tablecells",
-                    title: "表格上传",
-                    subtitle: "CSV / Excel 数据",
-                    gradientColors: [Color(hex: "#ea580c") ?? .orange, Color(hex: "#dc2626") ?? .red]
-                ) {
-                    isImporterPresented = true
+                    if type.allowsPDF {
+                        DataOptionCard(
+                            icon: "doc.text.fill",
+                            title: "PDF 上传",
+                            subtitle: "选择 PDF 文件",
+                            gradientColors: [Color(hex: "#0f766e") ?? .teal, Color(hex: "#0d5263") ?? .cyan]
+                        ) {
+                            viewModel.selectedImporter = type.importerKey
+                            isImporterPresented = true
+                        }
+                    }
+
+                    if type.allowsCSV {
+                        DataOptionCard(
+                            icon: "tablecells",
+                            title: "表格上传",
+                            subtitle: "CSV / Excel 数据",
+                            gradientColors: [Color(hex: "#ea580c") ?? .orange, Color(hex: "#dc2626") ?? .red]
+                        ) {
+                            viewModel.selectedImporter = type.importerKey
+                            isImporterPresented = true
+                        }
+                    }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                Text("请先选择数据类型")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 12)
             }
 
             if viewModel.isSubmittingImport {
@@ -681,6 +736,39 @@ private struct ImportTaskStatusCard: View {
             "失败"
         }
     }
+}
+
+// MARK: - Data Upload Type
+
+private enum DataUploadType: String, CaseIterable, Identifiable {
+    case annualExam  = "年度体检"
+    case bloodTest   = "医院检查"
+    case bodyScale   = "体重体脂"
+    case activity    = "运动健康"
+    case genetic     = "基因报告"
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .annualExam: return "heart.text.clipboard"
+        case .bloodTest:  return "cross.vial.fill"
+        case .bodyScale:  return "scalemass.fill"
+        case .activity:   return "figure.run"
+        case .genetic:    return "allergens"
+        }
+    }
+    var importerKey: ImporterKey {
+        switch self {
+        case .annualExam: return .annualExam
+        case .bloodTest:  return .bloodTest
+        case .bodyScale:  return .bodyScale
+        case .activity:   return .activity
+        case .genetic:    return .genetic
+        }
+    }
+    var allowsCamera: Bool { self != .genetic }
+    var allowsPhoto: Bool { self != .genetic }
+    var allowsPDF: Bool { true }
+    var allowsCSV: Bool { self == .bodyScale || self == .activity || self == .genetic }
 }
 
 // MARK: - Image Picker
