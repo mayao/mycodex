@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { AnnualExamView } from "../server/domain/health-hub";
 
 function formatValue(value: number | undefined, unit: string) {
@@ -45,6 +47,9 @@ export function AnnualExamPanel({ exam }: { exam?: AnnualExamView }) {
         <div className="summary-meta">
           <span>{exam.latestRecordedAt.slice(0, 10)}</span>
           {exam.previousTitle ? <span>{exam.previousTitle}</span> : null}
+          <Link href="/insights/annual-exam" className="panel-insight-link">
+            AI 洞察分析 →
+          </Link>
         </div>
       </div>
 

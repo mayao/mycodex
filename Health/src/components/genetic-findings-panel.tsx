@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import type { GeneticFindingView } from "../server/domain/health-hub";
 
 function riskLabel(riskLevel: GeneticFindingView["riskLevel"]) {
@@ -88,6 +90,9 @@ export function GeneticFindingsPanel({
             不把基因 finding 当作结论，而是把它们作为长期背景，和近期化验、睡眠、运动一起解释。
           </p>
         </div>
+        <Link href="/insights/genetics" className="panel-insight-link">
+          AI 洞察分析 →
+        </Link>
       </div>
 
       <div className="genetic-overview-grid">
