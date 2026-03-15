@@ -8,6 +8,8 @@ struct HealthPlanScreen: View {
     @State private var showPostAcceptOptions = false
     @State private var suggestionToCustomize: HealthSuggestion?
     @State private var planItemToEdit: HealthPlanItem?
+    @State private var enableReminder = true
+    @State private var enableCalendar = true
 
     var body: some View {
         NavigationStack {
@@ -64,32 +66,25 @@ struct HealthPlanScreen: View {
         } message: {
             Text(viewModel.operationError ?? "")
         }
-        .confirmationDialog(
-            "计划已添加",
-            isPresented: $showPostAcceptOptions,
-            titleVisibility: .visible
-        ) {
-            Button("开启提醒通知") {
-                if let item = acceptedPlanItem {
-                    Task { await LocalNotificationManager.schedulePlanReminder(planItem: item) }
-                }
-            }
-            Button("添加到日历") {
-                if let item = acceptedPlanItem {
-                    Task { await CalendarIntegration.createEvent(for: item) }
-                }
-            }
-            Button("都要") {
-                if let item = acceptedPlanItem {
-                    Task {
-                        await LocalNotificationManager.schedulePlanReminder(planItem: item)
-                        await CalendarIntegration.createEvent(for: item)
+        .sheet(isPresented: $showPostAcceptOptions) {
+            if let item = acceptedPlanItem {
+                PostAcceptSheet(
+                    planItem: item,
+                    enableReminder: $enableReminder,
+                    enableCalendar: $enableCalendar,
+                    onConfirm: {
+                        Task {
+                            if enableReminder {
+                                await LocalNotificationManager.schedulePlanReminder(planItem: item)
+                            }
+                            if enableCalendar {
+                                await CalendarIntegration.createEvent(for: item)
+                            }
+                        }
+                        showPostAcceptOptions = false
                     }
-                }
+                )
             }
-            Button("跳过", role: .cancel) {}
-        } message: {
-            Text("是否需要设置提醒来帮助你坚持计划？")
         }
         .sheet(item: $suggestionToCustomize) { suggestion in
             PlanCustomizeSheet(suggestion: suggestion) { frequency, timeHint, targetValue, targetUnit in
@@ -143,55 +138,126 @@ struct HealthPlanScreen: View {
 
     @ViewBuilder
     private func progressHeader(_ dashboard: HealthPlanDashboard) -> some View {
-        SectionCard(title: "今日进度", subtitle: "坚持就是胜利。") {
-            HStack(spacing: 20) {
-                // Progress ring
-                ZStack {
-                    Circle()
-                        .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
-
-                    Circle()
-                        .trim(from: 0, to: progressFraction(dashboard))
-                        .stroke(
-                            LinearGradient(
-                                colors: [Color(hex: "#10b981") ?? .green, Color(hex: "#0d9488") ?? .teal],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                        )
-                        .rotationEffect(.degrees(-90))
-                        .animation(.easeInOut(duration: 0.5), value: dashboard.stats.todayCompleted)
-
-                    VStack(spacing: 2) {
-                        Text("\(dashboard.stats.todayCompleted)")
-                            .font(.title2.weight(.bold).monospacedDigit())
-                        Text("/\(dashboard.stats.todayTotal)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+        VStack(spacing: 12) {
+            SectionCard(title: "今日进度", subtitle: progressSubtitle(dashboard)) {
+                HStack(spacing: 20) {
+                    // Progress ring
+                    ZStack {
+                        Circle()
+                            .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
+                        Circle()
+                            .trim(from: 0, to: progressFraction(dashboard))
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color(hex: "#10b981") ?? .green, Color(hex: "#0d9488") ?? .teal],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                style: StrokeStyle(lineWidth: 8, lineCap: .round)
+                            )
+                            .rotationEffect(.degrees(-90))
+                            .animation(.easeInOut(duration: 0.5), value: dashboard.stats.todayCompleted)
+                        VStack(spacing: 2) {
+                            Text("\(dashboard.stats.todayCompleted)")
+                                .font(.title2.weight(.bold).monospacedDigit())
+                            Text("/\(dashboard.stats.todayTotal)")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+                    .frame(width: 72, height: 72)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label {
+                            Text("活跃计划 \(dashboard.stats.activeCount) 项")
+                                .font(.subheadline.weight(.medium))
+                        } icon: {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                        }
+                        Label {
+                            Text("本周完成率 \(Int(dashboard.stats.weekCompletionRate * 100))%")
+                                .font(.subheadline.weight(.medium))
+                        } icon: {
+                            Image(systemName: "chart.bar.fill")
+                                .foregroundStyle(.indigo)
+                        }
+                    }
+                    Spacer()
                 }
-                .frame(width: 72, height: 72)
+            }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Label {
-                        Text("活跃计划 \(dashboard.stats.activeCount) 项")
-                            .font(.subheadline.weight(.medium))
-                    } icon: {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                    }
+            // Weekly day dots row
+            weeklyDayDotsRow(dashboard)
+        }
+    }
 
-                    Label {
-                        Text("本周完成率 \(Int(dashboard.stats.weekCompletionRate * 100))%")
-                            .font(.subheadline.weight(.medium))
-                    } icon: {
-                        Image(systemName: "chart.bar.fill")
-                            .foregroundStyle(.indigo)
+    private func progressSubtitle(_ dashboard: HealthPlanDashboard) -> String {
+        let rate = Int(dashboard.stats.weekCompletionRate * 100)
+        if dashboard.stats.todayCompleted == dashboard.stats.todayTotal && dashboard.stats.todayTotal > 0 {
+            return "🎉 今日任务全部完成！"
+        } else if rate >= 80 {
+            return "本周表现优秀，继续保持！"
+        } else if rate >= 50 {
+            return "坚持就是胜利，加油！"
+        } else {
+            return "每天一小步，健康一大步。"
+        }
+    }
+
+    @ViewBuilder
+    private func weeklyDayDotsRow(_ dashboard: HealthPlanDashboard) -> some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        // Generate last 7 days (Mon-Sun or last 7)
+        let weekDays = (0..<7).compactMap { offset -> Date? in
+            calendar.date(byAdding: .day, value: -6 + offset, to: today)
+        }
+        let dayLabels = ["一", "二", "三", "四", "五", "六", "日"]
+
+        SectionCard(title: "本周记录", subtitle: nil) {
+            HStack(spacing: 0) {
+                ForEach(Array(weekDays.enumerated()), id: \.offset) { index, day in
+                    let isToday = calendar.isDateInToday(day)
+                    let dayOfWeek = calendar.component(.weekday, from: day) // 1=Sun
+                    let label = dayOfWeek == 1 ? "日" : dayLabels[dayOfWeek - 2]
+                    // Determine completion: use weekCompletionRate as proxy for past days
+                    let isPast = day < today
+                    let isCompleted = isPast && index < Int(dashboard.stats.weekCompletionRate * 6.0)
+
+                    VStack(spacing: 4) {
+                        Text(label)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(isToday ? Color(hex: "#0f766e") ?? .teal : .secondary)
+
+                        ZStack {
+                            Circle()
+                                .fill(isToday ? (dashboard.stats.todayCompleted > 0 ? (Color(hex: "#10b981") ?? .green) : (Color(hex: "#0f766e") ?? .teal).opacity(0.15)) :
+                                    isCompleted ? (Color(hex: "#10b981") ?? .green).opacity(0.8) :
+                                    isPast ? Color.secondary.opacity(0.15) : Color.secondary.opacity(0.08))
+                                .frame(width: 28, height: 28)
+                                .overlay(
+                                    Circle()
+                                        .strokeBorder(isToday ? (Color(hex: "#0f766e") ?? .teal) : .clear, lineWidth: 2)
+                                )
+
+                            if isToday && dashboard.stats.todayCompleted > 0 {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                            } else if isCompleted {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(.white)
+                            } else if isPast {
+                                Image(systemName: "minus")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
+                    .frame(maxWidth: .infinity)
                 }
-
-                Spacer()
             }
         }
     }
@@ -374,5 +440,174 @@ struct HealthPlanScreen: View {
                 .disabled(viewModel.isGenerating)
             }
         }
+    }
+}
+
+// MARK: - Post Accept Sheet
+
+private struct PostAcceptSheet: View {
+    let planItem: HealthPlanItem
+    @Binding var enableReminder: Bool
+    @Binding var enableCalendar: Bool
+    var onConfirm: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Celebration header
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: "#10b981") ?? .green, Color(hex: "#0d9488") ?? .teal],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 64, height: 64)
+                            Image(systemName: "checkmark")
+                                .font(.title2.weight(.bold))
+                                .foregroundStyle(.white)
+                        }
+                        Text("计划已添加！")
+                            .font(.title3.weight(.bold))
+                        Text("「\(planItem.title)」已加入您的健康计划")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 12)
+
+                    // Plan details card
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(spacing: 10) {
+                            Image(systemName: planItem.dimension.icon)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color(hex: planItem.dimension.color) ?? .teal)
+                                .frame(width: 32, height: 32)
+                                .background((Color(hex: planItem.dimension.color) ?? .teal).opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(planItem.title)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(planItem.dimension.label)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                        Divider()
+                        HStack(spacing: 16) {
+                            Label(planItem.frequency.label, systemImage: "repeat")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            if let hint = planItem.timeHint, !hint.isEmpty {
+                                Label(hint, systemImage: "clock")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .padding(14)
+                    .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .padding(.horizontal, 2)
+
+                    // Reminder options
+                    VStack(spacing: 0) {
+                        Text("设置跟进提醒")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.bottom, 8)
+
+                        VStack(spacing: 2) {
+                            ReminderToggleRow(
+                                icon: "bell.fill",
+                                iconColor: .orange,
+                                title: "本地通知提醒",
+                                subtitle: "在计划时间前提醒你完成",
+                                isOn: $enableReminder
+                            )
+                            Divider().padding(.leading, 52)
+                            ReminderToggleRow(
+                                icon: "calendar",
+                                iconColor: .blue,
+                                title: "添加到系统日历",
+                                subtitle: "自动添加重复日历事件",
+                                isOn: $enableCalendar
+                            )
+                        }
+                        .background(Color(UIColor.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                    .padding(.horizontal, 2)
+
+                    // Confirm button
+                    Button(action: onConfirm) {
+                        Text((enableReminder || enableCalendar) ? "完成并开启提醒" : "完成")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                LinearGradient(
+                                    colors: [Color(hex: "#0f766e") ?? .teal, Color(hex: "#0d9488") ?? .teal],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            )
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 2)
+                    .padding(.top, 4)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 32)
+            }
+            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("🎯 计划已接受")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("跳过") { dismiss() }
+                        .font(.subheadline)
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
+private struct ReminderToggleRow: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let subtitle: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.subheadline)
+                .foregroundStyle(iconColor)
+                .frame(width: 32, height: 32)
+                .background(iconColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.subheadline.weight(.medium))
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Toggle("", isOn: $isOn)
+                .labelsHidden()
+                .tint(.teal)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
     }
 }
