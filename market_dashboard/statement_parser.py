@@ -9,7 +9,7 @@ from typing import Any
 
 DEPS_DIR = Path(__file__).resolve().parent / ".deps"
 if str(DEPS_DIR) not in sys.path:
-    sys.path.insert(0, str(DEPS_DIR))
+    sys.path.append(str(DEPS_DIR))
 
 import pdfplumber  # type: ignore
 
