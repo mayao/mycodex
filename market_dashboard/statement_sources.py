@@ -240,7 +240,7 @@ def get_statement_sources(user_id: str | None = None) -> list[dict[str, Any]]:
     for entry in entries:
         account_id = entry["account_id"]
         base = source_map.get(account_id, {})
-            source_map[account_id] = {
+        source_map[account_id] = {
                 **base,
                 "account_id": account_id,
                 "broker": entry["broker"],

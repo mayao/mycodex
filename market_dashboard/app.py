@@ -716,6 +716,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         previous_override = source if source and source.get("source_mode") == "upload" else None
         resolved_source: dict[str, Any] | None = None
+        upload_ai_request_config = _read_mobile_ai_request_config(self) if is_mobile_request else None
         try:
             resolved_source = register_uploaded_statement(
                 account_id,
@@ -733,6 +734,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 include_ai=False,
                 user_id=session_user_id,
                 refresh_portfolio=True,
+                ai_request_config=upload_ai_request_config,
             )
             payload: dict[str, Any] | None = None
             if is_mobile_request:

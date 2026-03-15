@@ -512,10 +512,16 @@ def summarize_source_issue(exc: Exception) -> str:
     return text.splitlines()[0][:160]
 
 
+def _now_iso() -> str:
+    import time
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
 def parse_accounts(
     cached_accounts_by_id: dict[str, dict[str, Any]] | None = None,
     strict_account_ids: set[str] | None = None,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     parsers = {
         "tiger_activity": parse_tiger,
@@ -532,7 +538,7 @@ def parse_accounts(
     for source in get_statement_sources(user_id=user_id):
         account_id = source["account_id"]
         path = Path(source["path"])
-        parser = parsers[source["type"]]
+        parser = parsers.get(source["type"])
         state = {
             "broker": source["broker"],
             "account_id": account_id,
@@ -545,35 +551,101 @@ def parse_accounts(
             "issue": None,
             "statement_date": None,
         }
+        rule_parse_error: str | None = None
         try:
             if not path.exists():
                 raise FileNotFoundError(path)
+            if parser is None:
+                raise RuntimeError(f"没有对应的规则解析器: {source['type']}")
             account = parser(source)
             account["load_status"] = "parsed"
             account["load_issue"] = None
             state["statement_date"] = account.get("statement_date")
             accounts.append(account)
+            source_states.append(state)
+            continue
         except Exception as exc:  # noqa: BLE001
-            issue = summarize_source_issue(exc)
-            cached_account = cached_by_id.get(account_id)
-            if cached_account is not None and account_id not in strict_ids:
-                account = deepcopy(cached_account)
-                account["load_status"] = "cache"
-                account["load_issue"] = issue
-                state["statement_date"] = account.get("statement_date")
-                state["load_status"] = "cache"
-                state["issue"] = issue
-                accounts.append(account)
-            else:
-                state["load_status"] = "error"
-                state["issue"] = issue
-                failures.append(
-                    {
-                        "message": f"{source['broker']} / {account_id}: {issue}",
-                        "source_mode": source.get("source_mode", "default"),
-                        "issue": issue,
-                    }
+            rule_parse_error = summarize_source_issue(exc)
+
+        # 对上传文件尝试 AI 兜底解析
+        if source.get("source_mode") == "upload" and path.exists():
+            try:
+                try:
+                    from statement_ai_parser import parse_statement_with_ai  # noqa: PLC0415
+                    from statement_sources import register_uploaded_statement  # noqa: PLC0415
+                except ModuleNotFoundError:
+                    from market_dashboard.statement_ai_parser import parse_statement_with_ai  # noqa: PLC0415
+                    from market_dashboard.statement_sources import register_uploaded_statement  # noqa: PLC0415
+                ai_account, ai_meta = parse_statement_with_ai(
+                    source,
+                    ai_request_config=ai_request_config,
+                    parse_error=rule_parse_error,
                 )
+                ai_account["load_status"] = "parsed"
+                ai_account["load_issue"] = None
+                state["statement_date"] = ai_account.get("statement_date")
+                state["load_status"] = "parsed"
+                state["issue"] = None
+                try:
+                    register_uploaded_statement(
+                        account_id,
+                        source["path"],
+                        source.get("uploaded_file_name") or path.name,
+                        user_id=user_id,
+                        broker=ai_account.get("broker"),
+                        statement_type=ai_account.get("statement_type"),
+                        parser_mode=ai_meta.get("parser_mode"),
+                        parse_status="parsed",
+                        parse_issue=None,
+                        detected_broker=ai_meta.get("detected_broker"),
+                        detected_statement_type=ai_meta.get("detected_statement_type"),
+                        last_parsed_at=_now_iso(),
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                accounts.append(ai_account)
+                source_states.append(state)
+                continue
+            except Exception as ai_exc:  # noqa: BLE001
+                ai_issue = str(ai_exc).strip()[:200]
+                combined_issue = f"规则解析: {rule_parse_error}; AI解析: {ai_issue}"
+                try:
+                    try:
+                        from statement_sources import register_uploaded_statement  # noqa: PLC0415
+                    except ModuleNotFoundError:
+                        from market_dashboard.statement_sources import register_uploaded_statement  # noqa: PLC0415
+                    register_uploaded_statement(
+                        account_id,
+                        source["path"],
+                        source.get("uploaded_file_name") or path.name,
+                        user_id=user_id,
+                        parse_status="error",
+                        parse_issue=combined_issue[:300],
+                    )
+                except Exception:  # noqa: BLE001
+                    pass
+                rule_parse_error = combined_issue
+
+        issue = rule_parse_error or "解析失败"
+        cached_account = cached_by_id.get(account_id)
+        if cached_account is not None and account_id not in strict_ids:
+            account = deepcopy(cached_account)
+            account["load_status"] = "cache"
+            account["load_issue"] = issue
+            state["statement_date"] = account.get("statement_date")
+            state["load_status"] = "cache"
+            state["issue"] = issue
+            accounts.append(account)
+        else:
+            state["load_status"] = "error"
+            state["issue"] = issue
+            failures.append(
+                {
+                    "message": f"{source['broker']} / {account_id}: {issue}",
+                    "source_mode": source.get("source_mode", "default"),
+                    "issue": issue,
+                }
+            )
         source_states.append(state)
     if failures:
         if all(
@@ -704,6 +776,7 @@ def load_real_portfolio(
     allow_cached_fallback: bool = True,
     strict_account_ids: set[str] | None = None,
     user_id: str | None = None,
+    ai_request_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     signature = file_signature(user_id=user_id)
     cache = load_portfolio_cache(user_id=user_id)
@@ -722,6 +795,7 @@ def load_real_portfolio(
             cached_accounts_by_id=cached_accounts_by_id,
             strict_account_ids=strict_account_ids,
             user_id=user_id,
+            ai_request_config=ai_request_config,
         )
         payload = aggregate_portfolio(accounts, source_states=source_states)
     except Exception:  # noqa: BLE001

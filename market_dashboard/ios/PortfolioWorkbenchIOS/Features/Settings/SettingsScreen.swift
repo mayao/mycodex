@@ -30,6 +30,7 @@ struct SettingsScreen: View {
                         aiModelSection
                         updateStatementSection
                         importCenterSection
+                        dataStatusSection
                         refreshSection
                         cacheSection
                     }
@@ -48,7 +49,7 @@ struct SettingsScreen: View {
             .task(id: dashboardAccountSeed) {
                 syncSelectedAccountIfNeeded()
             }
-            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.pdf]) { result in
+            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.pdf, .image]) { result in
                 switch result {
                 case let .success(url):
                     Task { await upload(url: url) }
@@ -535,25 +536,6 @@ struct SettingsScreen: View {
                         }
                     }
 
-                    if !importCenter.notes.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("导入说明")
-                                .font(.headline)
-                                .foregroundStyle(BrokerPalette.ink)
-
-                            ForEach(importCenter.notes, id: \.self) { item in
-                                HStack(alignment: .top, spacing: 10) {
-                                    Circle()
-                                        .fill(BrokerPalette.cyan)
-                                        .frame(width: 7, height: 7)
-                                        .padding(.top, 6)
-                                    Text(item)
-                                        .font(.subheadline)
-                                        .foregroundStyle(BrokerPalette.ink)
-                                }
-                            }
-                        }
-                    }
                 } else {
                     Text("当前还没拿到券商导入信息。确认服务地址可用后，再刷新一次。")
                         .font(.subheadline)
@@ -607,6 +589,49 @@ struct SettingsScreen: View {
         }
         .padding(14)
         .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var dataStatusSection: some View {
+        SectionPanel(title: "数据状态", subtitle: "各券商最新数据来源与解析状态。") {
+            VStack(alignment: .leading, spacing: 12) {
+                if let sources = dashboardPayload?.statementSources, !sources.isEmpty {
+                    ForEach(sources) { source in
+                        dataSourceRow(source)
+                    }
+                } else {
+                    Text("暂无数据，请先连接服务并同步一次账户数据。")
+                        .font(.subheadline)
+                        .foregroundStyle(BrokerPalette.muted)
+                }
+            }
+        }
+    }
+
+    private func dataSourceRow(_ source: MobileStatementSource) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("\(source.broker) · \(source.accountId)")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BrokerPalette.ink)
+                Spacer()
+                TagBadge(
+                    text: loadStatusLabel(source.loadStatus),
+                    tint: BrokerPalette.sourceStatus(source.loadStatus)
+                )
+            }
+            LabelValueRow(label: "文件", value: source.fileName)
+            if let uploadedAt = source.uploadedAt {
+                LabelValueRow(label: "更新时间", value: uploadedAt)
+            }
+            if let issue = source.issue, !issue.isEmpty {
+                Text(issue)
+                    .font(.footnote)
+                    .foregroundStyle(BrokerPalette.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 
     private var cacheSection: some View {

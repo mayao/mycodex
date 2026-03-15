@@ -3547,6 +3547,7 @@ def build_dashboard_payload(
         allow_cached_fallback=allow_cached_fallback,
         strict_account_ids=strict_account_ids,
         user_id=user_id,
+        ai_request_config=ai_request_config,
     )
     research_cache = load_local_analysis_cache()
     accounts = portfolio["accounts"]
