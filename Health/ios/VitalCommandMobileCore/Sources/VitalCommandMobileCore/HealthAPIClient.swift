@@ -134,7 +134,11 @@ public final class HealthAPIClient: @unchecked Sendable {
     }
 
     public func fetchDocumentInsights(type: String) async throws -> DocumentInsightResponse {
-        try await send(path: "api/ai/insights?type=\(type)")
+        var components = URLComponents(url: configuration.baseURL.appending(path: "api/ai/insights"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "type", value: type)]
+        var request = makeRequest(url: components.url!, method: "GET")
+        request.timeoutInterval = 90  // AI analysis can take up to 3×18s fallback chain
+        return try await send(request: request)
     }
 
     public func chatWithAI(_ input: AIChatRequest) async throws -> AIChatResponse {
@@ -270,14 +274,17 @@ public final class HealthAPIClient: @unchecked Sendable {
     }
 
     private func makeRequest(path: String, method: String) -> URLRequest {
-        let url = configuration.baseURL.appending(path: path)
+        makeRequest(url: configuration.baseURL.appending(path: path), method: method)
+    }
+
+    private func makeRequest(url: URL, method: String) -> URLRequest {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("no-cache", forHTTPHeaderField: "Pragma")
-        request.timeoutInterval = 30
+        request.timeoutInterval = 60
         if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

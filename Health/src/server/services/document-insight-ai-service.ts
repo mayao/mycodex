@@ -322,7 +322,7 @@ export async function callLLMWithFallbacks(
   prompt: string
 ): Promise<{ text: string; provider: string; model: string }> {
   const env = getAppEnv();
-  const TIMEOUT_MS = 22_000;
+  const TIMEOUT_MS = 18_000;
 
   function makeSignal(): AbortSignal {
     const ctrl = new AbortController();
