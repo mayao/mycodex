@@ -55,6 +55,21 @@ struct ReportsScreen: View {
         }
     }
 
+    /// Convert "2026-03-10" → "2026-03-16" into "3月10日–16日"
+    private func shortPeriodLabel(start: String, end: String) -> String {
+        let parts = end.split(separator: "-")
+        let startParts = start.split(separator: "-")
+        guard parts.count == 3, startParts.count == 3,
+              let m = Int(parts[1]), let d2 = Int(parts[2]), let d1 = Int(startParts[2]) else {
+            return "本周"
+        }
+        if startParts[1] == parts[1] {
+            return "\(m)月\(d1)日–\(d2)日"
+        }
+        let m1 = Int(startParts[1]) ?? m
+        return "\(m1)月\(d1)日–\(m)月\(d2)日"
+    }
+
     private func reload() async {
         do {
             let client = try settings.makeClient()
@@ -74,7 +89,7 @@ struct ReportsScreen: View {
                     .padding()
             }
         } else if let progress = viewModel.planProgress {
-            SectionCard(title: "本周计划进度", subtitle: "\(progress.periodStart) — \(progress.periodEnd)") {
+            SectionCard(title: "本周计划进度", subtitle: shortPeriodLabel(start: progress.periodStart, end: progress.periodEnd)) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("整体完成率")
@@ -178,6 +193,15 @@ private struct ReportSummaryBadge: View {
 private struct ReportSnapshotCard: View {
     let report: HealthReportSnapshotRecord
 
+    /// Format "2026-03-16" to "3月16日" for compact display
+    private var shortEndDate: String {
+        let parts = report.periodEnd.split(separator: "-")
+        guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]) else {
+            return report.periodEnd
+        }
+        return "\(m)月\(d)日"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -186,7 +210,7 @@ private struct ReportSnapshotCard: View {
                     tint: report.reportType == .weekly ? .teal : .indigo
                 )
                 Spacer()
-                Text(report.periodEnd)
+                Text(shortEndDate)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
             }

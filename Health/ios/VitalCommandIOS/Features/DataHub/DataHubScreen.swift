@@ -94,38 +94,24 @@ struct DataHubScreen: View {
     // MARK: - Add Data Section
 
     private var addDataSection: some View {
-        SectionCard(title: "添加数据", subtitle: "选择数据类型，再选择上传方式。") {
-            // Layer 1: Type chips
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(DataUploadType.allCases) { type in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedDataType = selectedDataType == type ? nil : type
-                            }
-                        } label: {
-                            HStack(spacing: 6) {
-                                Image(systemName: type.icon)
-                                    .font(.caption.weight(.semibold))
-                                Text(type.rawValue)
-                                    .font(.caption.weight(.semibold))
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                selectedDataType == type
-                                    ? Color.teal
-                                    : Color(red: 0.95, green: 0.97, blue: 0.96),
-                                in: Capsule()
-                            )
-                            .foregroundStyle(selectedDataType == type ? Color.white : Color(red: 0.05, green: 0.13, blue: 0.2))
+        SectionCard(title: "添加数据", subtitle: selectedDataType == nil ? "选择数据类型，再选择上传方式。" : "已选：\(selectedDataType!.rawValue) · 选择上传方式") {
+            // Layer 1: 2-column type card grid
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                spacing: 12
+            ) {
+                ForEach(DataUploadType.allCases) { type in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedDataType = selectedDataType == type ? nil : type
                         }
-                        .buttonStyle(.plain)
+                    } label: {
+                        DataTypeCard(type: type, isSelected: selectedDataType == type)
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 2)
-                .padding(.bottom, 4)
             }
+            .padding(.bottom, selectedDataType != nil ? 4 : 0)
 
             // Layer 2: Upload method grid (contextual)
             if let type = selectedDataType {
@@ -756,6 +742,24 @@ private enum DataUploadType: String, CaseIterable, Identifiable {
         case .genetic:    return "allergens"
         }
     }
+    var description: String {
+        switch self {
+        case .annualExam: return "体检报告、综合体检单"
+        case .bloodTest:  return "血常规、生化、影像"
+        case .bodyScale:  return "体重、BMI、体脂率"
+        case .activity:   return "运动记录、心率、步数"
+        case .genetic:    return "基因检测报告"
+        }
+    }
+    var accentColor: Color {
+        switch self {
+        case .annualExam: return .teal
+        case .bloodTest:  return Color(red: 0.85, green: 0.3, blue: 0.3)
+        case .bodyScale:  return Color(red: 0.4, green: 0.55, blue: 0.9)
+        case .activity:   return Color(red: 0.2, green: 0.75, blue: 0.5)
+        case .genetic:    return Color(red: 0.7, green: 0.45, blue: 0.9)
+        }
+    }
     var importerKey: ImporterKey {
         switch self {
         case .annualExam: return .annualExam
@@ -769,6 +773,55 @@ private enum DataUploadType: String, CaseIterable, Identifiable {
     var allowsPhoto: Bool { self != .genetic }
     var allowsPDF: Bool { true }
     var allowsCSV: Bool { self == .bodyScale || self == .activity || self == .genetic }
+}
+
+// MARK: - Data Type Card
+
+private struct DataTypeCard: View {
+    let type: DataUploadType
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                ZStack {
+                    Circle()
+                        .fill(isSelected ? type.accentColor : type.accentColor.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: type.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(isSelected ? .white : type.accentColor)
+                }
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(type.accentColor)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(type.rawValue)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(isSelected ? type.accentColor : .primary)
+                Text(type.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(isSelected ? type.accentColor.opacity(0.08) : Color(.secondarySystemGroupedBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(isSelected ? type.accentColor.opacity(0.5) : Color.clear, lineWidth: 1.5)
+                )
+        )
+        .animation(.easeInOut(duration: 0.15), value: isSelected)
+    }
 }
 
 // MARK: - Image Picker
