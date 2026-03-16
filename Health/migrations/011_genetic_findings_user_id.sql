@@ -1,8 +1,7 @@
--- Add user_id to genetic_findings for per-user data isolation
-ALTER TABLE genetic_findings ADD COLUMN user_id TEXT REFERENCES users(id);
-
 -- Backfill existing demo/seeded records to the primary user (user-self)
--- Any records without a valid user assignment go to user-self by default
+-- Note: the user_id column is already defined in the base schema (schema.ts).
+-- This migration originally included ALTER TABLE ADD COLUMN, but that fails
+-- on fresh databases where the column already exists from CREATE TABLE.
 UPDATE genetic_findings
 SET user_id = 'user-self'
 WHERE user_id IS NULL;
