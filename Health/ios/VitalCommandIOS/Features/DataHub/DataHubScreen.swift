@@ -94,7 +94,7 @@ struct DataHubScreen: View {
     // MARK: - Add Data Section
 
     private var addDataSection: some View {
-        SectionCard(title: "添加数据", subtitle: selectedDataType == nil ? "选择数据类型，再选择上传方式。" : "已选：\(selectedDataType!.rawValue) · 选择上传方式") {
+        SectionCard(title: "添加数据", subtitle: selectedDataType == nil ? "选择数据类型，再选择上传方式" : "已选 \(selectedDataType!.rawValue) · 请选择上传格式") {
             // Layer 1: 2-column type card grid
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
@@ -782,45 +782,84 @@ private struct DataTypeCard: View {
     let isSelected: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
+        VStack(alignment: .leading, spacing: 0) {
+            // Icon row
+            HStack(alignment: .center, spacing: 12) {
                 ZStack {
-                    Circle()
-                        .fill(isSelected ? type.accentColor : type.accentColor.opacity(0.12))
-                        .frame(width: 44, height: 44)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(
+                            isSelected
+                                ? LinearGradient(colors: [type.accentColor, type.accentColor.opacity(0.75)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                : LinearGradient(colors: [type.accentColor.opacity(0.14), type.accentColor.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                        )
+                        .frame(width: 50, height: 50)
+                        .shadow(color: isSelected ? type.accentColor.opacity(0.35) : .clear, radius: 6, y: 3)
+
                     Image(systemName: type.icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(isSelected ? .white : type.accentColor)
                 }
-                Spacer()
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(type.rawValue)
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(isSelected ? type.accentColor : .primary)
+
+                    Text(type.description)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 4)
+
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 20))
                         .foregroundStyle(type.accentColor)
                         .transition(.scale.combined(with: .opacity))
                 }
             }
-            VStack(alignment: .leading, spacing: 3) {
-                Text(type.rawValue)
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(isSelected ? type.accentColor : .primary)
-                Text(type.description)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+
+            // Format chips
+            HStack(spacing: 6) {
+                ForEach(formatChips, id: \.self) { chip in
+                    Text(chip)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(isSelected ? type.accentColor : .secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            (isSelected ? type.accentColor : Color.secondary).opacity(0.08),
+                            in: Capsule()
+                        )
+                }
             }
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
         }
-        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isSelected ? type.accentColor.opacity(0.08) : Color(.secondarySystemGroupedBackground))
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(isSelected ? type.accentColor.opacity(0.06) : Color(.secondarySystemGroupedBackground))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(isSelected ? type.accentColor.opacity(0.5) : Color.clear, lineWidth: 1.5)
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(isSelected ? type.accentColor.opacity(0.45) : Color(.separator).opacity(0.3), lineWidth: isSelected ? 1.5 : 0.5)
                 )
         )
-        .animation(.easeInOut(duration: 0.15), value: isSelected)
+        .shadow(color: isSelected ? type.accentColor.opacity(0.12) : Color.black.opacity(0.03), radius: isSelected ? 8 : 4, y: isSelected ? 3 : 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isSelected)
+    }
+
+    private var formatChips: [String] {
+        var chips: [String] = []
+        if type.allowsCamera { chips.append("拍照") }
+        if type.allowsPDF    { chips.append("PDF") }
+        if type.allowsCSV    { chips.append("CSV") }
+        return chips
     }
 }
 

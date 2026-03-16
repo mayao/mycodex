@@ -13,6 +13,7 @@ struct SettingsScreen: View {
     @State private var checkingServers: Set<String> = []
     @State private var modelStatus: AIModelStatusResponse?
     @State private var isLoadingModelStatus = false
+    @State private var isSwitchingProvider = false
 
     private let tealColor = Color(hex: "#0f766e") ?? .teal
 
@@ -64,56 +65,76 @@ struct SettingsScreen: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("AI 模型状态") {
-                if isLoadingModelStatus {
+            Section {
+                if isLoadingModelStatus && modelStatus == nil {
                     HStack {
                         ProgressView().scaleEffect(0.8)
                         Text("正在检测...").font(.subheadline).foregroundStyle(.secondary)
                     }
                 } else if let status = modelStatus {
                     ForEach(status.providers) { provider in
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(provider.isConfigured ? (provider.isPrimary ? Color.green : Color.teal) : Color.gray.opacity(0.4))
-                                .frame(width: 8, height: 8)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(provider.label)
-                                        .font(.subheadline.weight(.medium))
-                                    if provider.isPrimary && provider.isConfigured {
-                                        Text("主要")
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(.white)
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 2)
-                                            .background(Color.green, in: Capsule())
+                        Button {
+                            guard provider.isConfigured, !isSwitchingProvider else { return }
+                            Task { await switchProvider(to: provider.name) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: provider.isPrimary && provider.isConfigured ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(provider.isPrimary && provider.isConfigured ? tealColor : (provider.isConfigured ? Color.secondary : Color.gray.opacity(0.3)))
+                                    .font(.title3)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(provider.label)
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(provider.isConfigured ? .primary : .tertiary)
+                                        if provider.isPrimary && provider.isConfigured {
+                                            Text("使用中")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 2)
+                                                .background(tealColor, in: Capsule())
+                                        }
+                                    }
+                                    if let model = provider.model {
+                                        Text(model)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    } else {
+                                        Text("未配置")
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
                                     }
                                 }
-                                if let model = provider.model {
-                                    Text(model)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                Spacer()
+                                if isSwitchingProvider && status.activeProvider != provider.name && provider.isPrimary {
+                                    ProgressView().scaleEffect(0.6)
                                 } else {
-                                    Text("未配置")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
+                                    Circle()
+                                        .fill(provider.isConfigured ? Color.green : Color.gray.opacity(0.4))
+                                        .frame(width: 8, height: 8)
                                 }
                             }
-                            Spacer()
-                            Image(systemName: provider.isConfigured ? "checkmark.circle.fill" : "xmark.circle")
-                                .foregroundStyle(provider.isConfigured ? .green : .secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!provider.isConfigured)
+                    }
+
+                    if isSwitchingProvider {
+                        HStack(spacing: 6) {
+                            ProgressView().scaleEffect(0.7)
+                            Text("切换中...").font(.caption).foregroundStyle(.secondary)
                         }
                     }
-                    Button("刷新模型状态") {
-                        Task { await loadModelStatus() }
-                    }
-                    .font(.subheadline)
                 } else {
                     Button("检测 AI 模型") {
                         Task { await loadModelStatus() }
                     }
                     .font(.subheadline)
                 }
+            } header: {
+                Text("AI 模型选择")
+            } footer: {
+                Text("点击已配置的模型切换为首选。未配置的模型不可选择。")
             }
 
             // Server address section with status
@@ -358,6 +379,19 @@ struct SettingsScreen: View {
         defer { isLoadingModelStatus = false }
         if let client = try? settings.makeClient(token: authManager.token) {
             modelStatus = try? await client.fetchModelStatus()
+        }
+    }
+
+    private func switchProvider(to provider: String) async {
+        guard !isSwitchingProvider else { return }
+        isSwitchingProvider = true
+        defer { isSwitchingProvider = false }
+        if let client = try? settings.makeClient(token: authManager.token) {
+            if let updated = try? await client.setPreferredProvider(provider) {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    modelStatus = updated
+                }
+            }
         }
     }
 

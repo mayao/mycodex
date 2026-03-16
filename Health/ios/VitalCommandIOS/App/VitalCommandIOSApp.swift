@@ -45,35 +45,58 @@ struct VitalCommandIOSApp: App {
 
     private var launchScreen: some View {
         ZStack {
+            // Teal gradient background matching the MAI brand
             LinearGradient(
                 colors: [
-                    Color(red: 0.96, green: 0.99, blue: 0.97),
-                    Color.white
+                    Color(red: 0.15, green: 0.58, blue: 0.55),
+                    Color(red: 0.10, green: 0.48, blue: 0.46),
+                    Color(red: 0.06, green: 0.42, blue: 0.40)
                 ],
-                startPoint: .top,
-                endPoint: .bottom
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
-            VStack(spacing: 20) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "#0f766e") ?? .teal, Color(hex: "#0d5263") ?? .cyan],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 80, height: 80)
+            VStack(spacing: 0) {
+                Spacer()
 
-                    Image(systemName: "heart.text.clipboard")
-                        .font(.system(size: 36))
-                        .foregroundStyle(.white)
+                // App logo — uses the icon from the asset catalog
+                Image("SplashLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 120, height: 120)
+                    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                    .shadow(color: .black.opacity(0.2), radius: 16, y: 8)
+
+                // Loading dots
+                HStack(spacing: 6) {
+                    ForEach(0..<3) { _ in
+                        Circle()
+                            .fill(.white.opacity(0.5))
+                            .frame(width: 6, height: 6)
+                    }
                 }
+                .padding(.top, 24)
 
-                ProgressView()
-                    .tint(Color(hex: "#0f766e") ?? .teal)
+                // Title
+                Text("Health AI")
+                    .font(.title2.weight(.medium))
+                    .foregroundStyle(.white)
+                    .padding(.top, 20)
+
+                // Subtitle
+                Text("你的个性化健康助理")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.75))
+                    .padding(.top, 6)
+
+                Spacer()
+
+                // Bottom sparkle icon
+                Image(systemName: "sparkle")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.35))
+                    .padding(.bottom, 40)
             }
         }
     }

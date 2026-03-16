@@ -470,7 +470,8 @@ function buildImportOptions(): HealthImportOption[] {
     annual_exam: [".png", ".jpg", ".pdf", ".csv", ".xlsx", ".xls"],
     blood_test: [".png", ".jpg", ".pdf", ".csv", ".xlsx", ".xls"],
     body_scale: [".png", ".jpg", ".pdf", ".csv", ".xlsx"],
-    activity: [".png", ".jpg", ".pdf", ".csv", ".xlsx"]
+    activity: [".png", ".jpg", ".pdf", ".csv", ".xlsx"],
+    genetic: [".pdf", ".csv", ".json", ".xlsx"]
   };
 
   return (Object.entries(importerSpecs) as Array<[HealthImportOption["key"], (typeof importerSpecs)[keyof typeof importerSpecs]]>).map(
@@ -478,9 +479,11 @@ function buildImportOptions(): HealthImportOption[] {
       key,
       title: spec.sourceName,
       description: `支持图片、PDF、CSV、Excel。上传后会异步识别文本、映射指标并回流到当前健康总览。`,
-      formats: formatMap[key],
+      formats: formatMap[key] ?? [],
       hints: [
-        `常见字段：${spec.fieldMappings.slice(0, 3).map((item) => item.metricName).join("、")}`,
+        spec.fieldMappings.length > 0
+          ? `常见字段：${spec.fieldMappings.slice(0, 3).map((item) => item.metricName).join("、")}`
+          : `上传${spec.sourceName}，系统会自动提取关键信息`,
         `时间列支持：${spec.sampleTimeAliases.slice(0, 2).join(" / ")}；图片或 PDF 会先做 OCR/文档识别。`,
         "上传会在后台继续处理，完成后可在数据页查看状态与结果。"
       ]

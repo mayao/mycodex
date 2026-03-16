@@ -3,6 +3,9 @@ import Foundation
 public enum NarrativeProviderKind: String, Codable, Sendable {
     case mock
     case openAICompatible = "openai-compatible"
+    case anthropic
+    case kimi
+    case gemini
 }
 
 public enum SummaryPeriodKind: String, Codable, Sendable {
@@ -1013,6 +1016,11 @@ public struct AIModelProviderStatus: Codable, Sendable, Identifiable {
 public struct AIModelStatusResponse: Codable, Sendable {
     public let providers: [AIModelProviderStatus]
     public let activeProvider: String?
+}
+
+public struct SetPreferredProviderRequest: Codable, Sendable {
+    public let provider: String
+    public init(provider: String) { self.provider = provider }
 }
 
 public struct SuggestedQuestionsResponse: Codable, Sendable {

@@ -318,8 +318,11 @@ async function callGeminiForInsights(
   return { text, model };
 }
 
+type LLMProviderFn = () => Promise<{ text: string; provider: string; model: string }>;
+
 export async function callLLMWithFallbacks(
-  prompt: string
+  prompt: string,
+  options?: { preferredProvider?: string | null }
 ): Promise<{ text: string; provider: string; model: string }> {
   const env = getAppEnv();
   const TIMEOUT_MS = 18_000;
@@ -330,111 +333,92 @@ export async function callLLMWithFallbacks(
     return ctrl.signal;
   }
 
-  // Primary: openai-compatible (Kimi / any OpenAI-compat proxy)
-  if (env.HEALTH_LLM_API_KEY && env.HEALTH_LLM_PROVIDER === "openai-compatible" && env.HEALTH_LLM_BASE_URL) {
-    try {
-      const model = env.HEALTH_LLM_MODEL ?? "moonshot-v1-32k";
-      const baseUrl = env.HEALTH_LLM_BASE_URL.replace(/\/$/, "");
-      const response = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        signal: makeSignal(),
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.HEALTH_LLM_API_KEY}`
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 2048,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (!response.ok) throw new Error(`OpenAI-compat API ${response.status}`);
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
-      const text = data.choices?.[0]?.message?.content ?? "";
-      return { text, provider: "openai-compatible", model: data.model ?? model };
-    } catch {
-      // fall through
-    }
-  }
+  const tryOpenAI: LLMProviderFn = async () => {
+    if (!(env.HEALTH_LLM_API_KEY && env.HEALTH_LLM_PROVIDER === "openai-compatible" && env.HEALTH_LLM_BASE_URL)) throw new Error("not configured");
+    const model = env.HEALTH_LLM_MODEL ?? "moonshot-v1-32k";
+    const baseUrl = env.HEALTH_LLM_BASE_URL.replace(/\/$/, "");
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST", signal: makeSignal(),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.HEALTH_LLM_API_KEY}` },
+      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: "user", content: prompt }] })
+    });
+    if (!response.ok) throw new Error(`OpenAI-compat API ${response.status}`);
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
+    return { text: data.choices?.[0]?.message?.content ?? "", provider: "openai_compatible", model: data.model ?? model };
+  };
 
-  // Primary: Anthropic
-  if (env.HEALTH_LLM_API_KEY && env.HEALTH_LLM_PROVIDER === "anthropic") {
-    try {
-      const model = env.HEALTH_LLM_MODEL ?? "claude-sonnet-4-20250514";
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        signal: makeSignal(),
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.HEALTH_LLM_API_KEY,
-          "anthropic-version": "2023-06-01"
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 2048,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (!response.ok) throw new Error(`Anthropic API ${response.status}`);
-      const data = (await response.json()) as { content?: Array<{ type: string; text?: string }>; model?: string };
-      const text = data.content?.find((c) => c.type === "text")?.text ?? "";
-      return { text, model: data.model ?? model, provider: "anthropic" };
-    } catch {
-      // fall through
-    }
-  }
+  const tryAnthropic: LLMProviderFn = async () => {
+    if (!(env.HEALTH_LLM_API_KEY && env.HEALTH_LLM_PROVIDER === "anthropic")) throw new Error("not configured");
+    const model = env.HEALTH_LLM_MODEL ?? "claude-sonnet-4-20250514";
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", signal: makeSignal(),
+      headers: { "Content-Type": "application/json", "x-api-key": env.HEALTH_LLM_API_KEY, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: "user", content: prompt }] })
+    });
+    if (!response.ok) throw new Error(`Anthropic API ${response.status}`);
+    const data = (await response.json()) as { content?: Array<{ type: string; text?: string }>; model?: string };
+    return { text: data.content?.find((c) => c.type === "text")?.text ?? "", model: data.model ?? model, provider: "anthropic" };
+  };
 
-  // Fallback 1: Kimi (via HEALTH_LLM_FALLBACK_KIMI_KEY)
-  const kimiKey = process.env.HEALTH_LLM_FALLBACK_KIMI_KEY;
-  if (kimiKey) {
-    try {
-      const model = process.env.HEALTH_LLM_FALLBACK_KIMI_MODEL ?? "kimi-for-coding";
-      const response = await fetch("https://api.kimi.com/coding/v1/chat/completions", {
-        method: "POST",
-        signal: makeSignal(),
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${kimiKey}`,
-          "User-Agent": "KimiCLI/1.3"
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 2048,
-          messages: [{ role: "user", content: prompt }]
-        })
-      });
-      if (!response.ok) throw new Error(`Kimi API ${response.status}`);
-      const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
-      const text = data.choices?.[0]?.message?.content ?? "";
-      return { text, model: data.model ?? model, provider: "kimi" };
-    } catch {
-      // fall through
-    }
-  }
+  const tryKimi: LLMProviderFn = async () => {
+    const kimiKey = process.env.HEALTH_LLM_FALLBACK_KIMI_KEY;
+    if (!kimiKey) throw new Error("not configured");
+    const model = process.env.HEALTH_LLM_FALLBACK_KIMI_MODEL ?? "kimi-for-coding";
+    const response = await fetch("https://api.kimi.com/coding/v1/chat/completions", {
+      method: "POST", signal: makeSignal(),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${kimiKey}`, "User-Agent": "KimiCLI/1.3" },
+      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: "user", content: prompt }] })
+    });
+    if (!response.ok) throw new Error(`Kimi API ${response.status}`);
+    const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
+    return { text: data.choices?.[0]?.message?.content ?? "", model: data.model ?? model, provider: "kimi" };
+  };
 
-  // Fallback 2: Gemini
-  const geminiKey = process.env.HEALTH_LLM_FALLBACK_GEMINI_KEY;
-  if (geminiKey) {
+  const tryGemini: LLMProviderFn = async () => {
+    const geminiKey = process.env.HEALTH_LLM_FALLBACK_GEMINI_KEY;
+    if (!geminiKey) throw new Error("not configured");
+    const model = process.env.HEALTH_LLM_FALLBACK_GEMINI_MODEL ?? "gemini-2.0-flash";
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+      {
+        method: "POST", signal: makeSignal(),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048 } })
+      }
+    );
+    if (!response.ok) throw new Error(`Gemini API ${response.status}`);
+    const data = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    return { text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? "", model, provider: "gemini" };
+  };
+
+  // Default order: env primary → kimi → gemini → remaining
+  const providerMap: Record<string, LLMProviderFn> = {
+    anthropic: tryAnthropic,
+    openai_compatible: tryOpenAI,
+    kimi: tryKimi,
+    gemini: tryGemini,
+  };
+
+  // Build ordered list: preferred first, then remaining configured
+  const preferred = options?.preferredProvider;
+  const defaultOrder = [
+    env.HEALTH_LLM_PROVIDER === "anthropic" ? "anthropic" : "openai_compatible",
+    env.HEALTH_LLM_PROVIDER === "anthropic" ? "openai_compatible" : "anthropic",
+    "kimi",
+    "gemini",
+  ];
+
+  const order: string[] = preferred
+    ? [preferred, ...defaultOrder.filter(p => p !== preferred)]
+    : defaultOrder;
+
+  for (const name of order) {
+    const fn = providerMap[name];
+    if (!fn) continue;
     try {
-      const model = process.env.HEALTH_LLM_FALLBACK_GEMINI_MODEL ?? "gemini-2.0-flash";
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-        {
-          method: "POST",
-          signal: makeSignal(),
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { maxOutputTokens: 2048 }
-          })
-        }
-      );
-      if (!response.ok) throw new Error(`Gemini API ${response.status}`);
-      const data = (await response.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      return { text, model, provider: "gemini" };
+      return await fn();
     } catch {
-      // fall through
+      // fall through to next
     }
   }
 

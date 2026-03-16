@@ -7,6 +7,7 @@ import { getAppEnv } from "../config/env";
 import { getDatabase } from "../db/sqlite";
 import { getHealthHomePageData } from "./health-home-service";
 import { callLLMWithFallbacks } from "./document-insight-ai-service";
+import { getUserPreferredProvider } from "./llm-preference-service";
 
 const chatMessageSchema = z.object({
   id: z.string().optional(),
@@ -183,14 +184,15 @@ async function requestOpenAICompatibleReply(
 
 async function requestProviderReply(
   request: HealthAIChatRequest,
-  payload: Awaited<ReturnType<typeof getHealthHomePageData>>
+  payload: Awaited<ReturnType<typeof getHealthHomePageData>>,
+  preferredProvider?: string | null
 ): Promise<{ provider: string; model: string; content: string } | null> {
   const systemPrompt = buildSystemPrompt(payload);
   const latestUserMessage = [...request.messages].reverse().find((m) => m.role === "user");
   const userMessage = latestUserMessage?.content ?? "";
   const fullPrompt = `${systemPrompt}\n\n用户问题：${userMessage}`;
   try {
-    const result = await callLLMWithFallbacks(fullPrompt);
+    const result = await callLLMWithFallbacks(fullPrompt, { preferredProvider });
     return { provider: result.provider, model: result.model, content: result.text };
   } catch {
     return null;
@@ -305,7 +307,8 @@ export async function replyWithHealthAI(
   }
 
   try {
-    const providerReply = await requestProviderReply(request, payload);
+    const preferredProvider = getUserPreferredProvider(database, userId);
+    const providerReply = await requestProviderReply(request, payload, preferredProvider);
     if (providerReply) {
       return {
         reply: {

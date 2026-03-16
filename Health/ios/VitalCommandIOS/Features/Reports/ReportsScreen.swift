@@ -193,13 +193,24 @@ private struct ReportSummaryBadge: View {
 private struct ReportSnapshotCard: View {
     let report: HealthReportSnapshotRecord
 
-    /// Format "2026-03-16" to "3月16日" for compact display
-    private var shortEndDate: String {
-        let parts = report.periodEnd.split(separator: "-")
-        guard parts.count == 3, let m = Int(parts[1]), let d = Int(parts[2]) else {
+    /// Compact period label: "3月10日–16日" or "2月28日–3月5日"
+    private var periodLabel: String {
+        let startParts = report.periodStart.split(separator: "-")
+        let endParts = report.periodEnd.split(separator: "-")
+        guard startParts.count == 3, endParts.count == 3,
+              let m1 = Int(startParts[1]), let d1 = Int(startParts[2]),
+              let m2 = Int(endParts[1]), let d2 = Int(endParts[2]) else {
             return report.periodEnd
         }
-        return "\(m)月\(d)日"
+        if m1 == m2 {
+            return "\(m1)月\(d1)日–\(d2)日"
+        }
+        return "\(m1)月\(d1)日–\(m2)月\(d2)日"
+    }
+
+    /// Simple type label without dates
+    private var typeLabel: String {
+        report.reportType == .weekly ? "健康周报" : "健康月报"
     }
 
     var body: some View {
@@ -209,20 +220,23 @@ private struct ReportSnapshotCard: View {
                     text: report.reportType == .weekly ? "周报" : "月报",
                     tint: report.reportType == .weekly ? .teal : .indigo
                 )
-                Spacer()
-                Text(shortEndDate)
+                Text(periodLabel)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
             }
 
-            Text(report.title)
+            Text(typeLabel)
                 .font(.title3.weight(.bold))
                 .foregroundStyle(.primary)
 
             Text(report.summary.output.headline)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .lineLimit(3)
 
             LazyVGrid(
                 columns: [
@@ -249,29 +263,27 @@ private struct ReportSnapshotCard: View {
                 }
             }
 
-            HStack(spacing: 8) {
-                ForEach(report.structuredInsights.insights.prefix(3)) { insight in
-                    Text(insight.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(insightColor(insight.severity))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(insightColor(insight.severity).opacity(0.10), in: Capsule())
-                        .lineLimit(1)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(report.structuredInsights.insights.prefix(4)) { insight in
+                        Text(insight.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(insightColor(insight.severity))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(insightColor(insight.severity).opacity(0.10), in: Capsule())
+                            .lineLimit(1)
+                    }
+                    if let review = report.planReview {
+                        Text("计划 \(Int(review.overallCompletionRate * 100))%")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.purple)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(Color.purple.opacity(0.10), in: Capsule())
+                            .lineLimit(1)
+                    }
                 }
-                if let review = report.planReview {
-                    Text("计划 \(Int(review.overallCompletionRate * 100))%")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.purple)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 8)
-                        .background(Color.purple.opacity(0.10), in: Capsule())
-                        .lineLimit(1)
-                }
-                Spacer()
-                Image(systemName: "arrow.up.forward")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(18)

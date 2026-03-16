@@ -6,6 +6,7 @@ struct ReportDetailScreen: View {
 
     @EnvironmentObject private var settings: AppSettingsStore
     @StateObject private var viewModel = ReportDetailViewModel()
+    @State private var expandedInsightID: String? = nil
 
     var body: some View {
         Group {
@@ -59,6 +60,16 @@ struct ReportDetailScreen: View {
         }
     }
 
+    /// "3月10日–16日" or "2月28日–3月5日"
+    private func periodLabel(start: String, end: String) -> String {
+        let s = start.split(separator: "-")
+        let e = end.split(separator: "-")
+        guard s.count == 3, e.count == 3,
+              let m1 = Int(s[1]), let d1 = Int(s[2]),
+              let m2 = Int(e[1]), let d2 = Int(e[2]) else { return end }
+        return m1 == m2 ? "\(m1)月\(d1)日–\(d2)日" : "\(m1)月\(d1)日–\(m2)月\(d2)日"
+    }
+
     private func reportHero(_ report: HealthReportSnapshotRecord) -> some View {
         ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
@@ -79,13 +90,13 @@ struct ReportDetailScreen: View {
                         text: report.reportType == .weekly ? "周报" : "月报",
                         tint: .white
                     )
-                    Spacer()
-                    Text("\(report.periodStart) - \(report.periodEnd)")
+                    Text(periodLabel(start: report.periodStart, end: report.periodEnd))
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.86))
+                        .foregroundStyle(.white.opacity(0.80))
+                    Spacer()
                 }
 
-                Text(report.title)
+                Text(report.reportType == .weekly ? "健康周报" : "健康月报")
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
 
@@ -182,33 +193,24 @@ struct ReportDetailScreen: View {
     }
 
     private func insightSection(_ report: HealthReportSnapshotRecord) -> some View {
-        SectionCard(title: "结构化洞察", subtitle: "查看结论、强度和建议。") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(report.structuredInsights.insights.prefix(6)) { insight in
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack {
-                                Text(insight.title)
-                                    .font(.headline)
-                                    .lineLimit(2)
-                                Spacer()
-                                StatusBadge(text: severityText(insight.severity), tint: severityColor(insight.severity))
-                            }
-
-                            Text(insight.evidence.summary)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(4)
-
-                            Text(insight.suggestedAction)
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.primary)
-                                .lineLimit(3)
+        let sorted = report.structuredInsights.insights.sorted { lhs, rhs in
+            let order: [StructuredInsightSeverity] = [.high, .medium, .low, .positive]
+            let li = order.firstIndex(of: lhs.severity) ?? 4
+            let ri = order.firstIndex(of: rhs.severity) ?? 4
+            return li < ri
+        }
+        return SectionCard(title: "结构化洞察", subtitle: "点击每条查看证据与建议，按严重度排序。") {
+            VStack(spacing: 10) {
+                ForEach(sorted) { insight in
+                    InsightExpandRow(
+                        insight: insight,
+                        isExpanded: expandedInsightID == insight.id,
+                        severityColor: severityColor(insight.severity),
+                        severityText: severityText(insight.severity)
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            expandedInsightID = expandedInsightID == insight.id ? nil : insight.id
                         }
-                        .padding(16)
-                        .frame(width: 250, alignment: .topLeading)
-                        .frame(minHeight: 190, alignment: .topLeading)
-                        .background(severityColor(insight.severity).opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
                     }
                 }
             }
@@ -216,37 +218,31 @@ struct ReportDetailScreen: View {
     }
 
     private func aiActionSection(_ report: HealthReportSnapshotRecord) -> some View {
-        SectionCard(title: "AI 解析", subtitle: "从重点变化、可能原因到下一步建议。") {
-            LazyVGrid(
-                columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ],
-                spacing: 12
-            ) {
+        SectionCard(title: "AI 解析", subtitle: "基于最新数据的重点变化、可能原因和建议。") {
+            VStack(spacing: 12) {
                 InsightBlockCard(
                     title: "重点变化",
                     icon: "waveform.path.ecg",
                     color: .teal,
-                    items: Array(report.summary.output.mostImportantChanges.prefix(2))
+                    items: report.summary.output.mostImportantChanges
                 )
                 InsightBlockCard(
                     title: "原因推断",
                     icon: "brain.head.profile",
                     color: .indigo,
-                    items: Array(report.summary.output.possibleReasons.prefix(2))
+                    items: report.summary.output.possibleReasons
                 )
                 InsightBlockCard(
                     title: "行动建议",
                     icon: "sparkles",
                     color: .blue,
-                    items: Array(report.summary.output.priorityActions.prefix(2))
+                    items: report.summary.output.priorityActions
                 )
                 InsightBlockCard(
                     title: "继续观察",
                     icon: "eye.fill",
                     color: .orange,
-                    items: Array(report.summary.output.continueObserving.prefix(2))
+                    items: report.summary.output.continueObserving
                 )
             }
         }
@@ -374,27 +370,35 @@ private struct InsightBlockCard: View {
             HStack {
                 Image(systemName: icon)
                     .foregroundStyle(color)
+                    .font(.subheadline)
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
+                Text("\(items.count)条")
+                    .font(.caption2)
+                    .foregroundStyle(color.opacity(0.8))
             }
 
-            ForEach(items, id: \.self) { item in
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(color)
-                        .frame(width: 6, height: 6)
-                        .padding(.top, 6)
-                    Text(item)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(3)
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                    HStack(alignment: .top, spacing: 8) {
+                        Text("\(idx + 1)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(color)
+                            .frame(width: 16, height: 16)
+                            .background(color.opacity(0.12), in: Circle())
+                            .padding(.top, 2)
+                        Text(item)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-        .background(color.opacity(0.08), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(color.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -450,5 +454,93 @@ private struct PlanReviewItemRow: View {
         case "checkup": return .teal
         default: return .blue
         }
+    }
+}
+
+private struct InsightExpandRow: View {
+    let insight: StructuredInsight
+    let isExpanded: Bool
+    let severityColor: Color
+    let severityText: String
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header row — always visible
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(severityColor)
+                        .frame(width: 8, height: 8)
+                        .padding(.top, 2)
+
+                    Text(insight.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 4)
+
+                    StatusBadge(text: severityText, tint: severityColor)
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+
+                // Expanded content
+                if isExpanded {
+                    Divider()
+                        .padding(.horizontal, 14)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        if !insight.evidence.summary.isEmpty {
+                            Label {
+                                Text(insight.evidence.summary)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "chart.xyaxis.line")
+                                    .foregroundStyle(severityColor)
+                                    .font(.caption)
+                            }
+                        }
+
+                        if !insight.possibleReason.isEmpty {
+                            Label {
+                                Text(insight.possibleReason)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            } icon: {
+                                Image(systemName: "brain.head.profile")
+                                    .foregroundStyle(.indigo)
+                                    .font(.caption)
+                            }
+                        }
+
+                        Label {
+                            Text(insight.suggestedAction)
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .foregroundStyle(.blue)
+                                .font(.caption)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .background(severityColor.opacity(isExpanded ? 0.06 : 0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .animation(.easeInOut(duration: 0.2), value: isExpanded)
     }
 }

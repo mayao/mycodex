@@ -256,6 +256,21 @@ public final class HealthAPIClient: @unchecked Sendable {
 
         do {
             return try decoder.decode(T.self, from: payload)
+        } catch let decodingError as DecodingError {
+            let detail: String
+            switch decodingError {
+            case let .keyNotFound(key, context):
+                detail = "字段缺失: \(key.stringValue) 路径: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
+            case let .typeMismatch(type, context):
+                detail = "类型不匹配: 期望 \(type) 路径: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
+            case let .valueNotFound(type, context):
+                detail = "值为空: 期望 \(type) 路径: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
+            case let .dataCorrupted(context):
+                detail = "数据损坏: \(context.debugDescription) 路径: \(context.codingPath.map(\.stringValue).joined(separator: "."))"
+            @unknown default:
+                detail = decodingError.localizedDescription
+            }
+            throw HealthAPIClientError.transport("数据解析失败[\(String(describing: T.self))]: \(detail)")
         } catch {
             throw HealthAPIClientError.transport("数据解析失败: \(error.localizedDescription)")
         }
@@ -263,6 +278,10 @@ public final class HealthAPIClient: @unchecked Sendable {
 
     public func fetchModelStatus() async throws -> AIModelStatusResponse {
         try await send(path: "api/ai/model-status")
+    }
+
+    public func setPreferredProvider(_ provider: String) async throws -> AIModelStatusResponse {
+        try await sendJSON(path: "api/ai/model-status", body: SetPreferredProviderRequest(provider: provider))
     }
 
     public func fetchSuggestedQuestions() async throws -> SuggestedQuestionsResponse {
