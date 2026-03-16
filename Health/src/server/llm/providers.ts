@@ -1,3 +1,5 @@
+import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod";
 
 import type {
@@ -40,6 +42,57 @@ export class MockHealthSummaryProvider implements HealthSummaryProvider {
       model: this.model,
       prompt: request.prompt,
       output: request.fallback
+    };
+  }
+}
+
+interface AnthropicProviderOptions {
+  apiKey: string;
+  model: string;
+}
+
+export class AnthropicHealthSummaryProvider implements HealthSummaryProvider {
+  kind: NarrativeProviderKind = "anthropic";
+  model: string;
+  private client: Anthropic;
+
+  constructor(options: AnthropicProviderOptions) {
+    this.model = options.model;
+    this.client = new Anthropic({ apiKey: options.apiKey });
+  }
+
+  async generate(
+    request: HealthSummaryProviderRequest
+  ): Promise<HealthSummaryGenerationResult> {
+    const response = await this.client.messages.parse({
+      model: this.model,
+      max_tokens: 2048,
+      system: request.prompt.systemPrompt,
+      messages: [{ role: "user", content: request.prompt.userPrompt }],
+      output_config: {
+        format: zodOutputFormat(healthSummaryOutputSchema)
+      }
+    });
+
+    const parsed = response.parsed_output;
+
+    if (!parsed) {
+      return {
+        provider: this.kind,
+        model: this.model,
+        prompt: request.prompt,
+        output: request.fallback
+      };
+    }
+
+    return {
+      provider: this.kind,
+      model: this.model,
+      prompt: request.prompt,
+      output: {
+        period_kind: request.periodKind,
+        ...parsed
+      }
     };
   }
 }

@@ -13,6 +13,7 @@ import {
 } from "../utils/app-time";
 import { buildHealthSummaryPrompt } from "./prompt-templates";
 import {
+  AnthropicHealthSummaryProvider,
   MockHealthSummaryProvider,
   OpenAICompatibleHealthSummaryProvider,
   type HealthSummaryProvider
@@ -229,6 +230,13 @@ export function buildHealthSummarySourceInput(
 
 export function resolveHealthSummaryProvider(): HealthSummaryProvider {
   const env = getAppEnv();
+
+  if (env.HEALTH_LLM_PROVIDER === "anthropic" && env.HEALTH_LLM_API_KEY) {
+    return new AnthropicHealthSummaryProvider({
+      apiKey: env.HEALTH_LLM_API_KEY,
+      model: env.HEALTH_LLM_MODEL ?? "claude-opus-4-6"
+    });
+  }
 
   if (
     env.HEALTH_LLM_PROVIDER === "openai-compatible" &&

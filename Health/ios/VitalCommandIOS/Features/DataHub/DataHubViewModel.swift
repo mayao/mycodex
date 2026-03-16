@@ -2,6 +2,21 @@ import Foundation
 import SwiftUI
 import VitalCommandMobileCore
 
+enum ImportPhase: Equatable {
+    case idle
+    case uploading(fileName: String)
+    case serverProcessing(taskId: String, elapsed: Int)
+    case completed(success: Int, total: Int)
+    case failed(message: String)
+
+    var isActive: Bool {
+        switch self {
+        case .uploading, .serverProcessing: return true
+        default: return false
+        }
+    }
+}
+
 @MainActor
 final class DataHubViewModel: ObservableObject {
     @Published private(set) var state: LoadState<[HealthImportOption]> = .idle
@@ -12,6 +27,7 @@ final class DataHubViewModel: ObservableObject {
     @Published private(set) var latestPrivacyMessage: String?
     @Published private(set) var isSubmittingImport = false
     @Published private(set) var isSyncingHealthKit = false
+    @Published private(set) var importPhase: ImportPhase = .idle
 
     private let healthKitService = HealthKitSyncService()
     private var importPollingTask: Task<Void, Never>?
@@ -67,6 +83,7 @@ final class DataHubViewModel: ObservableObject {
         using client: HealthAPIClient
     ) async {
         isSubmittingImport = true
+        importPhase = .uploading(fileName: fileName)
         defer { isSubmittingImport = false }
 
         do {
@@ -79,10 +96,11 @@ final class DataHubViewModel: ObservableObject {
             )
             latestImportTask = response.task
             merge(task: response.task)
-            latestPrivacyMessage = "任务已进入后台处理，可离开当前页面继续使用。"
+            importPhase = .serverProcessing(taskId: response.task.importTaskId, elapsed: 0)
             await refreshImportTasks(using: client)
             startPolling(taskID: response.task.importTaskId, using: client)
         } catch {
+            importPhase = .failed(message: importErrorMessage(for: error))
             latestPrivacyMessage = importErrorMessage(for: error)
         }
     }
@@ -137,6 +155,7 @@ final class DataHubViewModel: ObservableObject {
 
     private func startPolling(taskID: String, using client: HealthAPIClient) {
         importPollingTask?.cancel()
+        pollingElapsed = 0
         importPollingTask = Task {
             while !Task.isCancelled {
                 do {
@@ -148,14 +167,26 @@ final class DataHubViewModel: ObservableObject {
                     }
 
                     if task.isFinished {
+                        await MainActor.run {
+                            self.importPhase = .completed(
+                                success: task.successRecords,
+                                total: max(task.totalRecords, task.successRecords)
+                            )
+                        }
                         await LocalNotificationManager.notify(
                             title: task.taskStatus == .completed ? "数据更新完成" : "数据任务已结束",
                             body: "\(task.title)：成功 \(task.successRecords) / \(task.totalRecords)"
                         )
                         break
+                    } else {
+                        await MainActor.run {
+                            self.pollingElapsed += 2
+                            self.importPhase = .serverProcessing(taskId: taskID, elapsed: self.pollingElapsed)
+                        }
                     }
                 } catch {
                     await MainActor.run {
+                        self.importPhase = .failed(message: error.localizedDescription)
                         self.latestPrivacyMessage = error.localizedDescription
                     }
                     break
@@ -165,6 +196,8 @@ final class DataHubViewModel: ObservableObject {
             }
         }
     }
+
+    private var pollingElapsed = 0
 
     private func merge(task: ImportTaskSummary) {
         var items = importTasks.filter { $0.importTaskId != task.importTaskId }

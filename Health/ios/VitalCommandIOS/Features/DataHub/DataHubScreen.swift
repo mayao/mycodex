@@ -179,15 +179,58 @@ struct DataHubScreen: View {
                     .padding(.vertical, 12)
             }
 
-            if viewModel.isSubmittingImport {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("正在上传处理中...")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+            // Import progress card
+            importProgressView
+        }
+    }
+
+    @ViewBuilder
+    private var importProgressView: some View {
+        switch viewModel.importPhase {
+        case .idle:
+            EmptyView()
+
+        case let .uploading(fileName):
+            ImportProgressCard(
+                icon: "arrow.up.circle.fill",
+                iconColor: .blue,
+                title: "正在上传",
+                detail: fileName,
+                showSpinner: true,
+                progress: nil
+            )
+
+        case let .serverProcessing(_, elapsed):
+            ImportProgressCard(
+                icon: "gearshape.2.fill",
+                iconColor: .orange,
+                title: "AI 解析中",
+                detail: elapsed < 10
+                    ? "服务器正在处理您的文件…"
+                    : "AI 正在提取健康数据（已等待 \(elapsed) 秒）",
+                showSpinner: true,
+                progress: min(Double(elapsed) / 60.0, 0.9)
+            )
+
+        case let .completed(success, total):
+            ImportProgressCard(
+                icon: "checkmark.circle.fill",
+                iconColor: .green,
+                title: "解析完成",
+                detail: "成功提取 \(success) / \(total) 条健康数据，首页已更新。",
+                showSpinner: false,
+                progress: 1.0
+            )
+
+        case let .failed(message):
+            ImportProgressCard(
+                icon: "xmark.circle.fill",
+                iconColor: .red,
+                title: "处理失败",
+                detail: message,
+                showSpinner: false,
+                progress: nil
+            )
         }
     }
 
@@ -420,6 +463,60 @@ struct DataHubScreen: View {
         } catch {
             viewModel.setPrivacyMessage(error.localizedDescription)
         }
+    }
+}
+
+// MARK: - Import Progress Card
+
+private struct ImportProgressCard: View {
+    let icon: String
+    let iconColor: Color
+    let title: String
+    let detail: String
+    let showSpinner: Bool
+    let progress: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundStyle(iconColor)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 8) {
+                        Text(title)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(iconColor)
+                        if showSpinner {
+                            ProgressView()
+                                .scaleEffect(0.7)
+                        }
+                    }
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer()
+            }
+
+            if let progress {
+                ProgressView(value: progress)
+                    .tint(iconColor)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            iconColor.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(iconColor.opacity(0.15), lineWidth: 1)
+        )
     }
 }
 

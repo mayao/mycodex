@@ -3,7 +3,7 @@ import type { PlanReviewData } from "../services/health-plan-service";
 import type { TrendPoint } from "./types";
 
 export type SummaryPeriodKind = "day" | "week" | "month";
-export type NarrativeProviderKind = "mock" | "openai-compatible";
+export type NarrativeProviderKind = "mock" | "openai-compatible" | "anthropic";
 export type TrendRangeKey = "30d" | "90d" | "1y" | "all";
 export type ReportKind = "weekly" | "monthly";
 

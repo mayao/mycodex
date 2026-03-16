@@ -1,6 +1,7 @@
 import SwiftUI
 import Speech
 import AVFoundation
+import UniformTypeIdentifiers
 import VitalCommandMobileCore
 
 struct HomeScreen: View {
@@ -3121,6 +3122,16 @@ private struct DocumentInsightSheet: View {
     @State private var result: DocumentInsightResponse?
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var isNoData = false
+    @State private var showFileImporter = false
+    @State private var showPhotoLibrary = false
+    @State private var showCamera = false
+    @State private var isUploading = false
+    @State private var uploadMessage: String?
+
+    private var importerKey: ImporterKey {
+        insightType == "genetic" ? .genetic : .annualExam
+    }
 
     var body: some View {
         NavigationStack {
@@ -3137,6 +3148,8 @@ private struct DocumentInsightSheet: View {
                             .foregroundStyle(.tertiary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if isNoData {
+                    noDataUploadView
                 } else if let error = errorMessage {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle")
@@ -3168,7 +3181,201 @@ private struct DocumentInsightSheet: View {
                 }
             }
         }
+        .fileImporter(
+            isPresented: $showFileImporter,
+            allowedContentTypes: [.pdf, .commaSeparatedText, .json, .spreadsheet, .item]
+        ) { result in
+            Task { await handleFileImport(result) }
+        }
+        .sheet(isPresented: $showPhotoLibrary) {
+            ImagePickerView(sourceType: .photoLibrary) { image in
+                Task { await handleImageUpload(image) }
+            }
+        }
+        .sheet(isPresented: $showCamera) {
+            ImagePickerView(sourceType: .camera) { image in
+                Task { await handleImageUpload(image) }
+            }
+        }
         .task { await loadInsights() }
+    }
+
+    @ViewBuilder
+    private var noDataUploadView: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Hero
+                VStack(spacing: 12) {
+                    Image(systemName: insightType == "genetic" ? "allergens" : "heart.text.clipboard")
+                        .font(.system(size: 48))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color(hex: "#0f766e") ?? .teal, Color(hex: "#14b8a6") ?? .teal],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                    Text(insightType == "genetic" ? "尚未上传基因检测报告" : "尚未上传体检报告")
+                        .font(.title3.weight(.semibold))
+                    Text(insightType == "genetic"
+                        ? "上传基因检测报告后，AI 将为您分析遗传风险因素、代谢特征和个性化健康建议。"
+                        : "上传体检报告后，AI 将为您解读各项指标、识别异常趋势并生成个性化健康建议。")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 20)
+
+                // What you'll get
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("上传后您将获得")
+                        .font(.subheadline.weight(.semibold))
+
+                    if insightType == "genetic" {
+                        insightBenefitRow(icon: "dna", text: "遗传风险因素分析 — 高血压、糖尿病、高血脂等遗传倾向评估")
+                        insightBenefitRow(icon: "leaf.fill", text: "代谢特征解读 — 咖啡因代谢、乳糖耐受、药物敏感度")
+                        insightBenefitRow(icon: "figure.run", text: "运动与营养建议 — 基于基因型的个性化生活方式优化")
+                        insightBenefitRow(icon: "chart.line.uptrend.xyaxis", text: "基因与实测关联 — 将基因风险与您的实际检测结果交叉分析")
+                    } else {
+                        insightBenefitRow(icon: "exclamationmark.triangle.fill", text: "异常指标识别 — 发现需要关注的健康异常和趋势变化")
+                        insightBenefitRow(icon: "chart.xyaxis.line", text: "历年对比分析 — 多年体检数据的指标变化趋势追踪")
+                        insightBenefitRow(icon: "heart.fill", text: "心血管风险评估 — 血脂、血压、血糖等综合风险分析")
+                        insightBenefitRow(icon: "lightbulb.fill", text: "个性化建议 — 基于您的具体数据的饮食、运动和生活方式建议")
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.teal.opacity(0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                // Upload actions
+                VStack(spacing: 12) {
+                    if insightType != "genetic" {
+                        uploadActionButton(icon: "camera.fill", title: "拍照上传", subtitle: "拍摄体检报告", color: .blue) {
+                            showCamera = true
+                        }
+                        uploadActionButton(icon: "photo.on.rectangle", title: "相册选择", subtitle: "从相册选择图片", color: .purple) {
+                            showPhotoLibrary = true
+                        }
+                    }
+                    uploadActionButton(icon: "doc.text.fill", title: "文件上传", subtitle: "PDF / CSV / Excel", color: .teal) {
+                        showFileImporter = true
+                    }
+                }
+
+                if isUploading {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("正在上传…")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let msg = uploadMessage {
+                    Text(msg)
+                        .font(.caption)
+                        .foregroundStyle(.teal)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .padding(16)
+        }
+        .background(Color.appGroupedBackground)
+    }
+
+    @ViewBuilder
+    private func insightBenefitRow(icon: String, text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundStyle(.teal)
+                .frame(width: 20)
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func uploadActionButton(icon: String, title: String, subtitle: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(color.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                    Image(systemName: icon)
+                        .font(.body)
+                        .foregroundStyle(color)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(isUploading)
+    }
+
+    private func handleFileImport(_ result: Result<URL, Error>) async {
+        do {
+            let url = try result.get()
+            let startedAccess = url.startAccessingSecurityScopedResource()
+            defer { if startedAccess { url.stopAccessingSecurityScopedResource() } }
+            let fileData = try Data(contentsOf: url)
+            let contentType = UTType(filenameExtension: url.pathExtension)
+            let mimeType = contentType?.preferredMIMEType ?? "application/octet-stream"
+            let extractedText = await DocumentTextExtractor.extractText(from: url, data: fileData, contentType: contentType)
+            let client = try settings.makeClient()
+            isUploading = true
+            let _ = try await client.importData(
+                importerKey: importerKey,
+                fileName: url.lastPathComponent,
+                mimeType: mimeType,
+                fileData: fileData,
+                extractedText: extractedText
+            )
+            isUploading = false
+            uploadMessage = "上传成功！后台正在解析，稍后返回此页面即可查看分析结果。"
+            settings.markHealthDataChanged()
+        } catch {
+            isUploading = false
+            uploadMessage = "上传失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func handleImageUpload(_ image: UIImage) async {
+        guard let imageData = image.jpegData(compressionQuality: 0.85) else { return }
+        do {
+            let client = try settings.makeClient()
+            isUploading = true
+            let _ = try await client.importData(
+                importerKey: importerKey,
+                fileName: "photo_\(Date().timeIntervalSince1970).jpg",
+                mimeType: "image/jpeg",
+                fileData: imageData,
+                extractedText: nil
+            )
+            isUploading = false
+            uploadMessage = "上传成功！后台正在解析，稍后返回此页面即可查看分析结果。"
+            settings.markHealthDataChanged()
+        } catch {
+            isUploading = false
+            uploadMessage = "上传失败：\(error.localizedDescription)"
+        }
     }
 
     @ViewBuilder
@@ -3266,9 +3473,22 @@ private struct DocumentInsightSheet: View {
     private func loadInsights() async {
         isLoading = true
         errorMessage = nil
+        isNoData = false
         do {
             let client = try settings.makeClient()
-            result = try await client.fetchDocumentInsights(type: insightType)
+            let response = try await client.fetchDocumentInsights(type: insightType)
+            if !response.hasData {
+                isNoData = true
+            } else {
+                result = response
+            }
+        } catch let apiError as HealthAPIClientError {
+            switch apiError {
+            case let .server(statusCode, _) where statusCode == 404:
+                isNoData = true
+            default:
+                errorMessage = apiError.localizedDescription
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
