@@ -417,8 +417,8 @@ struct LoginServerConfigSheet: View {
 
     private var quickSwitchSection: some View {
         Section("快速切换") {
-            serverRow(name: "主服务器", url: "http://192.168.31.193:3000/")
-            serverRow(name: "备用服务器", url: "http://10.8.144.16:3001/")
+            serverRow(name: "Mac 主服务器", url: "http://10.8.144.16:3001/")
+            serverRow(name: "开发服务器", url: "http://192.168.31.193:3000/")
 
             ForEach(settings.savedServers) { server in
                 serverRow(name: server.name, url: server.url)

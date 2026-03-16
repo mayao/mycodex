@@ -168,8 +168,8 @@ struct SettingsScreen: View {
             // Quick server switching
             Section("快速切换") {
                 // Built-in servers
-                serverSwitchRow(name: "主服务器 (193)", url: "http://192.168.31.193:3000/")
-                serverSwitchRow(name: "备用服务器 (16)", url: "http://10.8.144.16:3001/")
+                serverSwitchRow(name: "Mac 主服务器 (16)", url: "http://10.8.144.16:3001/")
+                serverSwitchRow(name: "开发服务器 (193)", url: "http://192.168.31.193:3000/")
 
                 // Saved servers (excluding built-in ones)
                 ForEach(settings.savedServers.filter { saved in
