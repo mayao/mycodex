@@ -27,6 +27,7 @@
 		C75CE6C6183F0411F978311A /* LoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A004A88204862891DF42780 /* LoadState.swift */; };
 		D71A356CC2645FA632DDE7C1 /* LoginScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB09CEA48A1F12B05972056 /* LoginScreen.swift */; };
 		ECE0CCE00B12B0BA81F63D3D /* PortfolioWorkbenchMobileCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0410839EE2F6F947FB989BFF /* PortfolioWorkbenchMobileCore.framework */; };
+		B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */; };
 		EDC21F0C392F626FC548B806 /* CachedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */; };
 		F0ECB97AC849809A20085215 /* UIComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 710CCCB27BBE88F1EAA34C04 /* UIComponents.swift */; };
 		F14DB378B1217E3DA8B12536 /* LocalMockAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9483CA763B73F4A4E76BAD44 /* LocalMockAPI.swift */; };
@@ -83,6 +84,7 @@
 		B394BBF5B42657D4FE15D630 /* BiometricUnlockScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricUnlockScreen.swift; sourceTree = "<group>"; };
 		BF619D9ECB95AE8735165420 /* OverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewScreen.swift; sourceTree = "<group>"; };
 		CDAD06DB4CF1424598BD8309 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
+		2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderSettings.swift; sourceTree = "<group>"; };
 		DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAccountIdentityStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -165,6 +167,7 @@
 		6F4352F98FC56D82C697D453 /* App */ = {
 			isa = PBXGroup;
 			children = (
+				2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */,
 				70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */,
 				9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */,
 				DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */,
@@ -343,6 +346,7 @@
 			files = (
 				0D95619F42854426BC1165EA /* AIChatScreen.swift in Sources */,
 				35AD8E9528C376F3B009AAE5 /* AccountsScreen.swift in Sources */,
+				B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */,
 				BFC34B2C9DDD91A3D69FEF83 /* AppSettingsStore.swift in Sources */,
 				F8923F2ED81C8FD1FAF13FE1 /* BiometricUnlockScreen.swift in Sources */,
 				EDC21F0C392F626FC548B806 /* CachedSnapshot.swift in Sources */,
