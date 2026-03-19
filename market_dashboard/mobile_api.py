@@ -79,6 +79,10 @@ def _compact_position(holding: dict[str, Any], note_by_symbol: dict[str, dict[st
         "statement_value_hkd": holding["statement_value_hkd"],
         "statement_pnl_pct": holding.get("statement_pnl_pct"),
         "statement_pnl_hkd": holding.get("statement_pnl_hkd"),
+        "pnl_source": holding.get("pnl_source"),
+        "statement_pnl_component_count": holding.get("statement_pnl_component_count"),
+        "estimated_pnl_component_count": holding.get("estimated_pnl_component_count"),
+        "unavailable_pnl_component_count": holding.get("unavailable_pnl_component_count"),
         "current_price": holding.get("current_price"),
         "change_pct": holding.get("change_pct"),
         "change_pct_5d": holding.get("change_pct_5d"),
@@ -635,6 +639,17 @@ def build_mobile_dashboard_payload(
     positions = [_compact_position(item, notes_by_symbol) for item in payload["holdings"]]
     positions_with_pnl = [item for item in payload["holdings"] if item.get("statement_pnl_hkd") is not None]
     total_statement_pnl_hkd = sum(float(item.get("statement_pnl_hkd") or 0.0) for item in positions_with_pnl)
+    statement_pnl_position_count = sum(1 for item in payload["holdings"] if int(item.get("statement_pnl_component_count") or 0) > 0)
+    estimated_pnl_position_count = sum(1 for item in payload["holdings"] if int(item.get("estimated_pnl_component_count") or 0) > 0)
+    unavailable_pnl_position_count = sum(1 for item in payload["holdings"] if item.get("pnl_source") == "unavailable")
+    total_unrealized_pnl_hkd = float(summary.get("total_unrealized_pnl_hkd") or total_statement_pnl_hkd)
+    total_realized_pnl_hkd = float(summary.get("total_realized_pnl_hkd") or 0.0)
+    total_portfolio_pnl_hkd = float(summary.get("total_pnl_hkd") or (total_unrealized_pnl_hkd + total_realized_pnl_hkd))
+    realized_account_count = int(summary.get("realized_account_count") or 0)
+    account_count = int(summary.get("account_count") or 0)
+    statement_realized_account_count = int(summary.get("statement_realized_account_count") or 0)
+    estimated_realized_account_count = int(summary.get("estimated_realized_account_count") or 0)
+    inferred_zero_realized_account_count = int(summary.get("inferred_zero_realized_account_count") or 0)
 
     primary_theme = payload["breakdowns"]["themes"][0] if payload["breakdowns"]["themes"] else None
     primary_broker = payload["breakdowns"]["brokers"][0] if payload["breakdowns"]["brokers"] else None
@@ -667,9 +682,19 @@ def build_mobile_dashboard_payload(
         },
         {
             "label": "盈亏额",
-            "value": _format_signed_hkd(total_statement_pnl_hkd),
-            "detail": f"{len(positions_with_pnl)} 个持仓已计算浮盈亏",
-            "tone": "up" if total_statement_pnl_hkd > 0 else "down" if total_statement_pnl_hkd < 0 else "neutral",
+            "value": _format_signed_hkd(total_portfolio_pnl_hkd),
+            "detail": (
+                f"已实现 {_format_signed_hkd(total_realized_pnl_hkd)}，"
+                f"未实现 {_format_signed_hkd(total_unrealized_pnl_hkd)}；"
+                "已实现已计入结单现金项（利息/分红/税费）；"
+                f"已实现覆盖 {realized_account_count}/{account_count} 个账户"
+                f"（结单实值 {statement_realized_account_count}，估算 {estimated_realized_account_count}，"
+                f"无卖出推断 0 值 {inferred_zero_realized_account_count}）。"
+                f" 持仓口径：结单原值 {statement_pnl_position_count} 个，"
+                f"估算 {estimated_pnl_position_count} 个，"
+                f"不可计算 {unavailable_pnl_position_count} 个"
+            ),
+            "tone": "up" if total_portfolio_pnl_hkd > 0 else "down" if total_portfolio_pnl_hkd < 0 else "neutral",
         },
         {
             "label": "融资占用",

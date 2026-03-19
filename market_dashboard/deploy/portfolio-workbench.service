@@ -1,0 +1,17 @@
+[Unit]
+Description=Portfolio Workbench Server
+After=network.target
+
+[Service]
+Type=simple
+User=xmly
+WorkingDirectory=/opt/portfolio-workbench
+Environment=PYTHONPATH=/opt/portfolio-workbench/.deps
+ExecStart=/usr/bin/python3 app.py --host 0.0.0.0 --port 8008
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

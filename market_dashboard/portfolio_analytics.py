@@ -619,6 +619,209 @@ def safe_pct(numerator: float, denominator: float) -> float | None:
     return numerator / denominator * 100.0
 
 
+def _resolve_account_pnl(account: dict[str, Any], *, default_currency: str) -> tuple[float | None, str]:
+    currency = str(account.get("currency") or default_currency or "USD")
+    statement_pnl = account.get("statement_pnl")
+    if statement_pnl is not None:
+        return hkd_value(float(statement_pnl), currency), "statement"
+
+    statement_value = account.get("statement_value")
+    quantity = account.get("quantity")
+    cost = account.get("cost")
+    if statement_value is not None and quantity is not None and cost is not None:
+        estimated = float(statement_value) - float(quantity) * float(cost)
+        return hkd_value(estimated, currency), "estimated"
+
+    return None, "unavailable"
+
+
+def _resolve_holding_pnl_components(row: dict[str, Any]) -> dict[str, Any]:
+    accounts = row.get("accounts") or []
+    default_currency = str(row.get("currency") or "USD")
+    statement_hkd = 0.0
+    estimated_hkd = 0.0
+    statement_count = 0
+    estimated_count = 0
+    unavailable_count = 0
+    cost_basis_hkd = 0.0
+    cost_basis_count = 0
+
+    if accounts:
+        for account in accounts:
+            if not isinstance(account, dict):
+                continue
+            account_pnl_hkd, source = _resolve_account_pnl(account, default_currency=default_currency)
+            if source == "statement" and account_pnl_hkd is not None:
+                statement_hkd += account_pnl_hkd
+                statement_count += 1
+            elif source == "estimated" and account_pnl_hkd is not None:
+                estimated_hkd += account_pnl_hkd
+                estimated_count += 1
+            else:
+                unavailable_count += 1
+
+            cost = account.get("cost")
+            quantity = account.get("quantity")
+            if cost is not None and quantity is not None:
+                account_currency = str(account.get("currency") or default_currency)
+                cost_basis_hkd += hkd_value(float(cost) * float(quantity), account_currency)
+                cost_basis_count += 1
+    else:
+        statement_present = int(row.get("statement_pnl_present_count") or 0) > 0 and row.get("statement_pnl") is not None
+        if statement_present:
+            statement_hkd = hkd_value(float(row.get("statement_pnl") or 0.0), default_currency)
+            statement_count = 1
+        else:
+            statement_value = row.get("statement_value")
+            quantity = row.get("quantity")
+            avg_cost = row.get("avg_cost")
+            if statement_value is not None and quantity is not None and avg_cost is not None:
+                estimated_hkd = hkd_value(float(statement_value) - float(quantity) * float(avg_cost), default_currency)
+                estimated_count = 1
+            else:
+                unavailable_count = 1
+        if row.get("cost_value") is not None:
+            cost_basis_hkd = hkd_value(float(row.get("cost_value") or 0.0), default_currency)
+            cost_basis_count = 1
+
+    total_pnl_hkd: float | None = None
+    if statement_count > 0 or estimated_count > 0:
+        total_pnl_hkd = statement_hkd + estimated_hkd
+
+    if statement_count > 0 and estimated_count > 0:
+        pnl_source = "mixed"
+    elif statement_count > 0:
+        pnl_source = "statement"
+    elif estimated_count > 0:
+        pnl_source = "estimated"
+    else:
+        pnl_source = "unavailable"
+
+    return {
+        "statement_hkd": statement_hkd,
+        "estimated_hkd": estimated_hkd,
+        "total_hkd": total_pnl_hkd,
+        "pnl_source": pnl_source,
+        "statement_count": statement_count,
+        "estimated_count": estimated_count,
+        "unavailable_count": unavailable_count,
+        "cost_basis_hkd": cost_basis_hkd if cost_basis_count > 0 else None,
+    }
+
+
+def _account_statement_pnl_pct(account: dict[str, Any], *, default_currency: str) -> float | None:
+    pnl_hkd, _ = _resolve_account_pnl(account, default_currency=default_currency)
+    if pnl_hkd is None:
+        return None
+    cost = account.get("cost")
+    quantity = account.get("quantity")
+    if cost is None or quantity is None:
+        return None
+    account_currency = str(account.get("currency") or default_currency)
+    cost_basis_hkd = hkd_value(float(cost) * float(quantity), account_currency)
+    return safe_pct(pnl_hkd, cost_basis_hkd)
+
+
+def _account_realized_pnl_summary(account: dict[str, Any]) -> dict[str, Any]:
+    entries = account.get("realized_pnl_entries")
+    if isinstance(entries, list):
+        total_hkd = 0.0
+        has_entry = False
+        source_set: set[str] = set()
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            amount = entry.get("amount")
+            if amount is None:
+                continue
+            currency = str(entry.get("currency") or account.get("pnl_currency") or account.get("base_currency") or "USD")
+            total_hkd += hkd_value(float(amount), currency)
+            has_entry = True
+            source_set.add(str(entry.get("source") or "statement").strip() or "statement")
+        if has_entry:
+            normalized_sources = {
+                "statement" if source in {"statement", "statement_cashflow", "statement_legacy"} else source
+                for source in source_set
+            }
+            has_statement = "statement" in normalized_sources
+            has_estimated = "estimated" in normalized_sources
+            has_inferred_zero = "inferred_zero" in normalized_sources
+            if has_estimated and (has_statement or has_inferred_zero):
+                source = "mixed"
+            elif has_estimated:
+                source = "estimated"
+            elif has_statement:
+                source = "statement"
+            elif has_inferred_zero:
+                source = "inferred_zero"
+            else:
+                source = next(iter(normalized_sources)) if normalized_sources else "mixed"
+            return {
+                "value_hkd": round(total_hkd, 2),
+                "source": source,
+                "entry_count": len([entry for entry in entries if isinstance(entry, dict) and entry.get("amount") is not None]),
+            }
+
+    realized = account.get("realized_pnl")
+    if realized is None:
+        return {
+            "value_hkd": None,
+            "source": "missing",
+            "entry_count": 0,
+        }
+    currency = str(account.get("pnl_currency") or account.get("base_currency") or "USD")
+    return {
+        "value_hkd": round(hkd_value(float(realized), currency), 2),
+        "source": "statement_legacy",
+        "entry_count": 1,
+    }
+
+
+def _account_unrealized_pnl_components(account: dict[str, Any]) -> dict[str, Any]:
+    total_hkd = 0.0
+    statement_count = 0
+    estimated_count = 0
+    unavailable_count = 0
+
+    for row in account.get("holdings", []):
+        if not isinstance(row, dict):
+            continue
+        currency = str(row.get("currency") or account.get("base_currency") or "USD")
+        statement_pnl = row.get("statement_pnl")
+        if statement_pnl is not None:
+            total_hkd += hkd_value(float(statement_pnl), currency)
+            statement_count += 1
+            continue
+
+        statement_value = row.get("statement_value")
+        quantity = row.get("quantity")
+        cost = row.get("cost")
+        if statement_value is not None and quantity is not None and cost is not None:
+            estimated = float(statement_value) - float(quantity) * float(cost)
+            total_hkd += hkd_value(estimated, currency)
+            estimated_count += 1
+        else:
+            unavailable_count += 1
+
+    for row in account.get("derivatives", []):
+        if not isinstance(row, dict):
+            continue
+        unrealized = row.get("unrealized_pnl")
+        if unrealized is None:
+            unavailable_count += 1
+            continue
+        currency = str(row.get("currency") or account.get("base_currency") or "USD")
+        total_hkd += hkd_value(float(unrealized), currency)
+        statement_count += 1
+
+    return {
+        "unrealized_hkd": round(total_hkd, 2),
+        "statement_component_count": statement_count,
+        "estimated_component_count": estimated_count,
+        "unavailable_component_count": unavailable_count,
+    }
+
+
 def stable_unit(seed: str) -> float:
     digest = sha256(seed.encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big") / float(2**64 - 1)
@@ -699,10 +902,16 @@ def asset_meta(symbol: str, fallback_name: str, market: str, currency: str) -> d
 def normalize_holding(row: dict[str, Any], total_value_hkd: float) -> dict[str, Any]:
     meta = asset_meta(row["symbol"], row["name"], row["market"], row["currency"])
     statement_value_hkd = hkd_value(row.get("statement_value"), row.get("currency"))
-    statement_pnl_hkd = hkd_value(row.get("statement_pnl"), row.get("currency"))
+    pnl_components = _resolve_holding_pnl_components(row)
+    statement_pnl_hkd = pnl_components.get("total_hkd")
     avg_cost = row.get("avg_cost")
     price = row.get("statement_price")
-    pnl_pct = safe_pct(row.get("statement_pnl") or 0.0, row.get("cost_value") or 0.0)
+    pnl_pct = safe_pct(
+        float(statement_pnl_hkd) if statement_pnl_hkd is not None else 0.0,
+        float(pnl_components.get("cost_basis_hkd") or 0.0),
+    )
+    if statement_pnl_hkd is None:
+        pnl_pct = None
     weight_pct = safe_pct(statement_value_hkd, total_value_hkd) or 0.0
     category = CATEGORY_BY_ID.get(meta["category"], {"name": "其他持仓"})
 
@@ -720,8 +929,14 @@ def normalize_holding(row: dict[str, Any], total_value_hkd: float) -> dict[str, 
         "statement_value": row.get("statement_value"),
         "statement_value_hkd": round(statement_value_hkd, 2),
         "statement_pnl": row.get("statement_pnl"),
-        "statement_pnl_hkd": round(statement_pnl_hkd, 2),
+        "statement_pnl_hkd": round(float(statement_pnl_hkd), 2) if statement_pnl_hkd is not None else None,
         "statement_pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
+        "pnl_source": pnl_components.get("pnl_source"),
+        "statement_pnl_component_hkd": round(float(pnl_components.get("statement_hkd") or 0.0), 2),
+        "estimated_pnl_component_hkd": round(float(pnl_components.get("estimated_hkd") or 0.0), 2),
+        "statement_pnl_component_count": int(pnl_components.get("statement_count") or 0),
+        "estimated_pnl_component_count": int(pnl_components.get("estimated_count") or 0),
+        "unavailable_pnl_component_count": int(pnl_components.get("unavailable_count") or 0),
         "weight_pct": round(weight_pct, 2),
         "account_count": row["account_count"],
         "accounts": row["accounts"],
@@ -833,6 +1048,23 @@ def build_account_cards(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
             2,
         )
         nav_hkd = round(hkd_value(account.get("nav"), account.get("base_currency")), 2)
+        realized_info = _account_realized_pnl_summary(account)
+        realized_pnl_hkd = realized_info.get("value_hkd")
+        realized_source = str(realized_info.get("source") or "missing")
+        unrealized_components = _account_unrealized_pnl_components(account)
+        unrealized_pnl_hkd = float(unrealized_components.get("unrealized_hkd") or 0.0)
+        total_pnl_hkd = round(
+            unrealized_pnl_hkd + (float(realized_pnl_hkd) if realized_pnl_hkd is not None else 0.0),
+            2,
+        )
+        if realized_pnl_hkd is None:
+            pnl_source = "unrealized_only"
+        elif realized_source in {"statement", "statement_legacy"}:
+            pnl_source = "complete"
+        elif realized_source == "inferred_zero":
+            pnl_source = "complete_inferred_zero"
+        else:
+            pnl_source = "complete_estimated"
         top_names = []
         sorted_holdings = sorted(
             account.get("holdings", []),
@@ -850,6 +1082,14 @@ def build_account_cards(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "nav_hkd": nav_hkd,
                 "holdings_value_hkd": holdings_value_hkd,
                 "financing_hkd": financing_hkd,
+                "realized_pnl_hkd": round(float(realized_pnl_hkd), 2) if realized_pnl_hkd is not None else None,
+                "realized_pnl_source": realized_source,
+                "unrealized_pnl_hkd": round(unrealized_pnl_hkd, 2),
+                "total_pnl_hkd": total_pnl_hkd,
+                "pnl_source": pnl_source,
+                "statement_unrealized_component_count": int(unrealized_components.get("statement_component_count") or 0),
+                "estimated_unrealized_component_count": int(unrealized_components.get("estimated_component_count") or 0),
+                "unavailable_unrealized_component_count": int(unrealized_components.get("unavailable_component_count") or 0),
                 "holding_count": len(account.get("holdings", [])),
                 "trade_count": len(account.get("recent_trades", [])),
                 "derivative_count": len(account.get("derivatives", [])),
@@ -1463,7 +1703,8 @@ def build_risk_flags(
 ) -> list[dict[str, str]]:
     flags: list[dict[str, str]] = []
     largest = holdings[0] if holdings else None
-    biggest_loser = min(holdings, key=lambda item: item["statement_pnl_hkd"], default=None)
+    holdings_with_pnl = [item for item in holdings if item.get("statement_pnl_hkd") is not None]
+    biggest_loser = min(holdings_with_pnl, key=lambda item: float(item.get("statement_pnl_hkd") or 0.0), default=None)
     financing_ratio = safe_pct(total_financing_hkd, total_nav_hkd) or 0.0
     derivative_ratio = safe_pct(total_derivative_notional_hkd, total_nav_hkd) or 0.0
 
@@ -2621,12 +2862,13 @@ def build_stock_detail_payload(
     related_accounts = []
     for index, account in enumerate(target.get("accounts", []), start=1):
         account_label = account["broker"] if not share_mode else f"账户 {index}"
+        account_statement_pnl_pct = _account_statement_pnl_pct(account, default_currency=target["currency"])
         demo_statement_value = share_demo_hkd(
             hkd_value(account.get("statement_value"), target["currency"]),
             f"share-detail-account-value:{target['symbol']}:{account.get('account_id') or index}",
         )
         demo_statement_pnl_pct = share_demo_pct(
-            safe_pct(account.get("statement_pnl") or 0.0, (account.get("cost") or 0.0) * (account.get("quantity") or 0.0)),
+            account_statement_pnl_pct,
             f"share-detail-account-pnl:{target['symbol']}:{account.get('account_id') or index}",
         )
         related_accounts.append(
@@ -2639,7 +2881,7 @@ def build_stock_detail_payload(
                 ),
                 "statement_value": hkd_value(account.get("statement_value"), target["currency"]) if not share_mode else demo_statement_value,
                 "statement_pnl_pct": (
-                    safe_pct(account.get("statement_pnl") or 0.0, (account.get("cost") or 0.0) * (account.get("quantity") or 0.0))
+                    account_statement_pnl_pct
                     if not share_mode
                     else demo_statement_pnl_pct
                 ),
@@ -2665,14 +2907,16 @@ def build_stock_detail_payload(
         {
             "label": "浮盈亏",
             "value": (
-                f"{target['statement_pnl_pct']:.2f}% / HK${target['statement_pnl_hkd']:,.0f}"
+                (
+                    f"{target['statement_pnl_pct']:.2f}% / HK${target['statement_pnl_hkd']:,.0f}"
+                    if target.get("statement_pnl_pct") is not None and target.get("statement_pnl_hkd") is not None
+                    else "不可计算"
+                )
                 if not share_mode
                 else (
-                    (
-                        f"{demo_pnl_pct:+.2f}% / {'-' if (demo_pnl_hkd or 0.0) < 0 else ''}HK${abs(demo_pnl_hkd or 0.0):,.0f}"
-                        if demo_pnl_pct is not None and demo_pnl_hkd is not None
-                        else "演示中"
-                    )
+                    f"{demo_pnl_pct:+.2f}% / {'-' if (demo_pnl_hkd or 0.0) < 0 else ''}HK${abs(demo_pnl_hkd or 0.0):,.0f}"
+                    if demo_pnl_pct is not None and demo_pnl_hkd is not None
+                    else "演示中"
                 )
             ),
         },
@@ -3415,6 +3659,16 @@ def monitored_statements(accounts: list[dict[str, Any]], user_id: str | None = N
                 "file_name": path.name,
                 "source_mode": item.get("source_mode", "default"),
                 "uploaded_at": item.get("uploaded_at"),
+                "uploaded_media_type": item.get("uploaded_media_type"),
+                "parser_mode": item.get("parser_mode"),
+                "parse_status": item.get("parse_status"),
+                "parse_issue": item.get("parse_issue"),
+                "llm_provider": item.get("llm_provider"),
+                "llm_model": item.get("llm_model"),
+                "parsed_payload_path": item.get("parsed_payload_path"),
+                "detected_broker": item.get("detected_broker"),
+                "detected_statement_type": item.get("detected_statement_type"),
+                "last_parsed_at": item.get("last_parsed_at"),
                 "file_exists": path.exists(),
                 "load_status": status.get("load_status") or ("parsed" if path.exists() else "error"),
                 "issue": status.get("issue"),
@@ -3440,6 +3694,15 @@ def _empty_dashboard_payload(user_id: str | None = None) -> dict[str, Any]:
             "total_statement_value_hkd": 0.0,
             "total_financing_hkd": 0.0,
             "total_derivative_notional_hkd": 0.0,
+            "total_unrealized_pnl_hkd": 0.0,
+            "total_realized_pnl_hkd": 0.0,
+            "total_pnl_hkd": 0.0,
+            "realized_account_count": 0,
+            "unrealized_only_account_count": 0,
+            "realized_coverage_pct": 0.0,
+            "statement_realized_account_count": 0,
+            "estimated_realized_account_count": 0,
+            "inferred_zero_realized_account_count": 0,
             "top5_ratio": 0.0,
             "top1_weight_pct": 0.0,
             "statement_start_date": today,
@@ -3638,6 +3901,34 @@ def build_dashboard_payload(
     }
     provider_counts = live_bundle.get("provider_counts", {})
     provider_summary = provider_summary_text(provider_counts)
+    total_unrealized_pnl_hkd = round(
+        sum(float(item.get("unrealized_pnl_hkd") or 0.0) for item in account_cards),
+        2,
+    )
+    realized_accounts = [item for item in account_cards if item.get("realized_pnl_hkd") is not None]
+    total_realized_pnl_hkd = round(
+        sum(float(item.get("realized_pnl_hkd") or 0.0) for item in realized_accounts),
+        2,
+    )
+    total_pnl_hkd = round(total_unrealized_pnl_hkd + total_realized_pnl_hkd, 2)
+    realized_account_count = len(realized_accounts)
+    realized_coverage_pct = round(safe_pct(realized_account_count, len(account_cards)) or 0.0, 2)
+    unrealized_only_account_count = len(account_cards) - realized_account_count
+    statement_realized_account_count = sum(
+        1
+        for item in realized_accounts
+        if str(item.get("realized_pnl_source") or "") in {"statement", "statement_legacy"}
+    )
+    estimated_realized_account_count = sum(
+        1
+        for item in realized_accounts
+        if str(item.get("realized_pnl_source") or "") in {"estimated", "mixed"}
+    )
+    inferred_zero_realized_account_count = sum(
+        1
+        for item in realized_accounts
+        if str(item.get("realized_pnl_source") or "") == "inferred_zero"
+    )
     source_cache_overview = ""
     if source_health.get("cached_count"):
         source_cache_overview = f"结单层有 {source_health['cached_count']} 个账户使用缓存快照。"
@@ -3648,6 +3939,10 @@ def build_dashboard_payload(
     overview = (
         f"股票市值约 HK${portfolio['total_statement_value_hkd']:,.0f}，净资产约 HK${portfolio['total_nav_hkd']:,.0f}，"
         f"融资相关负现金约 HK${portfolio['total_financing_hkd']:,.0f}。"
+        f"账户盈亏口径：已实现 HK${total_realized_pnl_hkd:,.0f} + 未实现 HK${total_unrealized_pnl_hkd:,.0f}"
+        f" = 合计 HK${total_pnl_hkd:,.0f}（已实现含结单现金项，如利息/分红/税费）"
+        f"（已实现覆盖 {realized_account_count}/{len(account_cards)} 个账户；"
+        f"结单实值 {statement_realized_account_count}，估算 {estimated_realized_account_count}，无卖出推断 0 值 {inferred_zero_realized_account_count}）。"
         f"当前价格层使用 {live_mode_map.get(live_bundle.get('source_mode'), '离线快照')}，"
         f"{f'主数据源为 {provider_summary}；' if provider_summary else ''}"
         f"60 日走势窗口固定为 {HISTORY_POINTS} 个交易日，接口异常时自动回退到本地日更快照，再兜底到结单价格。"
@@ -3669,6 +3964,15 @@ def build_dashboard_payload(
             "total_statement_value_hkd": portfolio["total_statement_value_hkd"],
             "total_financing_hkd": portfolio["total_financing_hkd"],
             "total_derivative_notional_hkd": total_derivative_notional_hkd,
+            "total_unrealized_pnl_hkd": total_unrealized_pnl_hkd,
+            "total_realized_pnl_hkd": total_realized_pnl_hkd,
+            "total_pnl_hkd": total_pnl_hkd,
+            "realized_account_count": realized_account_count,
+            "unrealized_only_account_count": unrealized_only_account_count,
+            "realized_coverage_pct": realized_coverage_pct,
+            "statement_realized_account_count": statement_realized_account_count,
+            "estimated_realized_account_count": estimated_realized_account_count,
+            "inferred_zero_realized_account_count": inferred_zero_realized_account_count,
             "top5_ratio": portfolio["top5_ratio"],
             "top1_weight_pct": holdings[0]["weight_pct"] if holdings else 0.0,
             "statement_start_date": snapshot_dates[0],
