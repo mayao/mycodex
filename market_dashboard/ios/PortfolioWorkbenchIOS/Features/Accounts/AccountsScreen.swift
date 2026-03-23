@@ -103,6 +103,12 @@ struct AccountsScreen: View {
     private func accountsSection(_ payload: MobileDashboardPayload) -> some View {
         SectionPanel(title: "账户总览") {
             VStack(alignment: .leading, spacing: 12) {
+                SectionStatusRow(
+                    lastUpdatedAt: dashboardStore.lastUpdatedAt,
+                    isRefreshing: dashboardStore.isRefreshing,
+                    isShowingCachedSnapshot: dashboardStore.isShowingCachedSnapshot
+                )
+
                 Chart(payload.accounts.prefix(6)) { account in
                     BarMark(
                         x: .value("账户", "\(account.broker)-\(account.accountId.suffix(4))"),

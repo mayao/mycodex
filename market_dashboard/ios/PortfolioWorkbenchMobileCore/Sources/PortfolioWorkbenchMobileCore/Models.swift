@@ -526,6 +526,7 @@ public struct MobilePosition: Codable, Sendable, Identifiable {
     public let nameEn: String?
     public let market: String
     public let currency: String
+    public let quantity: Double?
     public let categoryName: String
     public let styleLabel: String
     public let fundamentalLabel: String
@@ -552,6 +553,70 @@ public struct MobilePosition: Codable, Sendable, Identifiable {
     public let sparklinePoints: [Double]
 
     public var id: String { symbol }
+
+    public init(
+        symbol: String,
+        name: String,
+        nameEn: String? = nil,
+        market: String,
+        currency: String,
+        quantity: Double? = nil,
+        categoryName: String,
+        styleLabel: String,
+        fundamentalLabel: String,
+        weightPct: Double,
+        statementValueHkd: Double,
+        statementPnlPct: Double? = nil,
+        statementPnlHkd: Double? = nil,
+        currentPrice: Double? = nil,
+        changePct: Double? = nil,
+        changePct5d: Double? = nil,
+        tradeDate: String? = nil,
+        signalScore: Int? = nil,
+        signalZone: String? = nil,
+        trendState: String? = nil,
+        positionLabel: String? = nil,
+        macroSignal: String? = nil,
+        newsSignal: String? = nil,
+        accountCount: Int? = nil,
+        stance: String,
+        role: String,
+        summary: String? = nil,
+        action: String? = nil,
+        watchItems: String? = nil,
+        sparklinePoints: [Double]
+    ) {
+        self.symbol = symbol
+        self.name = name
+        self.nameEn = nameEn
+        self.market = market
+        self.currency = currency
+        self.quantity = quantity
+        self.categoryName = categoryName
+        self.styleLabel = styleLabel
+        self.fundamentalLabel = fundamentalLabel
+        self.weightPct = weightPct
+        self.statementValueHkd = statementValueHkd
+        self.statementPnlPct = statementPnlPct
+        self.statementPnlHkd = statementPnlHkd
+        self.currentPrice = currentPrice
+        self.changePct = changePct
+        self.changePct5d = changePct5d
+        self.tradeDate = tradeDate
+        self.signalScore = signalScore
+        self.signalZone = signalZone
+        self.trendState = trendState
+        self.positionLabel = positionLabel
+        self.macroSignal = macroSignal
+        self.newsSignal = newsSignal
+        self.accountCount = accountCount
+        self.stance = stance
+        self.role = role
+        self.summary = summary
+        self.action = action
+        self.watchItems = watchItems
+        self.sparklinePoints = sparklinePoints
+    }
 }
 
 public struct MobileAccount: Codable, Sendable, Identifiable {
@@ -615,12 +680,64 @@ public struct MobileStatementSource: Codable, Sendable, Identifiable {
     public let fileName: String
     public let issue: String?
     public let loadStatus: String
+    public let availabilityStatus: String?
+    public let availabilityNote: String?
+    public let parsedPayloadExists: Bool?
     public let sourceMode: String
     public let statementDate: String?
     public let statementType: String
     public let uploadedAt: String?
 
     public var id: String { accountId }
+
+    public init(
+        accountId: String,
+        broker: String,
+        fileExists: Bool,
+        fileName: String,
+        issue: String? = nil,
+        loadStatus: String,
+        availabilityStatus: String? = nil,
+        availabilityNote: String? = nil,
+        parsedPayloadExists: Bool? = nil,
+        sourceMode: String,
+        statementDate: String? = nil,
+        statementType: String,
+        uploadedAt: String? = nil
+    ) {
+        self.accountId = accountId
+        self.broker = broker
+        self.fileExists = fileExists
+        self.fileName = fileName
+        self.issue = issue
+        self.loadStatus = loadStatus
+        self.availabilityStatus = availabilityStatus
+        self.availabilityNote = availabilityNote
+        self.parsedPayloadExists = parsedPayloadExists
+        self.sourceMode = sourceMode
+        self.statementDate = statementDate
+        self.statementType = statementType
+        self.uploadedAt = uploadedAt
+    }
+}
+
+public enum HoldingsExportFormat: String, Sendable, CaseIterable, Identifiable {
+    case pdf
+    case xlsx
+
+    public var id: String { rawValue }
+}
+
+public struct ExportedDocument: Sendable, Equatable {
+    public let fileURL: URL
+    public let fileName: String
+    public let contentType: String
+
+    public init(fileURL: URL, fileName: String, contentType: String) {
+        self.fileURL = fileURL
+        self.fileName = fileName
+        self.contentType = contentType
+    }
 }
 
 public struct MobileReferenceSource: Codable, Sendable, Identifiable {
@@ -906,4 +1023,12 @@ public struct HoldingDetailNote: Codable, Sendable {
 public struct StatementUploadEnvelope: Codable, Sendable {
     public let message: String
     public let payload: MobileDashboardPayload?
+    public let resolvedAccountId: String?
+    public let resolvedBroker: String?
+    public let resolvedStatementType: String?
+    public let detectedBroker: String?
+    public let detectedStatementType: String?
+    public let detectedStatementDate: String?
+    public let routingAction: String?
+    public let rejectionReason: String?
 }

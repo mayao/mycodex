@@ -128,8 +128,46 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         return try await send(path: "api/mobile/dashboard-ai", query: query)
     }
 
-    public func fetchAIServiceStatus() async throws -> AIServiceStatusPayload {
-        try await send(path: "api/mobile/ai-service-status")
+    public func fetchAIServiceStatus(probe: Bool = false) async throws -> AIServiceStatusPayload {
+        let query = probe ? [URLQueryItem(name: "probe", value: "1")] : []
+        return try await send(path: "api/mobile/ai-service-status", query: query)
+    }
+
+    public func downloadHoldingsExport(format: HoldingsExportFormat) async throws -> ExportedDocument {
+        let request = makeRequest(
+            path: "api/mobile/export/holdings",
+            method: "GET",
+            query: [URLQueryItem(name: "format", value: format.rawValue)]
+        )
+        let payload: Data
+        let response: URLResponse
+
+        do {
+            (payload, response) = try await session.data(for: request)
+        } catch {
+            throw PortfolioWorkbenchAPIClientError.transport(error.localizedDescription)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PortfolioWorkbenchAPIClientError.invalidResponse
+        }
+
+        guard (200 ..< 300).contains(httpResponse.statusCode) else {
+            if let envelope = try? decoder.decode(APIErrorEnvelope.self, from: payload) {
+                throw PortfolioWorkbenchAPIClientError.server(statusCode: httpResponse.statusCode, message: envelope.error.message)
+            }
+            throw PortfolioWorkbenchAPIClientError.server(statusCode: httpResponse.statusCode, message: "导出失败。")
+        }
+
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "application/octet-stream"
+        let headerFileName = httpResponse.value(forHTTPHeaderField: "Content-Disposition")
+            .flatMap(Self.fileName(fromContentDisposition:))
+        let fileName = headerFileName ?? "myinvai-holdings.\(format.rawValue)"
+        let safeFileName = fileName.replacingOccurrences(of: "/", with: "-")
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-\(safeFileName)")
+        try payload.write(to: tempURL, options: .atomic)
+        return ExportedDocument(fileURL: tempURL, fileName: fileName, contentType: contentType)
     }
 
     public func fetchHoldingDetail(symbol: String, refresh: Bool = false) async throws -> HoldingDetailPayload {
@@ -329,6 +367,17 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         } catch {
             throw PortfolioWorkbenchAPIClientError.transport("数据解析失败: \(error.localizedDescription)")
         }
+    }
+
+    private static func fileName(fromContentDisposition value: String) -> String? {
+        let parts = value.split(separator: ";").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        for part in parts {
+            if part.lowercased().hasPrefix("filename=") {
+                let raw = part.dropFirst("filename=".count)
+                return raw.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            }
+        }
+        return nil
     }
 
     private func makeRequest(path: String, method: String, query: [URLQueryItem] = []) -> URLRequest {

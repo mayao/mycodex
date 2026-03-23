@@ -481,6 +481,31 @@ final class PortfolioWorkbenchAPIClientTests: XCTestCase {
         XCTAssertEqual(session.lastRequest?.url?.path, "/api/mobile/ai-service-status")
     }
 
+    func testFetchesAIServiceStatusWithProbeFlag() async throws {
+        let session = MockSession(
+            statusCode: 200,
+            body: """
+            {
+              "primary_provider": "anthropic",
+              "enable_fallbacks": true,
+              "provider_order": ["anthropic", "kimi", "gemini"],
+              "uses_service_config": true,
+              "note": "",
+              "providers": []
+            }
+            """
+        )
+        let client = PortfolioWorkbenchAPIClient(
+            configuration: AppServerConfiguration(baseURL: URL(string: "http://localhost:8008/")!),
+            session: session
+        )
+
+        _ = try await client.fetchAIServiceStatus(probe: true)
+
+        let queryItems = URLComponents(url: try XCTUnwrap(session.lastRequest?.url), resolvingAgainstBaseURL: false)?.queryItems
+        XCTAssertEqual(queryItems?.first(where: { $0.name == "probe" })?.value, "1")
+    }
+
     func testBuildsOwnerDevLoginRequest() async throws {
         let session = MockSession(
             statusCode: 200,

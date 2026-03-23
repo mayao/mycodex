@@ -165,6 +165,7 @@ final class AppSettingsStore: ObservableObject {
     @Published private(set) var requiresBiometricUnlock: Bool
     @Published private(set) var biometryType: DeviceBiometryType
     @Published private(set) var isRestoringDeviceSession: Bool
+    @Published private(set) var connectionStatusMessage: String?
 
     init(
         identityStore: DeviceAccountIdentityStore = .shared,
@@ -227,6 +228,7 @@ final class AppSettingsStore: ObservableObject {
         self.automaticRestoreAttemptServerURLString = nil
         self.automaticDeviceRestoreSuppressed = UserDefaults.standard.bool(forKey: Self.automaticDeviceRestoreSuppressedKey)
         self.isRestoringDeviceSession = false
+        self.connectionStatusMessage = nil
 
         let environment = ProcessInfo.processInfo.environment
         let autoMockLogin = environment[Self.autoMockLoginInfoKey]?.lowercased()
@@ -294,6 +296,10 @@ final class AppSettingsStore: ObservableObject {
 
     var isAuthenticated: Bool {
         currentUser != nil && !(sessionToken ?? "").isEmpty
+    }
+
+    var canAttemptAutomaticDeviceLogin: Bool {
+        !automaticDeviceRestoreSuppressed
     }
 
     var supportsBiometricUnlock: Bool {
@@ -402,6 +408,7 @@ final class AppSettingsStore: ObservableObject {
         lastValidatedServerURLString = trimmedServerURLString
         automaticRestoreAttemptServerURLString = nil
         automaticDeviceRestoreSuppressed = false
+        connectionStatusMessage = "已连接 \(displayServerName(from: trimmedServerURLString))"
     }
 
     func activateLocalMockPhoneSession(phoneNumber: String = PortfolioWorkbenchLocalMock.mockPhoneNumber) {
@@ -414,6 +421,7 @@ final class AppSettingsStore: ObservableObject {
         lastValidatedServerURLString = trimmedServerURLString
         automaticRestoreAttemptServerURLString = nil
         automaticDeviceRestoreSuppressed = false
+        connectionStatusMessage = nil
     }
 
     func activateLocalMockWeChatSession(displayName: String? = nil) {
@@ -426,6 +434,7 @@ final class AppSettingsStore: ObservableObject {
         lastValidatedServerURLString = trimmedServerURLString
         automaticRestoreAttemptServerURLString = nil
         automaticDeviceRestoreSuppressed = false
+        connectionStatusMessage = nil
     }
 
     func updateCurrentUser(_ user: MobileUser) {
@@ -444,6 +453,7 @@ final class AppSettingsStore: ObservableObject {
         requiresBiometricUnlock = false
         lastSessionValidationAt = nil
         lastValidatedServerURLString = nil
+        connectionStatusMessage = nil
     }
 
     func logoutCurrentSession() {
@@ -467,15 +477,13 @@ final class AppSettingsStore: ObservableObject {
         automaticRestoreAttemptServerURLString = currentURL
         isRestoringDeviceSession = true
         defer { isRestoringDeviceSession = false }
+        connectionStatusMessage = "正在连接服务器…"
 
         do {
-            let client = try makeNetworkClient()
-            let payload = try await client.bootstrapDeviceAccount(
-                deviceID: deviceAccountProfile.installationID,
-                deviceName: Self.currentDeviceLabel
-            )
+            let payload = try await bootstrapDeviceSessionWithAutoFailover()
             updateAuthenticatedSession(payload)
         } catch {
+            connectionStatusMessage = userFriendlyConnectionMessage(for: error)
             // Keep the login screen visible; the user can still switch server or log in manually.
         }
     }
@@ -485,12 +493,9 @@ final class AppSettingsStore: ObservableObject {
         if requireLocalAuthentication {
             try await authenticateLocalUser(reason: "使用 \(biometryType.displayName) 登录你的投资账户")
         }
+        connectionStatusMessage = "正在连接服务器…"
 
-        let client = try makeNetworkClient()
-        let payload = try await client.bootstrapDeviceAccount(
-            deviceID: deviceAccountProfile.installationID,
-            deviceName: Self.currentDeviceLabel
-        )
+        let payload = try await bootstrapDeviceSessionWithAutoFailover()
         updateAuthenticatedSession(payload)
         if supportsBiometricUnlock {
             biometricUnlockEnabled = true
@@ -530,6 +535,12 @@ final class AppSettingsStore: ObservableObject {
         requiresBiometricUnlock = false
     }
 
+    func proceedIntoActiveSessionWithoutBiometric() async throws {
+        try await validateAuthenticatedSessionIfNeeded(force: true)
+        requiresBiometricUnlock = false
+        connectionStatusMessage = "已连接 \(displayServerName(from: trimmedServerURLString))"
+    }
+
     func makeClient() throws -> PortfolioWorkbenchAPIClient {
         if isUsingLocalMockSession {
             return PortfolioWorkbenchLocalMock.makeClient(
@@ -541,9 +552,25 @@ final class AppSettingsStore: ObservableObject {
     }
 
     func makeValidatedClient(forceSessionCheck: Bool = true) async throws -> PortfolioWorkbenchAPIClient {
-        let client = try makeClient()
-        try await validateAuthenticatedSessionIfNeeded(using: client, force: forceSessionCheck)
-        return try makeClient()
+        do {
+            let client = try makeClient()
+            try await validateAuthenticatedSessionIfNeeded(using: client, force: forceSessionCheck)
+            connectionStatusMessage = "已连接 \(displayServerName(from: trimmedServerURLString))"
+            return try makeClient()
+        } catch {
+            guard shouldAttemptServerFailover(for: error) else {
+                connectionStatusMessage = userFriendlyConnectionMessage(for: error)
+                throw error
+            }
+            connectionStatusMessage = "当前连接异常，正在自动恢复服务器连接…"
+            guard await recoverServerConnectionIfNeeded() else {
+                throw error
+            }
+            let retriedClient = try makeClient()
+            try await validateAuthenticatedSessionIfNeeded(using: retriedClient, force: true)
+            connectionStatusMessage = "已自动切换到 \(displayServerName(from: trimmedServerURLString))"
+            return try makeClient()
+        }
     }
 
     func makeNetworkClient() throws -> PortfolioWorkbenchAPIClient {
@@ -610,6 +637,271 @@ final class AppSettingsStore: ObservableObject {
                 biometricUnlockEnabled = true
             }
             return true
+        } catch {
+            return false
+        }
+    }
+
+    private func bootstrapDeviceSessionWithAutoFailover() async throws -> MobileSessionPayload {
+        do {
+            let client = try makeNetworkClient()
+            return try await client.bootstrapDeviceAccount(
+                deviceID: deviceAccountProfile.installationID,
+                deviceName: Self.currentDeviceLabel
+            )
+        } catch {
+            guard shouldAttemptServerFailover(for: error) else {
+                connectionStatusMessage = userFriendlyConnectionMessage(for: error)
+                throw error
+            }
+            connectionStatusMessage = "当前网络连接异常，正在自动恢复服务器连接…"
+            guard await recoverServerConnectionIfNeeded() else {
+                throw error
+            }
+            let retriedClient = try makeNetworkClient()
+            connectionStatusMessage = "已自动切换到 \(displayServerName(from: trimmedServerURLString))，正在继续登录…"
+            return try await retriedClient.bootstrapDeviceAccount(
+                deviceID: deviceAccountProfile.installationID,
+                deviceName: Self.currentDeviceLabel
+            )
+        }
+    }
+
+    private func shouldAttemptServerFailover(for error: Error) -> Bool {
+        if let apiError = error as? PortfolioWorkbenchAPIClientError {
+            switch apiError {
+            case .transport:
+                return true
+            case let .server(statusCode, _):
+                return statusCode >= 500 || statusCode == 404
+            case .invalidResponse:
+                return true
+            }
+        }
+        let message = error.localizedDescription.lowercased()
+        return message.contains("timed out")
+            || message.contains("could not connect")
+            || message.contains("offline")
+            || message.contains("network")
+            || message.contains("transport")
+    }
+
+    @discardableResult
+    private func autoSwitchToReachableServer(excludingCurrent: Bool) async -> Bool {
+        let current = normalizedCurrentServerURL
+        let candidates = candidateServerURLs(
+            includeCurrent: !excludingCurrent,
+            current: current
+        )
+        guard !candidates.isEmpty else {
+            connectionStatusMessage = "暂无可探测服务器地址，请检查网络后重试。"
+            return false
+        }
+
+        connectionStatusMessage = "正在自动探测可用服务器…"
+        for candidate in candidates.prefix(6) {
+            connectionStatusMessage = "正在探测 \(displayServerName(from: candidate))…"
+            let reachable = await isServerReachable(candidate)
+            guard reachable else { continue }
+            if candidate != current {
+                selectServerURL(candidate, name: inferredServerName(from: candidate), rememberSelection: true)
+                connectionStatusMessage = "已自动切换到 \(displayServerName(from: candidate))"
+            } else {
+                connectionStatusMessage = "已连接 \(displayServerName(from: candidate))"
+            }
+            return true
+        }
+        connectionStatusMessage = "暂未发现可用服务器，请检查网络后重试。"
+        return false
+    }
+
+    func recoverServerConnectionIfNeeded() async -> Bool {
+        if await autoSwitchToReachableServer(excludingCurrent: true) {
+            return true
+        }
+        if await autoDiscoverAndSwitchToReachableServer() {
+            return true
+        }
+        connectionStatusMessage = "未找到可连接的服务器，请点击“配置服务器”手动设置。"
+        return false
+    }
+
+    private func autoDiscoverAndSwitchToReachableServer() async -> Bool {
+        guard let wifiAddress = getWiFiAddress() else {
+            connectionStatusMessage = "当前未获取到局域网地址，无法自动探测服务器。"
+            return false
+        }
+
+        let segments = wifiAddress.split(separator: ".")
+        guard segments.count == 4 else {
+            connectionStatusMessage = "局域网地址格式异常，无法自动探测服务器。"
+            return false
+        }
+
+        let subnet = segments[0...2].joined(separator: ".")
+        let ports = discoveryPorts()
+        connectionStatusMessage = "正在自动扫描局域网服务器…"
+
+        var discoveredURL: String?
+        await withTaskGroup(of: String?.self) { group in
+            for hostIndex in 1...254 {
+                let candidateIP = "\(subnet).\(hostIndex)"
+                if candidateIP == wifiAddress {
+                    continue
+                }
+                for port in ports {
+                    group.addTask {
+                        await self.probeDiscoveryServer(ip: candidateIP, port: port)
+                    }
+                }
+            }
+
+            for await result in group {
+                guard let result else { continue }
+                discoveredURL = result
+                group.cancelAll()
+                break
+            }
+        }
+
+        guard let discoveredURL else {
+            connectionStatusMessage = "自动探测完成，未发现可连接的局域网服务器。"
+            return false
+        }
+
+        if discoveredURL != normalizedCurrentServerURL {
+            selectServerURL(discoveredURL, name: inferredServerName(from: discoveredURL), rememberSelection: true)
+            connectionStatusMessage = "已自动切换到 \(displayServerName(from: discoveredURL))"
+        } else {
+            connectionStatusMessage = "已连接 \(displayServerName(from: discoveredURL))"
+        }
+        return true
+    }
+
+    private func discoveryPorts() -> [Int] {
+        let currentPort = currentServerPort
+        if currentPort == 8008 {
+            return [8008]
+        }
+        return [currentPort, 8008]
+    }
+
+    private func probeDiscoveryServer(ip: String, port: Int) async -> String? {
+        guard let url = URL(string: "http://\(ip):\(port)/api/mobile/discovery") else {
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 0.6
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return nil
+            }
+
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let payload = try decoder.decode(MobileServerDiscoveryPayload.self, from: data)
+            guard payload.service == "portfolio-workbench" else {
+                return nil
+            }
+
+            let discoveredBaseURL = payload.suggestedBaseUrl?.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let discoveredBaseURL, !discoveredBaseURL.isEmpty {
+                return discoveredBaseURL
+            }
+            return "http://\(ip):\(port)/"
+        } catch {
+            return nil
+        }
+    }
+
+    private func getWiFiAddress() -> String? {
+        var address: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else {
+            return nil
+        }
+        defer { freeifaddrs(ifaddr) }
+
+        for pointer in sequence(first: first, next: { $0.pointee.ifa_next }) {
+            let interface = pointer.pointee
+            guard let interfaceAddress = interface.ifa_addr else { continue }
+            guard interfaceAddress.pointee.sa_family == UInt8(AF_INET) else { continue }
+
+            let name = String(cString: interface.ifa_name)
+            guard name == "en0" || name == "en1" else { continue }
+
+            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            getnameinfo(
+                interfaceAddress,
+                socklen_t(interfaceAddress.pointee.sa_len),
+                &hostname,
+                socklen_t(hostname.count),
+                nil,
+                0,
+                NI_NUMERICHOST
+            )
+            let candidate = String(cString: hostname)
+            if !candidate.isEmpty, !candidate.hasPrefix("169.254.") {
+                address = candidate
+                break
+            }
+        }
+
+        return address
+    }
+
+    private func candidateServerURLs(includeCurrent: Bool, current: String?) -> [String] {
+        var raw: [String] = []
+        if includeCurrent, let current {
+            raw.append(current)
+        }
+        raw.append(Self.defaultServerURLString)
+        if let bundledDefaultServerURLString {
+            raw.append(bundledDefaultServerURLString)
+        }
+        raw.append(contentsOf: savedServers.map(\.url))
+
+        var seen = Set<String>()
+        var normalized: [String] = []
+        for item in raw {
+            guard let value = Self.normalizeServerURLString(item), !seen.contains(value) else {
+                continue
+            }
+            seen.insert(value)
+            normalized.append(value)
+        }
+        return normalized
+    }
+
+    private func isServerReachable(_ baseURLString: String) async -> Bool {
+        guard let baseURL = URL(string: baseURLString) else {
+            return false
+        }
+        let discoveryURL = baseURL.appending(path: "api/mobile/discovery")
+        var request = URLRequest(url: discoveryURL)
+        request.timeoutInterval = 1.2
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 1.2
+        configuration.timeoutIntervalForResource = 1.8
+        let session = URLSession(configuration: configuration)
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200..<300).contains(httpResponse.statusCode) else {
+                return false
+            }
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let payload = try decoder.decode(MobileServerDiscoveryPayload.self, from: data)
+            return payload.service == "portfolio-workbench"
         } catch {
             return false
         }
@@ -790,5 +1082,47 @@ final class AppSettingsStore: ObservableObject {
         )
         let trimmed = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "_"))
         return trimmed.isEmpty ? "default" : trimmed
+    }
+
+    private func displayServerName(from rawValue: String) -> String {
+        guard let components = URLComponents(string: rawValue), let host = components.host, !host.isEmpty else {
+            return "当前服务器"
+        }
+        if let port = components.port {
+            return "\(host):\(port)"
+        }
+        return host
+    }
+
+    private func userFriendlyConnectionMessage(for error: Error) -> String {
+        if let apiError = error as? PortfolioWorkbenchAPIClientError {
+            switch apiError {
+            case .invalidResponse:
+                return "服务返回异常，请稍后重试。"
+            case let .server(statusCode, message):
+                if statusCode == 401 {
+                    return "登录状态已失效，请重新验证。"
+                }
+                if statusCode >= 500 {
+                    return "服务暂时不可用，请稍后重试。"
+                }
+                return message
+            case let .transport(message):
+                let lowered = message.lowercased()
+                if lowered.contains("timed out") || lowered.contains("timeout") {
+                    return "连接超时，已尝试自动切换服务器。"
+                }
+                if lowered.contains("could not connect")
+                    || lowered.contains("offline")
+                    || lowered.contains("network")
+                    || lowered.contains("connection") {
+                    return "网络连接异常，请检查网络后重试。"
+                }
+                return "连接失败，请稍后重试。"
+            }
+        }
+        return shouldAttemptServerFailover(for: error)
+            ? "当前网络连接异常，请稍后重试。"
+            : error.localizedDescription
     }
 }
