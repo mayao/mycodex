@@ -36,7 +36,7 @@ enum AppAIProvider: String, Codable, CaseIterable, Identifiable {
         case .anthropic:
             return "claude-sonnet-4-5-20250929"
         case .kimi:
-            return "moonshot-v1-8k"
+            return "kimi-k2-0711-preview"
         case .gemini:
             return "gemini-2.5-flash"
         }

@@ -175,6 +175,8 @@ def _load_manifest_entries() -> list[dict[str, Any]]:
                 "parser_mode": str(raw.get("parser_mode") or "").strip() or None,
                 "parse_status": str(raw.get("parse_status") or "").strip() or None,
                 "parse_issue": str(raw.get("parse_issue") or "").strip() or None,
+                "llm_provider": str(raw.get("llm_provider") or "").strip() or None,
+                "llm_model": str(raw.get("llm_model") or "").strip() or None,
                 "parsed_payload_path": (
                     str(Path(raw.get("parsed_payload_path")).expanduser())
                     if str(raw.get("parsed_payload_path") or "").strip()
@@ -215,6 +217,8 @@ def get_uploaded_statement_overrides(user_id: str | None = None) -> dict[str, di
             "parser_mode": entry.get("parser_mode"),
             "parse_status": entry.get("parse_status"),
             "parse_issue": entry.get("parse_issue"),
+            "llm_provider": entry.get("llm_provider"),
+            "llm_model": entry.get("llm_model"),
             "parsed_payload_path": entry.get("parsed_payload_path"),
             "detected_broker": entry.get("detected_broker"),
             "detected_statement_type": entry.get("detected_statement_type"),
@@ -240,7 +244,7 @@ def get_statement_sources(user_id: str | None = None) -> list[dict[str, Any]]:
     for entry in entries:
         account_id = entry["account_id"]
         base = source_map.get(account_id, {})
-            source_map[account_id] = {
+        source_map[account_id] = {
                 **base,
                 "account_id": account_id,
                 "broker": entry["broker"],
@@ -253,6 +257,8 @@ def get_statement_sources(user_id: str | None = None) -> list[dict[str, Any]]:
                 "parser_mode": entry.get("parser_mode"),
                 "parse_status": entry.get("parse_status"),
                 "parse_issue": entry.get("parse_issue"),
+                "llm_provider": entry.get("llm_provider"),
+                "llm_model": entry.get("llm_model"),
                 "parsed_payload_path": entry.get("parsed_payload_path"),
                 "detected_broker": entry.get("detected_broker"),
                 "detected_statement_type": entry.get("detected_statement_type"),
@@ -295,6 +301,8 @@ def register_uploaded_statement(
     parser_mode: str | None = None,
     parse_status: str | None = None,
     parse_issue: str | None = None,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
     parsed_payload_path: str | None = None,
     detected_broker: str | None = None,
     detected_statement_type: str | None = None,
@@ -347,18 +355,21 @@ def register_uploaded_statement(
             "path": stored_path,
             "uploaded_at": datetime.now(timezone.utc).isoformat(),
             "uploaded_file_name": uploaded_file_name,
-            "uploaded_media_type": uploaded_media_type or (previous_entry or {}).get("uploaded_media_type"),
-            "parser_mode": parser_mode or (previous_entry or {}).get("parser_mode"),
-            "parse_status": parse_status or (previous_entry or {}).get("parse_status"),
-            "parse_issue": parse_issue if parse_issue is not None else (previous_entry or {}).get("parse_issue"),
+            # A new upload must start from a clean parse state; do not inherit stale parse metadata.
+            "uploaded_media_type": uploaded_media_type,
+            "parser_mode": parser_mode,
+            "parse_status": parse_status,
+            "parse_issue": parse_issue,
+            "llm_provider": llm_provider,
+            "llm_model": llm_model,
             "parsed_payload_path": (
                 str(Path(parsed_payload_path).expanduser())
                 if parsed_payload_path
-                else (previous_entry or {}).get("parsed_payload_path")
+                else None
             ),
-            "detected_broker": detected_broker or (previous_entry or {}).get("detected_broker"),
-            "detected_statement_type": detected_statement_type or (previous_entry or {}).get("detected_statement_type"),
-            "last_parsed_at": last_parsed_at or (previous_entry or {}).get("last_parsed_at"),
+            "detected_broker": detected_broker,
+            "detected_statement_type": detected_statement_type,
+            "last_parsed_at": last_parsed_at,
         }
     )
     _write_manifest_entries(entries)
@@ -378,4 +389,55 @@ def remove_uploaded_statement(account_id: str, user_id: str | None = None) -> No
             and entry.get("account_id") == account_id
         )
     ]
+    _write_manifest_entries(entries)
+
+
+def update_uploaded_statement_parse_result(
+    account_id: str,
+    *,
+    user_id: str | None = None,
+    parser_mode: str | None = None,
+    parse_status: str | None = None,
+    parse_issue: str | None = None,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    parsed_payload_path: str | None = None,
+    detected_broker: str | None = None,
+    detected_statement_type: str | None = None,
+    last_parsed_at: str | None = None,
+    uploaded_media_type: str | None = None,
+) -> None:
+    """Update parsing metadata for an already uploaded statement without touching upload timestamp."""
+    normalized_user_id = _normalize_user_id(user_id)
+    entries = _load_manifest_entries()
+    updated = False
+    for entry in entries:
+        if entry.get("user_id") != normalized_user_id or entry.get("account_id") != account_id:
+            continue
+        if parser_mode is not None:
+            entry["parser_mode"] = parser_mode
+        if parse_status is not None:
+            entry["parse_status"] = parse_status
+        if parse_issue is not None:
+            entry["parse_issue"] = parse_issue
+        if llm_provider is not None:
+            entry["llm_provider"] = llm_provider
+        if llm_model is not None:
+            entry["llm_model"] = llm_model
+        if parsed_payload_path is not None:
+            entry["parsed_payload_path"] = str(Path(parsed_payload_path).expanduser()) if parsed_payload_path else None
+        if detected_broker is not None:
+            entry["detected_broker"] = detected_broker
+        if detected_statement_type is not None:
+            entry["detected_statement_type"] = detected_statement_type
+        if last_parsed_at is not None:
+            entry["last_parsed_at"] = last_parsed_at
+        if uploaded_media_type is not None:
+            entry["uploaded_media_type"] = uploaded_media_type
+        updated = True
+        break
+
+    if not updated:
+        raise KeyError(f"uploaded statement entry not found: {normalized_user_id}/{account_id}")
+
     _write_manifest_entries(entries)

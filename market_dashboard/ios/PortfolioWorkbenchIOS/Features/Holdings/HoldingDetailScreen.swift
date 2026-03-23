@@ -36,6 +36,7 @@ struct HoldingDetailScreen: View {
                 case let .loaded(payload):
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
+                            refreshStripSection
                             heroSection(payload)
                             focusSection(payload)
                             priceTrendSection(payload)
@@ -125,6 +126,22 @@ struct HoldingDetailScreen: View {
 
     private var detailChatTitle: String {
         viewModel.state.value?.hero.name ?? symbol
+    }
+
+    private var refreshStripSection: some View {
+        RefreshActionStrip(
+            title: "当前标的状态",
+            subtitle: "先同步价格与走势，再按需刷新 AI 洞察。",
+            lastUpdatedAt: viewModel.lastUpdatedAt,
+            isRefreshing: viewModel.isRefreshing,
+            isShowingCachedSnapshot: viewModel.isShowingCachedSnapshot,
+            marketAction: {
+                Task { await load(force: true, intent: .market) }
+            },
+            insightAction: {
+                Task { await refreshAI(force: true) }
+            }
+        )
     }
 
     private func heroSection(_ payload: HoldingDetailPayload) -> some View {

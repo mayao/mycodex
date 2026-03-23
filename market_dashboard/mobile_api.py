@@ -72,6 +72,7 @@ def _compact_position(holding: dict[str, Any], note_by_symbol: dict[str, dict[st
         "name_en": holding.get("name_en"),
         "market": holding["market"],
         "currency": holding["currency"],
+        "quantity": holding.get("quantity"),
         "category_name": holding["category_name"],
         "style_label": holding["style_label"],
         "fundamental_label": holding["fundamental_label"],
@@ -659,7 +660,7 @@ def build_mobile_dashboard_payload(
     live_note = (
         f"{live.get('provider_summary') or '结单价格'} · 行情更新 {live.get('updated_at') or '未记录'}"
         if live.get("tracked_count")
-        else "当前先显示最近一次已同步的价格。"
+        else "当前先显示最近一次已同步的价格，数量仍按结单固定。"
     )
     macro_note = (
         f"宏观更新 {macro.get('updated_at') or '未记录'}"
@@ -671,13 +672,13 @@ def build_mobile_dashboard_payload(
         {
             "label": "净资产",
             "value": _format_hkd(summary["total_nav_hkd"]),
-            "detail": f"结单窗口 {summary['statement_start_date']} 至 {summary['statement_end_date']}",
+            "detail": f"数量按结单固定，净值按最新价格估算；窗口 {summary['statement_start_date']} 至 {summary['statement_end_date']}",
             "tone": "up",
         },
         {
             "label": "股票市值",
             "value": _format_hkd(summary["total_statement_value_hkd"]),
-            "detail": f"{summary['holding_count']} 个持仓，头部主题 {primary_theme['label'] if primary_theme else '未识别'}",
+            "detail": f"{summary['holding_count']} 个持仓，金额优先按最新价格更新；头部主题 {primary_theme['label'] if primary_theme else '未识别'}",
             "tone": "neutral",
         },
         {

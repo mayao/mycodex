@@ -17,7 +17,10 @@ enum BrokerPalette {
     static let green = Color(red: 0.13, green: 0.90, blue: 0.64)
     static let panel = Color(red: 0.05, green: 0.13, blue: 0.24, opacity: 0.94)
     static let panelStrong = Color(red: 0.03, green: 0.09, blue: 0.17, opacity: 0.98)
+    static let panelElevated = Color(red: 0.08, green: 0.18, blue: 0.31, opacity: 0.96)
     static let line = Color.white.opacity(0.08)
+    static let lineStrong = Color.white.opacity(0.14)
+    static let shadow = Color.black.opacity(0.24)
 
     static func tone(_ tone: MobileTone?) -> Color {
         switch tone {
@@ -128,12 +131,12 @@ struct SectionPanel<Content: View>: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .font(.system(.title3, design: .rounded, weight: .heavy))
                     .foregroundStyle(BrokerPalette.ink)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.footnote)
+                        .font(.footnote.weight(.medium))
                         .foregroundStyle(BrokerPalette.muted)
                 }
             }
@@ -146,7 +149,7 @@ struct SectionPanel<Content: View>: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [BrokerPalette.panel, BrokerPalette.panelStrong],
+                        colors: [BrokerPalette.panelElevated, BrokerPalette.panelStrong],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -154,8 +157,9 @@ struct SectionPanel<Content: View>: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(BrokerPalette.line, lineWidth: 1)
+                .stroke(BrokerPalette.lineStrong, lineWidth: 1)
         )
+        .shadow(color: BrokerPalette.shadow, radius: 18, y: 10)
     }
 }
 
@@ -266,7 +270,8 @@ struct SummaryCardView: View {
                 }
         }
         .padding(16)
-        .frame(width: 184, alignment: .leading)
+        .frame(width: 206, alignment: .leading)
+        .frame(minHeight: 152)
         .background(BrokerPalette.tone(card.tone).opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -314,7 +319,7 @@ struct InsightCardView: View {
                     Text(detail)
                         .font(.subheadline)
                         .foregroundStyle(BrokerPalette.muted)
-                        .lineLimit(2)
+                        .lineLimit(3)
                 }
             }
         }
@@ -373,11 +378,12 @@ struct SyncStatusBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(BrokerPalette.panelStrong.opacity(0.94), in: Capsule())
+        .background(BrokerPalette.panelElevated.opacity(0.97), in: Capsule())
         .overlay(
             Capsule()
-                .stroke(BrokerPalette.line, lineWidth: 1)
+                .stroke(BrokerPalette.lineStrong, lineWidth: 1)
         )
+        .shadow(color: BrokerPalette.shadow, radius: 10, y: 6)
     }
 }
 
@@ -756,6 +762,35 @@ struct PositionCompactCard: View {
                 TagBadge(text: position.stance, tint: BrokerPalette.gold)
             }
 
+            HStack(spacing: 10) {
+                if let quantity = position.quantity {
+                    metricPill(
+                        title: "持仓",
+                        value: NumberFormatters.grouped(quantity),
+                        tint: BrokerPalette.silver
+                    )
+                }
+                if let changePct = position.changePct {
+                    metricPill(
+                        title: "日内",
+                        value: NumberFormatters.signedPercent(changePct),
+                        tint: NumberFormatters.pnlColor(changePct)
+                    )
+                }
+                if let signalScore = position.signalScore {
+                    metricPill(
+                        title: "信号",
+                        value: "\(signalScore)",
+                        tint: toneColor
+                    )
+                }
+                metricPill(
+                    title: "趋势",
+                    value: position.trendState ?? "待确认",
+                    tint: BrokerPalette.teal
+                )
+            }
+
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(SensitiveValueMask.display(NumberFormatters.hkd(position.statementValueHkd), hidden: settings.hideSensitiveAmounts))
@@ -770,6 +805,10 @@ struct PositionCompactCard: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
+                    Text(NumberFormatters.signedHKD(position.statementPnlHkd))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(NumberFormatters.pnlColor(position.statementPnlHkd))
+                        .monospacedDigit()
                     Text(NumberFormatters.signedPercent(position.statementPnlPct))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(NumberFormatters.pnlColor(position.statementPnlPct))
@@ -791,6 +830,7 @@ struct PositionCompactCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(BrokerPalette.line, lineWidth: 1)
         )
+        .shadow(color: BrokerPalette.shadow.opacity(0.5), radius: 10, y: 6)
     }
 
     private var toneColor: Color {
@@ -804,6 +844,22 @@ struct PositionCompactCard: View {
         default:
             return BrokerPalette.gold
         }
+    }
+
+    @ViewBuilder
+    private func metricPill(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(BrokerPalette.muted)
+            Text(value)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -844,6 +900,12 @@ enum NumberFormatters {
     static func hkd(_ value: Double?) -> String {
         guard let value else { return "N/A" }
         return "HK$" + grouped(value)
+    }
+
+    static func signedHKD(_ value: Double?) -> String {
+        guard let value else { return "N/A" }
+        let sign = value > 0 ? "+" : value < 0 ? "-" : ""
+        return "\(sign)HK$" + grouped(abs(value))
     }
 
     static func currency(_ value: Double?, code: String) -> String {

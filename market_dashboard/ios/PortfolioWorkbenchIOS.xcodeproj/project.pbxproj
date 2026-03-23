@@ -22,6 +22,7 @@
 		A7143C5816949AF6576D9B6C /* HoldingDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6861EE915907DA98EECE0E1D /* HoldingDetailScreen.swift */; };
 		ABBADE061CB9A09E990A0401 /* HoldingDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EAB2B7C1B84326CC2E0050 /* HoldingDetailViewModel.swift */; };
 		AF43D3456B833F9F52B6DACE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5251B548EE3AE317ACC5E88D /* Assets.xcassets */; };
+		B6EF1894A3A9FC941DAB4FB2 /* BootBranding.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7961FDAE60C52AC6108E30D /* BootBranding.swift */; };
 		B7411FA3FD54C0827B0F66F2 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDAD06DB4CF1424598BD8309 /* MainTabView.swift */; };
 		B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */; };
 		BA9739AD06A3B37F3E0486C9 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2514C7174B5A98587F947B55 /* SettingsScreen.swift */; };
@@ -86,6 +87,7 @@
 		9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedSnapshot.swift; sourceTree = "<group>"; };
 		9E3F1D79A7976480297AC3A9 /* OverviewDrilldownViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewDrilldownViews.swift; sourceTree = "<group>"; };
 		B394BBF5B42657D4FE15D630 /* BiometricUnlockScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricUnlockScreen.swift; sourceTree = "<group>"; };
+		B7961FDAE60C52AC6108E30D /* BootBranding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootBranding.swift; sourceTree = "<group>"; };
 		BF619D9ECB95AE8735165420 /* OverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewScreen.swift; sourceTree = "<group>"; };
 		CDAD06DB4CF1424598BD8309 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAccountIdentityStore.swift; sourceTree = "<group>"; };
@@ -186,6 +188,7 @@
 		942877D9D7A3A28803B30306 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				B7961FDAE60C52AC6108E30D /* BootBranding.swift */,
 				5A004A88204862891DF42780 /* LoadState.swift */,
 				710CCCB27BBE88F1EAA34C04 /* UIComponents.swift */,
 			);
@@ -354,6 +357,7 @@
 				35AD8E9528C376F3B009AAE5 /* AccountsScreen.swift in Sources */,
 				BFC34B2C9DDD91A3D69FEF83 /* AppSettingsStore.swift in Sources */,
 				F8923F2ED81C8FD1FAF13FE1 /* BiometricUnlockScreen.swift in Sources */,
+				B6EF1894A3A9FC941DAB4FB2 /* BootBranding.swift in Sources */,
 				EDC21F0C392F626FC548B806 /* CachedSnapshot.swift in Sources */,
 				5BC7D22E0BFAF8C9C09DEE36 /* DeviceAccountIdentityStore.swift in Sources */,
 				A7143C5816949AF6576D9B6C /* HoldingDetailScreen.swift in Sources */,

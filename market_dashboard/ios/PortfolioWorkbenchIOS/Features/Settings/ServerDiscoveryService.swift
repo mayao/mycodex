@@ -21,14 +21,14 @@ final class ServerDiscoveryService: ObservableObject {
     func startScan(currentServerURLString: String) {
         stopScanning()
         isScanning = true
-        statusMessage = "正在扫描同一局域网内可用的 Invest 服务…"
+        statusMessage = "正在自动探测可用的 Invest 服务…"
 
         scanTask = Task {
             await performScan(currentServerURLString: currentServerURLString)
             guard !Task.isCancelled else { return }
             isScanning = false
             statusMessage = discoveredServers.isEmpty
-                ? "没有发现可连接的局域网服务。"
+                ? "没有发现可连接的服务。"
                 : "发现 \(discoveredServers.count) 台可连接的部署机器。"
         }
     }
@@ -53,7 +53,7 @@ final class ServerDiscoveryService: ObservableObject {
         guard let wifiAddress = getWiFiAddress() else {
             discoveredServers = deduplicated(nextServers)
             if nextServers.isEmpty {
-                statusMessage = "当前没有拿到 Wi‑Fi 局域网地址，请确认手机已连接无线网络。"
+                statusMessage = "未获取到当前网络地址，请确认设备已联网。"
             }
             return
         }

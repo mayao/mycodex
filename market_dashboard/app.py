@@ -6,10 +6,13 @@ import base64
 import cgi
 import ipaddress
 import json
+import mimetypes
 import re
 import socket
 import subprocess
+import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -38,6 +41,11 @@ try:
         build_mobile_dashboard_payload,
         build_mobile_stock_detail_ai_payload,
     )
+    from holdings_export import (
+        build_holdings_export_dataset,
+        render_holdings_pdf,
+        render_holdings_xlsx,
+    )
     from portfolio_analytics import (
         build_dashboard_ai_payload_from_snapshot,
         build_dashboard_payload,
@@ -45,12 +53,15 @@ try:
         build_stock_detail_payload,
         validate_payload,
     )
+    from statement_parser import summarize_source_issue
     from statement_sources import (
         UPLOADS_DIR,
+        get_statement_sources,
         get_statement_source_by_account,
         register_uploaded_statement,
         remove_uploaded_statement,
     )
+    from statement_ai_parser import parse_statement_with_ai_best_effort
 except ModuleNotFoundError:
     from market_dashboard.auth_store import (
         create_or_login_device_session,
@@ -71,6 +82,11 @@ except ModuleNotFoundError:
         build_mobile_dashboard_payload,
         build_mobile_stock_detail_ai_payload,
     )
+    from market_dashboard.holdings_export import (
+        build_holdings_export_dataset,
+        render_holdings_pdf,
+        render_holdings_xlsx,
+    )
     from market_dashboard.portfolio_analytics import (
         build_dashboard_ai_payload_from_snapshot,
         build_dashboard_payload,
@@ -78,12 +94,22 @@ except ModuleNotFoundError:
         build_stock_detail_payload,
         validate_payload,
     )
+    from market_dashboard.statement_ai_parser import parse_statement_with_ai_best_effort
+    from market_dashboard.statement_parser import load_portfolio_cache, summarize_source_issue
     from market_dashboard.statement_sources import (
         UPLOADS_DIR,
+        get_statement_sources,
         get_statement_source_by_account,
         register_uploaded_statement,
         remove_uploaded_statement,
     )
+else:
+    from statement_parser import load_portfolio_cache
+
+try:
+    import pdfplumber  # type: ignore
+except Exception:  # noqa: BLE001
+    pdfplumber = None
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -91,11 +117,26 @@ HTML_PATH = BASE_DIR / "dashboard.html"
 SHARE_HTML_PATH = BASE_DIR / "share_dashboard.html"
 STOCK_DETAIL_HTML_PATH = BASE_DIR / "stock_detail.html"
 MAX_UPLOAD_BYTES = 40 * 1024 * 1024
+CN_TZ = timezone(timedelta(hours=8))
 AI_CONTEXT_TTL_SECONDS = 10 * 60
 AI_CONTEXT_MAX_ENTRIES = 8
 AI_CONTEXT_CACHE: dict[str, dict[str, Any]] = {}
 AI_CONTEXT_LOCK = Lock()
 MOBILE_AI_CONFIG_HEADER = "X-MyInvAI-AI-Config"
+SUPPORTED_BROKER_ALIASES = {
+    "tiger": "Tiger",
+    "tiger brokers": "Tiger",
+    "老虎": "Tiger",
+    "ib": "Interactive Brokers",
+    "ibkr": "Interactive Brokers",
+    "interactive brokers": "Interactive Brokers",
+    "盈透": "Interactive Brokers",
+    "futu": "Futu",
+    "moomoo": "Futu",
+    "富途": "Futu",
+    "longbridge": "Longbridge",
+    "长桥": "Longbridge",
+}
 
 
 def load_html() -> str:
@@ -327,10 +368,132 @@ def _build_mobile_discovery_payload(handler: BaseHTTPRequestHandler) -> dict[str
             "/api/mobile/auth/device/bootstrap",
             "/api/mobile/dashboard",
             "/api/mobile/ai-service-status",
+            "/api/mobile/export/holdings",
             "/api/mobile/stock-detail",
             "/api/mobile/upload-statement",
         ],
     }
+
+
+def _normalize_broker_for_match(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    normalized = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff]+", " ", raw).strip().lower()
+    if not normalized:
+        return ""
+    if normalized in SUPPORTED_BROKER_ALIASES:
+        return SUPPORTED_BROKER_ALIASES[normalized]
+    for alias, broker in SUPPORTED_BROKER_ALIASES.items():
+        if alias in normalized:
+            return broker
+    return raw
+
+
+def _normalize_statement_type_for_match(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def _find_unique_source_by_broker_type(
+    sources: list[dict[str, Any]],
+    *,
+    broker: str | None,
+    statement_type: str | None,
+) -> tuple[dict[str, Any] | None, str | None]:
+    normalized_broker = _normalize_broker_for_match(broker)
+    normalized_type = _normalize_statement_type_for_match(statement_type)
+    if not normalized_broker or not normalized_type:
+        return None, "识别结果不完整，无法定位到唯一券商子项。"
+
+    matched = [
+        item
+        for item in sources
+        if _normalize_broker_for_match(item.get("broker")) == normalized_broker
+        and _normalize_statement_type_for_match(item.get("type")) == normalized_type
+    ]
+    if len(matched) == 1:
+        return matched[0], None
+    if not matched:
+        return None, f"未找到与 {normalized_broker} / {normalized_type} 对应的券商子项。"
+    return None, f"{normalized_broker} / {normalized_type} 存在多个候选子项，请在设置页指定具体子项后再上传。"
+
+
+def _source_matches_broker_type(
+    source: dict[str, Any] | None,
+    *,
+    broker: str | None,
+    statement_type: str | None,
+) -> bool:
+    if source is None:
+        return False
+    return (
+        _normalize_broker_for_match(source.get("broker")) == _normalize_broker_for_match(broker)
+        and _normalize_statement_type_for_match(source.get("type")) == _normalize_statement_type_for_match(statement_type)
+    )
+
+
+def _parse_iso_date(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    match = re.search(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})", text)
+    if match:
+        year, month, day = match.groups()
+        try:
+            return datetime(int(year), int(month), int(day)).date().isoformat()
+        except ValueError:
+            return None
+    compact = re.search(r"(20\d{2})(\d{2})(\d{2})", text)
+    if compact:
+        year, month, day = compact.groups()
+        try:
+            return datetime(int(year), int(month), int(day)).date().isoformat()
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_statement_date_hint(path: Path, *, uploaded_media_type: str | None = None) -> str | None:
+    candidates: set[str] = set()
+    from_file_name = _parse_iso_date(path.name)
+    if from_file_name:
+        candidates.add(from_file_name)
+
+    media_type = str(uploaded_media_type or "").lower()
+    is_pdf = media_type == "application/pdf" or path.suffix.lower() == ".pdf"
+    if is_pdf and pdfplumber is not None:
+        try:
+            with pdfplumber.open(path) as pdf:
+                text = "\n".join((page.extract_text() or "") for page in pdf.pages[:4])
+            for match in re.finditer(r"(20\d{2})[-/.年](\d{1,2})[-/.月](\d{1,2})", text):
+                year, month, day = match.groups()
+                parsed = _parse_iso_date(f"{year}-{month}-{day}")
+                if parsed:
+                    candidates.add(parsed)
+        except Exception:  # noqa: BLE001
+            pass
+
+    if not candidates:
+        return None
+    return sorted(candidates)[-1]
+
+
+def _cached_statement_date_for_account(account_id: str, *, user_id: str | None) -> str | None:
+    cache = load_portfolio_cache(user_id=user_id)
+    if not isinstance(cache, dict):
+        return None
+    payload = cache.get("payload")
+    if not isinstance(payload, dict):
+        return None
+    for account in payload.get("accounts") or []:
+        if not isinstance(account, dict):
+            continue
+        if str(account.get("account_id") or "") != account_id:
+            continue
+        parsed = _parse_iso_date(str(account.get("statement_date") or ""))
+        if parsed:
+            return parsed
+    return None
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
@@ -339,11 +502,15 @@ class DashboardHandler(BaseHTTPRequestHandler):
         body: bytes,
         content_type: str,
         status: HTTPStatus = HTTPStatus.OK,
+        *,
+        filename: str | None = None,
     ) -> None:
         try:
             self.send_response(status.value)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
+            if filename:
+                self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
             self.end_headers()
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
@@ -505,7 +672,36 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if session is None:
                 return
             ai_request_config = _read_mobile_ai_request_config(self)
-            self._send_json(get_ai_service_status(ai_request_config=ai_request_config))
+            probe = (query.get("probe") or ["0"])[0].lower() in {"1", "true", "yes", "on"}
+            self._send_json(get_ai_service_status(ai_request_config=ai_request_config, probe=probe))
+            return
+        if path == "/api/mobile/export/holdings":
+            session = self._require_mobile_session()
+            if session is None:
+                return
+            fmt = str((query.get("format") or ["xlsx"])[0] or "xlsx").strip().lower()
+            if fmt not in {"xlsx", "pdf"}:
+                self._send_json({"error": "仅支持导出 xlsx 或 pdf。"}, status=HTTPStatus.BAD_REQUEST)
+                return
+            ai_request_config = _read_mobile_ai_request_config(self)
+            try:
+                dataset = build_holdings_export_dataset(
+                    force_refresh=False,
+                    user_id=self._portfolio_user_id_for_session(session),
+                    ai_request_config=ai_request_config,
+                )
+                if fmt == "pdf":
+                    body = render_holdings_pdf(dataset)
+                    content_type = "application/pdf"
+                else:
+                    body = render_holdings_xlsx(dataset)
+                    content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            except Exception as exc:  # noqa: BLE001
+                self._send_json({"error": f"导出失败：{exc}"}, status=HTTPStatus.INTERNAL_SERVER_ERROR)
+                return
+            timestamp = datetime.now(CN_TZ).strftime("%Y%m%d-%H%M")
+            file_name = f"myinvai-holdings-{timestamp}.{fmt}"
+            self._send_bytes(body, content_type, filename=file_name)
             return
         if path == "/api/share-data":
             force_refresh = "refresh=1" in self.path
@@ -701,29 +897,149 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "请选择已有账户，或提供券商与结单类型后新建导入。"}, status=HTTPStatus.BAD_REQUEST)
             return
         if file_item is None or not getattr(file_item, "filename", ""):
-            self._send_json({"error": "请选择要上传的结单 PDF。"}, status=HTTPStatus.BAD_REQUEST)
+            self._send_json({"error": "请选择要上传的结单文件（PDF 或截图）。"}, status=HTTPStatus.BAD_REQUEST)
             return
 
         UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
         original_name = Path(file_item.filename).name
         safe_name = re.sub(r"[\\/]+", "_", original_name).strip() or "statement.pdf"
-        account_dir_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", account_id or broker or "statement").strip("_") or "statement"
-        account_dir = UPLOADS_DIR / (session_user_id or "shared") / account_dir_name
-        account_dir.mkdir(parents=True, exist_ok=True)
-        stored_path = account_dir / safe_name
-        with stored_path.open("wb") as handle:
-            handle.write(file_item.file.read())
+        uploaded_media_type = str(getattr(file_item, "type", "") or "").strip()
+        if not uploaded_media_type:
+            uploaded_media_type = mimetypes.guess_type(safe_name)[0] or ""
+        normalized_media_type = uploaded_media_type.lower()
+        supported_image_exts = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".gif"}
+        is_pdf_like = normalized_media_type == "application/pdf" or safe_name.lower().endswith(".pdf")
+        is_image_like = normalized_media_type.startswith("image/") or Path(safe_name).suffix.lower() in supported_image_exts
+        if not (is_pdf_like or is_image_like):
+            self._send_json({"error": "仅支持上传 PDF 或图片格式（JPG/PNG/WEBP/HEIC）。"}, status=HTTPStatus.BAD_REQUEST)
+            return
+        file_bytes = file_item.file.read()
+        if not file_bytes:
+            self._send_json({"error": "上传文件为空，请重新选择。"}, status=HTTPStatus.BAD_REQUEST)
+            return
 
-        previous_override = source if source and source.get("source_mode") == "upload" else None
+        staged_path: Path | None = None
+        committed_path: Path | None = None
         resolved_source: dict[str, Any] | None = None
+        previous_override: dict[str, Any] | None = None
+        resolved_account_id: str | None = None
+        resolved_broker: str | None = None
+        resolved_statement_type: str | None = None
+        detected_broker: str | None = None
+        detected_statement_type: str | None = None
+        detected_statement_date: str | None = None
+        routing_action = "target"
+        rejection_reason: str | None = None
+        sources = get_statement_sources(user_id=session_user_id)
+
+        suffix = Path(safe_name).suffix or ".pdf"
+        with tempfile.NamedTemporaryFile(prefix="statement-staging-", suffix=suffix, delete=False) as staged_file:
+            staged_file.write(file_bytes)
+            staged_path = Path(staged_file.name)
+
         try:
+            staging_source = {
+                "account_id": (source or {}).get("account_id") or "staging_upload",
+                "broker": (source or {}).get("broker") or broker or "Unknown",
+                "type": (source or {}).get("type") or statement_type or "unknown",
+                "path": str(staged_path),
+                "uploaded_media_type": uploaded_media_type or None,
+                "source_mode": "upload",
+            }
+            parsed_account, parsed_meta, _warnings = parse_statement_with_ai_best_effort(staging_source, parse_error=None)
+            detected_broker = str(parsed_meta.get("detected_broker") or parsed_account.get("broker") or "").strip() or None
+            detected_statement_type = (
+                str(parsed_meta.get("detected_statement_type") or parsed_account.get("statement_type") or "").strip() or None
+            )
+            detected_statement_date = _extract_statement_date_hint(staged_path, uploaded_media_type=uploaded_media_type)
+            if not detected_statement_date and str(parsed_meta.get("parser_mode") or "") == "llm":
+                detected_statement_date = _parse_iso_date(str(parsed_account.get("statement_date") or ""))
+
+            if source is not None:
+                if _source_matches_broker_type(
+                    source,
+                    broker=detected_broker or source.get("broker"),
+                    statement_type=detected_statement_type or source.get("type"),
+                ):
+                    resolved_source = source
+                    routing_action = "target"
+                else:
+                    rerouted_source, route_issue = _find_unique_source_by_broker_type(
+                        sources,
+                        broker=detected_broker,
+                        statement_type=detected_statement_type,
+                    )
+                    if rerouted_source is None:
+                        routing_action = "rejected"
+                        rejection_reason = route_issue or "无法自动定位到唯一券商子项。"
+                        raise ValueError(rejection_reason)
+                    resolved_source = rerouted_source
+                    routing_action = "rerouted"
+            else:
+                requested_source, route_issue = _find_unique_source_by_broker_type(
+                    sources,
+                    broker=broker,
+                    statement_type=statement_type,
+                )
+                if requested_source is not None:
+                    resolved_source = requested_source
+                    routing_action = "target"
+                else:
+                    rerouted_source, reroute_issue = _find_unique_source_by_broker_type(
+                        sources,
+                        broker=detected_broker,
+                        statement_type=detected_statement_type,
+                    )
+                    if rerouted_source is None:
+                        routing_action = "rejected"
+                        rejection_reason = reroute_issue or route_issue or "无法定位目标券商子项。"
+                        raise ValueError(rejection_reason)
+                    resolved_source = rerouted_source
+                    routing_action = "rerouted"
+
+            resolved_account_id = str((resolved_source or {}).get("account_id") or "").strip()
+            resolved_broker = str((resolved_source or {}).get("broker") or "").strip() or None
+            resolved_statement_type = str((resolved_source or {}).get("type") or "").strip() or None
+            if not resolved_account_id or not resolved_broker or not resolved_statement_type:
+                routing_action = "rejected"
+                rejection_reason = "目标券商子项信息不完整，请在设置页重新同步后再上传。"
+                raise ValueError(rejection_reason)
+
+            if detected_statement_date:
+                current_statement_date = _cached_statement_date_for_account(resolved_account_id, user_id=session_user_id)
+                if current_statement_date and detected_statement_date < current_statement_date:
+                    routing_action = "rejected"
+                    rejection_reason = (
+                        f"识别到结单日期 {detected_statement_date} 早于当前记录 {current_statement_date}，"
+                        "为避免旧单覆盖新数据，本次上传已拒绝。"
+                    )
+                    raise ValueError(rejection_reason)
+
+            account_dir_name = re.sub(r"[^a-zA-Z0-9_.-]+", "_", resolved_account_id).strip("_") or "statement"
+            account_dir = UPLOADS_DIR / (session_user_id or "shared") / account_dir_name
+            account_dir.mkdir(parents=True, exist_ok=True)
+            committed_path = account_dir / safe_name
+            with committed_path.open("wb") as handle:
+                handle.write(file_bytes)
+
+            previous_override = (
+                resolved_source
+                if resolved_source and str(resolved_source.get("source_mode") or "") == "upload"
+                else None
+            )
             resolved_source = register_uploaded_statement(
-                account_id,
-                str(stored_path),
+                resolved_account_id,
+                str(committed_path),
                 safe_name,
                 user_id=session_user_id,
-                broker=broker or (source or {}).get("broker"),
-                statement_type=statement_type or (source or {}).get("type"),
+                broker=resolved_broker,
+                statement_type=resolved_statement_type,
+                uploaded_media_type=uploaded_media_type or None,
+                parser_mode="staging",
+                parse_status="pending",
+                parse_issue="",
+                detected_broker=detected_broker,
+                detected_statement_type=detected_statement_type,
             )
             validation_payload = build_dashboard_payload(
                 force_refresh=True,
@@ -744,32 +1060,80 @@ class DashboardHandler(BaseHTTPRequestHandler):
             else:
                 payload = _attach_deferred_ai_context(validation_payload)
         except Exception as exc:  # noqa: BLE001
-            if previous_override:
+            issue_summary = summarize_source_issue(exc)
+            if previous_override and resolved_account_id:
                 register_uploaded_statement(
-                    account_id,
+                    resolved_account_id,
                     previous_override["path"],
                     previous_override.get("uploaded_file_name") or Path(previous_override["path"]).name,
                     user_id=session_user_id,
                     broker=previous_override.get("broker"),
                     statement_type=previous_override.get("type"),
+                    uploaded_media_type=previous_override.get("uploaded_media_type"),
+                    parser_mode=previous_override.get("parser_mode"),
+                    parse_status=previous_override.get("parse_status"),
+                    parse_issue=previous_override.get("parse_issue"),
+                    llm_provider=previous_override.get("llm_provider"),
+                    llm_model=previous_override.get("llm_model"),
+                    parsed_payload_path=previous_override.get("parsed_payload_path"),
+                    detected_broker=previous_override.get("detected_broker"),
+                    detected_statement_type=previous_override.get("detected_statement_type"),
+                    last_parsed_at=previous_override.get("last_parsed_at"),
                 )
-            else:
-                remove_uploaded_statement((resolved_source or {}).get("account_id") or account_id or "", user_id=session_user_id)
+            elif resolved_account_id:
+                remove_uploaded_statement(resolved_account_id, user_id=session_user_id)
             try:
-                stored_path.unlink()
+                if committed_path is not None:
+                    committed_path.unlink()
             except OSError:
                 pass
-            self._send_json({"error": f"结单已上传，但解析失败：{exc}"}, status=HTTPStatus.BAD_REQUEST)
+            response_error = rejection_reason or issue_summary
+            self._send_json(
+                {
+                    "error": f"结单上传未生效：{response_error}",
+                    "resolved_account_id": resolved_account_id,
+                    "resolved_broker": resolved_broker,
+                    "resolved_statement_type": resolved_statement_type,
+                    "detected_broker": detected_broker,
+                    "detected_statement_type": detected_statement_type,
+                    "detected_statement_date": detected_statement_date,
+                    "routing_action": routing_action if routing_action in {"target", "rerouted", "rejected"} else "rejected",
+                    "rejection_reason": response_error,
+                },
+                status=HTTPStatus.BAD_REQUEST,
+            )
+            if staged_path is not None:
+                try:
+                    staged_path.unlink()
+                except OSError:
+                    pass
             return
+        finally:
+            if staged_path is not None:
+                try:
+                    staged_path.unlink()
+                except OSError:
+                    pass
 
+        route_note = ""
+        if routing_action == "rerouted" and source is not None and resolved_source is not None:
+            route_note = f"已按识别结果自动路由到 {resolved_source['broker']} / {resolved_source['account_id']}。"
         self._send_json(
             {
                 "message": (
-                    f"{resolved_source['broker']} / {resolved_source['account_id']} 的结单已接入并刷新。"
+                    f"{resolved_source['broker']} / {resolved_source['account_id']} 的结单已接入并刷新。{route_note}"
                     if resolved_source
                     else "结单已接入并刷新。"
                 ),
                 "payload": payload,
+                "resolved_account_id": resolved_source.get("account_id") if resolved_source else None,
+                "resolved_broker": resolved_source.get("broker") if resolved_source else None,
+                "resolved_statement_type": resolved_source.get("type") if resolved_source else None,
+                "detected_broker": detected_broker,
+                "detected_statement_type": detected_statement_type,
+                "detected_statement_date": detected_statement_date,
+                "routing_action": routing_action,
+                "rejection_reason": None,
             }
         )
 
