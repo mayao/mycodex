@@ -8,6 +8,7 @@ import type {
   HealthSummarySectionedOutput,
   NarrativeProviderKind
 } from "../domain/health-hub";
+import { getKimiOpenAIHeaders } from "../services/llm-provider-routing";
 
 export const healthSummaryOutputSchema = z.object({
   headline: z.string().min(1),
@@ -64,19 +65,39 @@ export class AnthropicHealthSummaryProvider implements HealthSummaryProvider {
   async generate(
     request: HealthSummaryProviderRequest
   ): Promise<HealthSummaryGenerationResult> {
-    const response = await this.client.messages.parse({
-      model: this.model,
-      max_tokens: 2048,
-      system: request.prompt.systemPrompt,
-      messages: [{ role: "user", content: request.prompt.userPrompt }],
-      output_config: {
-        format: zodOutputFormat(healthSummaryOutputSchema)
+    try {
+      const response = await this.client.messages.parse({
+        model: this.model,
+        max_tokens: 2048,
+        system: request.prompt.systemPrompt,
+        messages: [{ role: "user", content: request.prompt.userPrompt }],
+        output_config: {
+          format: zodOutputFormat(healthSummaryOutputSchema)
+        }
+      });
+
+      const parsed = response.parsed_output;
+
+      if (!parsed) {
+        return {
+          provider: this.kind,
+          model: this.model,
+          prompt: request.prompt,
+          output: request.fallback
+        };
       }
-    });
 
-    const parsed = response.parsed_output;
-
-    if (!parsed) {
+      return {
+        provider: this.kind,
+        model: this.model,
+        prompt: request.prompt,
+        output: {
+          period_kind: request.periodKind,
+          ...parsed
+        }
+      };
+    } catch (error) {
+      console.error(`[Anthropic] Health summary failed:`, error instanceof Error ? error.message : error);
       return {
         provider: this.kind,
         model: this.model,
@@ -84,16 +105,6 @@ export class AnthropicHealthSummaryProvider implements HealthSummaryProvider {
         output: request.fallback
       };
     }
-
-    return {
-      provider: this.kind,
-      model: this.model,
-      prompt: request.prompt,
-      output: {
-        period_kind: request.periodKind,
-        ...parsed
-      }
-    };
   }
 }
 
@@ -122,7 +133,8 @@ export class OpenAICompatibleHealthSummaryProvider implements HealthSummaryProvi
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`
+        Authorization: `Bearer ${this.apiKey}`,
+        ...(getKimiOpenAIHeaders(this.apiKey) ?? {})
       },
       body: JSON.stringify({
         model: this.model,

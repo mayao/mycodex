@@ -10,6 +10,7 @@ final class AutoSyncCoordinator: ObservableObject {
 
     private static let lastSyncKey = "vital-command.last-healthkit-sync"
     private static let throttleInterval: TimeInterval = 15 * 60 // 15 minutes
+    private let syncStateStore = HealthKitSyncStateStore()
 
     init() {
         lastSyncDate = UserDefaults.standard.object(forKey: Self.lastSyncKey) as? Date
@@ -35,12 +36,23 @@ final class AutoSyncCoordinator: ObservableObject {
         do {
             let service = HealthKitSyncService()
             let samples = try await service.fetchSyncSamples(daysBack: 7)
+            let state =
+                samples.isEmpty
+                    ? syncStateStore.loadState()
+                    : syncStateStore.mergePendingSamples(samples)
 
-            guard !samples.isEmpty else { return }
+            guard state.pendingSampleCount > 0 else { return }
 
-            let client = try settings.makeClient()
-            let request = HealthKitSyncRequest(samples: samples)
-            _ = try await client.syncHealthKit(request)
+            let upload = try await HealthKitOfflineSyncEngine.flushPendingSamples(
+                targetURLs: settings.healthKitUploadTargetURLs(),
+                preferredToken: settings.authToken,
+                pendingSamples: state.pendingSamples
+            )
+            _ = syncStateStore.markSyncSuccess(
+                sentSampleIDs: upload.sentSampleIDs,
+                result: upload.result,
+                serverURL: upload.serverURL
+            )
 
             // Update throttle timestamp
             let now = Date()
@@ -50,11 +62,9 @@ final class AutoSyncCoordinator: ObservableObject {
             // Trigger dashboard refresh
             settings.markHealthDataChanged()
 
-            // Auto-check plan completion after sync
-            _ = try? await client.triggerPlanCheck()
-
-            print("[AutoSync] Synced \(samples.count) samples from HealthKit")
+            print("[AutoSync] Synced \(upload.result.successRecords) records from HealthKit")
         } catch {
+            _ = syncStateStore.markSyncFailure(message: error.localizedDescription)
             // Silent failure — don't bother the user
             print("[AutoSync] Failed: \(error.localizedDescription)")
         }

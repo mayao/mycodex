@@ -21,11 +21,13 @@ export const bloodTestImporter = createImporter("blood_test");
 export const bodyScaleImporter = createImporter("body_scale");
 export const activityImporter = createImporter("activity");
 export const geneticImporter = createImporter("genetic");
+export const dietImporter = createImporter("diet");
 
 export const importers: Record<ImporterKey, Importer> = {
   annual_exam: annualExamImporter,
   blood_test: bloodTestImporter,
   body_scale: bodyScaleImporter,
   activity: activityImporter,
-  genetic: geneticImporter
+  genetic: geneticImporter,
+  diet: dietImporter
 };

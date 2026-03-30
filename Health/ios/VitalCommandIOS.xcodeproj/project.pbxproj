@@ -439,6 +439,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "HealthAI 需要访问麦克风来进行语音输入，将语音转换为文字与 AI 助手对话。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "HealthAI 需要访问日历来创建健康计划提醒事件，帮助你按时完成健康目标。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "HealthAI 需要语音识别功能来将你的语音转换为文字，方便与 AI 健康助手对话。";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
@@ -453,7 +454,7 @@
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0.0;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 34;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = com.xihe.healthai;
@@ -530,6 +531,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "HealthAI 需要访问麦克风来进行语音输入，将语音转换为文字与 AI 助手对话。";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "HealthAI 需要访问日历来创建健康计划提醒事件，帮助你按时完成健康目标。";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "HealthAI 需要语音识别功能来将你的语音转换为文字，方便与 AI 健康助手对话。";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIRequiresFullScreen = YES;
@@ -544,7 +546,7 @@
 				);
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0.0;
-				CURRENT_PROJECT_VERSION = 18;
+				CURRENT_PROJECT_VERSION = 34;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;

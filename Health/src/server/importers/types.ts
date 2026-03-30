@@ -1,13 +1,20 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export type ImporterKey = "annual_exam" | "blood_test" | "body_scale" | "activity" | "genetic";
+export type ImporterKey =
+  | "annual_exam"
+  | "blood_test"
+  | "body_scale"
+  | "activity"
+  | "genetic"
+  | "diet";
 
 export type UnifiedMetricCategory =
   | "body_composition"
   | "lipid"
   | "activity"
   | "sleep"
-  | "lab";
+  | "lab"
+  | "diet";
 
 export type ImportRowStatus = "imported" | "failed" | "skipped";
 export type ImportTaskStatus =

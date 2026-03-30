@@ -4,6 +4,7 @@ export type MeasurementSetKind =
   | "body_composition"
   | "activity_daily"
   | "sleep_daily"
+  | "diet_daily"
   | "genetic_panel";
 
 export type MetricCategory =
@@ -13,6 +14,7 @@ export type MetricCategory =
   | "renal"
   | "activity"
   | "sleep"
+  | "diet"
   | "genetics";
 
 export type BetterDirection = "up" | "down" | "neutral";

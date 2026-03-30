@@ -1,10 +1,12 @@
 import SwiftUI
+import AuthenticationServices
 import VitalCommandMobileCore
 
 struct LoginScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
     @EnvironmentObject private var authManager: AuthManager
 
+    @StateObject private var discovery = ServerDiscoveryService()
     @State private var isLoggingIn = false
     @State private var errorMessage: String?
     @State private var didAttemptAutoLogin = false
@@ -33,6 +35,9 @@ struct LoginScreen: View {
             guard !didAttemptAutoLogin else { return }
             didAttemptAutoLogin = true
             await checkServerReachability()
+            if serverReachable != true {
+                await discoverReachableServerIfNeeded()
+            }
             if serverReachable == true {
                 await loginWithBiometrics()
             }
@@ -40,7 +45,12 @@ struct LoginScreen: View {
         .onChange(of: settings.serverURLString) {
             serverReachable = nil
             errorMessage = nil
-            Task { await checkServerReachability() }
+            Task {
+                await checkServerReachability()
+                if serverReachable != true {
+                    await discoverReachableServerIfNeeded()
+                }
+            }
         }
         .sheet(isPresented: $showServerConfig) {
             LoginServerConfigSheet(serverReachable: $serverReachable)
@@ -121,6 +131,7 @@ struct LoginScreen: View {
             welcomeSection
             serverStatusBanner
             errorBanner
+            appleLoginButton
             biometricButton
             skipButton
         }
@@ -147,10 +158,31 @@ struct LoginScreen: View {
                 .font(.headline)
                 .foregroundColor(darkText)
 
-            Text("首次使用将自动为您创建账号\n数据将绑定到此设备")
+            Text("可使用 Apple 登录，或继续用当前设备快速进入。\n离线时仍可查看已缓存的数据。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
+        }
+    }
+
+    private var appleLoginButton: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SignInWithAppleButton(.signIn) { request in
+                request.requestedScopes = [.fullName, .email]
+            } onCompletion: { result in
+                handleAppleSignIn(result)
+            }
+            .signInWithAppleButtonStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .disabled(isLoggingIn || serverReachable == false)
+
+            if serverReachable == false {
+                Text("Apple 登录需要先连接可用的 HealthAI 服务。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -300,13 +332,49 @@ struct LoginScreen: View {
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             if let httpResponse = response as? HTTPURLResponse {
-                serverReachable = (200...499).contains(httpResponse.statusCode)
+                serverReachable = (200...299).contains(httpResponse.statusCode)
             } else {
                 serverReachable = false
             }
         } catch {
             serverReachable = false
         }
+    }
+
+    private func discoverReachableServerIfNeeded() async {
+        let currentURL = normalizedServerURL(settings.trimmedServerURLString)
+
+        discovery.startScanning()
+        defer { discovery.stopScanning() }
+        await discovery.scanSubnet()
+
+        let discoveredURLs = discovery.discoveredServers.map(\.urlString)
+        settings.rememberDiscoveredServerURLs(discoveredURLs)
+
+        guard let candidate =
+            discoveredURLs
+            .map(normalizedServerURL)
+            .first(where: { !$0.isEmpty && $0 != currentURL })
+        else {
+            return
+        }
+
+        guard candidate != currentURL else { return }
+        settings.serverURLString = candidate
+        await checkServerReachability()
+    }
+
+    private func normalizedServerURL(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed) else {
+            return ""
+        }
+
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.path = "/"
+        components?.query = nil
+        components?.fragment = nil
+        return components?.url?.absoluteString ?? trimmed
     }
 
     // MARK: - Login methods
@@ -344,6 +412,36 @@ struct LoginScreen: View {
             serverReachable = false
         }
         isLoggingIn = false
+    }
+
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .failure(error):
+            if let authError = error as? ASAuthorizationError, authError.code == .canceled {
+                return
+            }
+            errorMessage = error.localizedDescription
+
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                errorMessage = "Apple 登录返回格式无效，请重试。"
+                return
+            }
+
+            Task {
+                errorMessage = nil
+                isLoggingIn = true
+                defer { isLoggingIn = false }
+
+                do {
+                    let payload = try AppleAuthorizationPayload(credential: credential)
+                    try await authManager.signInWithApple(payload, using: settings)
+                    serverReachable = true
+                } catch {
+                    errorMessage = error.localizedDescription
+                }
+            }
+        }
     }
 }
 
@@ -385,7 +483,7 @@ struct LoginServerConfigSheet: View {
     private var currentServerSection: some View {
         Section("当前服务器") {
             HStack {
-                TextField("http://192.168.31.193:3000/", text: $editingURL)
+                TextField(AppSettingsStore.currentRemoteServerURL, text: $editingURL)
                     .appURLTextEntry()
 
                 if checkingServers.contains(editingURL) {
@@ -417,10 +515,9 @@ struct LoginServerConfigSheet: View {
 
     private var quickSwitchSection: some View {
         Section("快速切换") {
-            serverRow(name: "Mac 主服务器", url: "http://10.8.144.16:3001/")
-            serverRow(name: "开发服务器", url: "http://192.168.31.193:3000/")
+            serverRow(name: "远端主服务器", url: AppSettingsStore.currentRemoteServerURL)
 
-            ForEach(settings.savedServers) { server in
+            ForEach(settings.savedServers.filter { $0.url != AppSettingsStore.currentRemoteServerURL }) { server in
                 serverRow(name: server.name, url: server.url)
             }
         }
@@ -524,7 +621,7 @@ struct LoginServerConfigSheet: View {
 
     private func checkAllServers() async {
         let urls = Set(
-            ["http://192.168.31.193:3000/", "http://10.8.144.16:3001/"]
+            [AppSettingsStore.currentRemoteServerURL]
             + settings.savedServers.map(\.url)
         )
         await withTaskGroup(of: Void.self) { group in

@@ -283,3 +283,17 @@ export function getUnifiedReportSnapshotById(
     )
     .get(snapshotId, userId) as UnifiedReportSnapshotRow | undefined;
 }
+
+export function deleteReportSnapshotsForUser(
+  database: DatabaseSync,
+  userId: string
+): void {
+  database
+    .prepare(
+      `
+      DELETE FROM report_snapshot
+      WHERE user_id = ?
+    `
+    )
+    .run(userId);
+}

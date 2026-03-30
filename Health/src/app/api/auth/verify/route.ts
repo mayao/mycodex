@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 import { jsonOk, jsonSafeError } from "../../../../server/http/safe-response";
-import { verifyCodeAndLogin } from "../../../../server/services/auth-service";
+import { extractBearerToken } from "../../../../server/http/auth-middleware";
+import { validateToken, verifyCodeAndLogin, AuthError } from "../../../../server/services/auth-service";
 
 export const dynamic = "force-dynamic";
 
@@ -20,13 +21,15 @@ export async function POST(request: Request) {
     const body = verifySchema.parse(await request.json());
     const phoneNumber = (body.phoneNumber || body.phone_number)!;
     const deviceLabel = body.deviceLabel || body.device_label;
-    const result = verifyCodeAndLogin(phoneNumber, body.code, deviceLabel);
+    const bearerToken = extractBearerToken(request);
+    const preferredUserId = bearerToken ? validateToken(bearerToken) : undefined;
+    const result = verifyCodeAndLogin(phoneNumber, body.code, deviceLabel, preferredUserId);
     return jsonOk(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : "验证失败，请重试";
     return jsonSafeError({
       message,
-      status: 401,
+      status: error instanceof AuthError ? 401 : 401,
       error,
       context: { route: "/api/auth/verify", method: "POST" },
     });

@@ -3,6 +3,7 @@ import VitalCommandMobileCore
 
 struct ReportsScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
+    @EnvironmentObject private var authManager: AuthManager
     @StateObject private var viewModel = ReportsViewModel()
 
     var body: some View {
@@ -26,6 +27,12 @@ struct ReportsScreen: View {
                 case .loaded:
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
+                            if viewModel.isUsingCache {
+                                OfflineCacheBanner(
+                                    title: "当前为离线缓存报告",
+                                    cachedAt: viewModel.cacheDate
+                                )
+                            }
                             reportHeader
                             planProgressSection
 
@@ -48,11 +55,6 @@ struct ReportsScreen: View {
         .task(id: settings.dashboardReloadKey) {
             await reload()
         }
-        .onAppear {
-            Task {
-                await reload()
-            }
-        }
     }
 
     /// Convert "2026-03-10" → "2026-03-16" into "3月10日–16日"
@@ -73,8 +75,9 @@ struct ReportsScreen: View {
     private func reload() async {
         do {
             let client = try settings.makeClient()
-            await viewModel.load(using: client)
-            await viewModel.loadPlanProgress(using: client)
+            let cacheScope = settings.cacheScope(userID: authManager.currentUser?.id)
+            await viewModel.load(using: client, cacheScope: cacheScope)
+            await viewModel.loadPlanProgress(using: client, cacheScope: cacheScope)
         } catch {
             viewModel.setError(error.localizedDescription)
         }

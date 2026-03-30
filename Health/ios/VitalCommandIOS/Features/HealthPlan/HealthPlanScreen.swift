@@ -3,6 +3,7 @@ import VitalCommandMobileCore
 
 struct HealthPlanScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
+    @EnvironmentObject private var authManager: AuthManager
     @StateObject private var viewModel = HealthPlanViewModel()
     @State private var acceptedPlanItem: HealthPlanItem?
     @State private var showPostAcceptOptions = false
@@ -33,6 +34,12 @@ struct HealthPlanScreen: View {
                 case let .loaded(dashboard):
                     ScrollView {
                         VStack(alignment: .leading, spacing: 18) {
+                            if viewModel.isUsingCache {
+                                OfflineCacheBanner(
+                                    title: "当前为离线缓存计划，暂时只读",
+                                    cachedAt: viewModel.cacheDate
+                                )
+                            }
                             progressHeader(dashboard)
                             activePlanSection(dashboard)
                             pausedPlanSection(dashboard)
@@ -149,7 +156,10 @@ struct HealthPlanScreen: View {
     private func reload() async {
         do {
             let client = try settings.makeClient()
-            await viewModel.load(using: client)
+            await viewModel.load(
+                using: client,
+                cacheScope: settings.cacheScope(userID: authManager.currentUser?.id)
+            )
         } catch {
             viewModel.setError(error.localizedDescription)
         }

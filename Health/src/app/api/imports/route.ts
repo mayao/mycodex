@@ -10,6 +10,7 @@ import { getDatabase } from "../../../server/db/sqlite";
 import {
   enqueueImportJob
 } from "../../../server/importers/async-import-queue";
+import { buildImportTaskCompletionPreview } from "../../../server/importers/import-task-presentation";
 import {
   listRecentImportTasks,
   taskRowDisplayTitle
@@ -21,7 +22,8 @@ const supportedImporters = new Set<ImporterKey>([
   "blood_test",
   "body_scale",
   "activity",
-  "genetic"
+  "genetic",
+  "diet"
 ]);
 
 function toSafeFilename(filename: string): string {
@@ -30,6 +32,7 @@ function toSafeFilename(filename: string): string {
 }
 
 function serializeTask(task: ReturnType<typeof listRecentImportTasks>[number]) {
+  const database = getDatabase();
   return {
     importTaskId: task.importTaskId,
     title: taskRowDisplayTitle(task),
@@ -43,7 +46,8 @@ function serializeTask(task: ReturnType<typeof listRecentImportTasks>[number]) {
     totalRecords: task.totalRecords,
     successRecords: task.successRecords,
     failedRecords: task.failedRecords,
-    parseMode: task.parseMode
+    parseMode: task.parseMode,
+    completionPreview: buildImportTaskCompletionPreview(database, task)
   };
 }
 

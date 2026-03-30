@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 import VitalCommandMobileCore
 
 struct SettingsScreen: View {
@@ -9,11 +10,20 @@ struct SettingsScreen: View {
     @State private var syncStatus: SyncStatusResponse?
     @State private var isSyncing = false
     @State private var syncError: String?
+    @State private var syncMessage: String?
     @State private var serverStatuses: [String: Bool] = [:]
     @State private var checkingServers: Set<String> = []
     @State private var modelStatus: AIModelStatusResponse?
     @State private var isLoadingModelStatus = false
     @State private var isSwitchingProvider = false
+    @State private var availableUsers: [UserListItem] = []
+    @State private var isLoadingUsers = false
+    @State private var currentUserId: String?
+    @State private var isSwitchingUser = false
+    @State private var isCreatingTestUser = false
+    @State private var canSwitchUser = false
+    @State private var isLinkingApple = false
+    @State private var appleLinkMessage: String?
 
     private let tealColor = Color(hex: "#0f766e") ?? .teal
 
@@ -47,6 +57,11 @@ struct SettingsScreen: View {
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
+                            if let email = user.email, email.isEmpty == false {
+                                Text(email)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
 
                         Spacer()
@@ -56,6 +71,67 @@ struct SettingsScreen: View {
                             .foregroundStyle(.tertiary)
                     }
                     .padding(.vertical, 4)
+
+                    if !user.authProviders.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(user.authProviders) { provider in
+                                    StatusBadge(
+                                        text: providerLabel(provider.provider),
+                                        tint: provider.provider == .apple ? .black : (provider.provider == .phone ? .blue : tealColor)
+                                    )
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                }
+            }
+
+            if let user = authManager.currentUser {
+                Section("账号安全") {
+                    if user.hasAppleLinked {
+                        HStack(spacing: 10) {
+                            Image(systemName: "apple.logo")
+                                .foregroundStyle(.primary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Apple 账号已绑定")
+                                    .font(.subheadline.weight(.medium))
+                                Text(user.email ?? "后续可直接使用 Apple 登录当前账号")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    } else {
+                        Text("绑定 Apple 后，同一用户在不同节点登录时会更稳定，也能避免设备号和 Apple 账号分裂成不同用户。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+
+                        SignInWithAppleButton(.continue) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            handleAppleLink(result)
+                        }
+                        .signInWithAppleButtonStyle(.black)
+                        .frame(height: 46)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .disabled(isLinkingApple)
+
+                        if isLinkingApple {
+                            HStack(spacing: 8) {
+                                ProgressView().scaleEffect(0.8)
+                                Text("正在绑定 Apple 账号...")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if let appleLinkMessage {
+                        Text(appleLinkMessage)
+                            .font(.caption)
+                            .foregroundStyle(user.hasAppleLinked ? .green : .secondary)
+                    }
                 }
             }
 
@@ -140,7 +216,7 @@ struct SettingsScreen: View {
             // Server address section with status
             Section("服务地址") {
                 HStack {
-                    TextField("http://192.168.31.193:3000/", text: $settings.serverURLString)
+                    TextField(AppSettingsStore.currentRemoteServerURL, text: $settings.serverURLString)
                         .appURLTextEntry()
 
                     if checkingServers.contains(settings.trimmedServerURLString) {
@@ -167,19 +243,17 @@ struct SettingsScreen: View {
 
             // Quick server switching
             Section("快速切换") {
-                // Built-in servers
-                serverSwitchRow(name: "Mac 主服务器 (16)", url: "http://10.8.144.16:3001/")
-                serverSwitchRow(name: "开发服务器 (193)", url: "http://192.168.31.193:3000/")
+                serverSwitchRow(name: "远端主服务器 (16)", url: AppSettingsStore.currentRemoteServerURL)
 
                 // Saved servers (excluding built-in ones)
                 ForEach(settings.savedServers.filter { saved in
-                    saved.url != "http://192.168.31.193:3000/" && saved.url != "http://10.8.144.16:3001/"
+                    saved.url != AppSettingsStore.currentRemoteServerURL
                 }) { server in
                     serverSwitchRow(name: server.name, url: server.url)
                 }
                 .onDelete { indexSet in
                     let filtered = settings.savedServers.filter { saved in
-                        saved.url != "http://192.168.31.193:3000/" && saved.url != "http://10.8.144.16:3001/"
+                        saved.url != AppSettingsStore.currentRemoteServerURL
                     }
                     for index in indexSet {
                         settings.removeSavedServer(filtered[index])
@@ -210,6 +284,7 @@ struct SettingsScreen: View {
 
                 ForEach(discovery.discoveredServers) { server in
                     Button {
+                        settings.rememberDiscoveredServerURLs([server.urlString])
                         settings.serverURLString = server.urlString
                     } label: {
                         HStack {
@@ -308,6 +383,12 @@ struct SettingsScreen: View {
                     }
                 }
 
+                if let syncMessage {
+                    Text(syncMessage)
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+
                 if let error = syncError {
                     Text(error)
                         .font(.caption)
@@ -330,6 +411,97 @@ struct SettingsScreen: View {
                 }
                 .disabled(isSyncing)
             }
+
+            if canSwitchUser {
+            Section {
+                if isLoadingUsers {
+                    HStack {
+                        ProgressView().scaleEffect(0.8)
+                        Text("加载中...").font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else if !availableUsers.isEmpty {
+                    ForEach(availableUsers) { user in
+                        Button {
+                            guard user.id != currentUserId, !isSwitchingUser else { return }
+                            Task { await performSwitchUser(to: user.id) }
+                        } label: {
+                            HStack(spacing: 10) {
+                                ZStack {
+                                    Circle()
+                                        .fill(user.id == currentUserId
+                                            ? LinearGradient(colors: [tealColor, Color(hex: "#0d5263") ?? .cyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                            : LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                        )
+                                        .frame(width: 36, height: 36)
+                                    Text(String((user.displayName ?? "U").prefix(1)))
+                                        .font(.subheadline.weight(.bold))
+                                        .foregroundStyle(user.id == currentUserId ? .white : .secondary)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(user.displayName ?? "未命名")
+                                            .font(.subheadline.weight(.medium))
+                                            .foregroundStyle(.primary)
+                                        if user.id == "user-self" {
+                                            Text("🛠️ 种子数据")
+                                                .font(.system(size: 10, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                                .padding(.horizontal, 5)
+                                                .padding(.vertical, 2)
+                                                .background(Color.orange, in: Capsule())
+                                        }
+                                    }
+                                    Text("ID: \(String(user.id.suffix(6)))")
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(.tertiary)
+                                }
+
+                                Spacer()
+
+                                if isSwitchingUser && user.id != currentUserId {
+                                    // show nothing for non-target rows during switch
+                                } else if user.id == currentUserId {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(tealColor)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(user.id == currentUserId || isSwitchingUser)
+                    }
+
+                    if isSwitchingUser {
+                        HStack(spacing: 6) {
+                            ProgressView().scaleEffect(0.7)
+                            Text("切换中...").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                } else {
+                    Button("加载账号列表") {
+                        Task { await loadUsers() }
+                    }
+                    .font(.subheadline)
+                }
+
+                Button {
+                    Task { await createTestUser() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if isCreatingTestUser {
+                            ProgressView().scaleEffect(0.7)
+                        }
+                        Label("创建测试账号", systemImage: "person.badge.plus")
+                    }
+                    .font(.subheadline)
+                }
+                .disabled(isCreatingTestUser)
+            } header: {
+                Text("账号切换（开发）")
+            } footer: {
+                Text("切换用户后首页数据会刷新为该用户的数据。\"种子数据\" 为开发者默认账号。")
+            }
+            } // end if canSwitchUser
 
             Section("使用说明") {
                 Text("首页用于快速查看核心结论和行动提示。")
@@ -357,7 +529,11 @@ struct SettingsScreen: View {
                 await loadSyncStatus()
                 await checkAllServers()
                 await loadModelStatus()
+                await loadUsers()
             }
+        }
+        .onReceive(discovery.$discoveredServers) { servers in
+            settings.rememberDiscoveredServerURLs(servers.map(\.urlString))
         }
         .onDisappear { discovery.stopScanning() }
         .navigationTitle("设置")
@@ -368,6 +544,99 @@ struct SettingsScreen: View {
             }
         } message: {
             Text("退出后需要重新验证身份登录")
+        }
+    }
+
+    // MARK: - Account Switching
+
+    private func loadUsers() async {
+        guard !isLoadingUsers else { return }
+        isLoadingUsers = true
+        defer { isLoadingUsers = false }
+        do {
+            let client = try settings.makeClient(token: authManager.token)
+            let response = try await client.fetchUsers()
+            availableUsers = response.users
+            currentUserId = response.currentUserId
+            canSwitchUser = response.canSwitchUser ?? false
+        } catch {
+            // Silently fail
+        }
+    }
+
+    private func performSwitchUser(to targetUserId: String) async {
+        guard !isSwitchingUser else { return }
+        isSwitchingUser = true
+        defer { isSwitchingUser = false }
+        do {
+            let client = try settings.makeClient(token: authManager.token)
+            let response = try await client.switchUser(SwitchUserRequest(targetUserId: targetUserId))
+            authManager.switchUser(token: response.token, user: response.user)
+            currentUserId = response.user.id
+            settings.markHealthDataChanged()
+        } catch {
+            // Could show error
+        }
+    }
+
+    private func createTestUser() async {
+        guard !isCreatingTestUser else { return }
+        isCreatingTestUser = true
+        defer { isCreatingTestUser = false }
+        do {
+            let client = try settings.makeClient(token: authManager.token)
+            let randomDeviceId = UUID().uuidString
+            let response = try await client.deviceLogin(
+                DeviceLoginRequest(deviceId: randomDeviceId, deviceLabel: "测试账号")
+            )
+            // Switch to the new user
+            authManager.switchUser(token: response.token, user: response.user)
+            currentUserId = response.user.id
+            settings.markHealthDataChanged()
+            // Reload user list
+            await loadUsers()
+        } catch {
+            // Could show error
+        }
+    }
+
+    private func handleAppleLink(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .failure(error):
+            if let authError = error as? ASAuthorizationError, authError.code == .canceled {
+                return
+            }
+            appleLinkMessage = error.localizedDescription
+
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                appleLinkMessage = "Apple 绑定返回格式无效，请重试。"
+                return
+            }
+
+            Task {
+                isLinkingApple = true
+                defer { isLinkingApple = false }
+
+                do {
+                    let payload = try AppleAuthorizationPayload(credential: credential)
+                    try await authManager.linkAppleIdentity(payload, using: settings)
+                    appleLinkMessage = "Apple 账号已成功绑定到当前 HealthAI 账号。"
+                } catch {
+                    appleLinkMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func providerLabel(_ provider: AuthProviderKind) -> String {
+        switch provider {
+        case .device:
+            return "设备"
+        case .phone:
+            return "手机号"
+        case .apple:
+            return "Apple"
         }
     }
 
@@ -458,7 +727,7 @@ struct SettingsScreen: View {
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
-            let reachable = (response as? HTTPURLResponse).map { (200...499).contains($0.statusCode) } ?? false
+            let reachable = (response as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
             serverStatuses[urlString] = reachable
         } catch {
             serverStatuses[urlString] = false
@@ -467,7 +736,7 @@ struct SettingsScreen: View {
 
     private func checkAllServers() async {
         let urls = Set(
-            ["http://192.168.31.193:3000/", "http://10.8.144.16:3001/"]
+            [AppSettingsStore.currentRemoteServerURL]
             + settings.savedServers.map(\.url)
             + [settings.trimmedServerURLString]
         )
@@ -518,21 +787,59 @@ struct SettingsScreen: View {
     private func triggerManualSync() async {
         isSyncing = true
         syncError = nil
+        syncMessage = nil
         do {
             let client = try settings.makeClient(token: authManager.token)
-            let _ = try await client.triggerSync()
+            let response = try await client.triggerSync(peerURLs: knownPeerURLs())
             // Reload full sync status after trigger completes
             await loadSyncStatus()
+            syncMessage = response.message
+            if response.successfulPeers == 0 {
+                syncError = response.failedPeers > 0 ? response.message : nil
+            }
         } catch {
             syncError = error.localizedDescription
         }
         isSyncing = false
     }
 
+    private func knownPeerURLs() -> [String] {
+        let current = normalizedServerURL(settings.trimmedServerURLString)
+        let candidates = Set(
+            discovery.discoveredServers.map(\.urlString)
+            + settings.recentDiscoveredServerURLs
+            + settings.savedServers.map(\.url)
+            + [AppSettingsStore.currentRemoteServerURL]
+        )
+
+        return candidates
+            .map(normalizedServerURL)
+            .filter { !$0.isEmpty && $0 != current }
+            .sorted()
+    }
+
+    private func normalizedServerURL(_ raw: String) -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed) else {
+            return ""
+        }
+
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.path = "/"
+        components?.query = nil
+        components?.fragment = nil
+        return components?.url?.absoluteString ?? trimmed
+    }
+
+    private static let isoFormatterFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoFormatterBasic = ISO8601DateFormatter()
+
     private func formatRelativeTime(_ isoString: String) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = formatter.date(from: isoString) ?? ISO8601DateFormatter().date(from: isoString) else {
+        guard let date = Self.isoFormatterFractional.date(from: isoString) ?? Self.isoFormatterBasic.date(from: isoString) else {
             return isoString
         }
         let interval = Date().timeIntervalSince(date)

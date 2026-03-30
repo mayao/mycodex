@@ -16,6 +16,7 @@ interface SyncableTable {
 
 const SYNCABLE_TABLES: SyncableTable[] = [
   { name: "users", pk: "id", updatedAtCol: "updated_at" },
+  { name: "user_identity", pk: "id", updatedAtCol: "updated_at" },
   { name: "metric_definition", pk: "metric_code", updatedAtCol: "updated_at" },
   { name: "data_source", pk: "id", updatedAtCol: "updated_at" },
   { name: "import_task", pk: "id", updatedAtCol: "updated_at" },
@@ -67,6 +68,30 @@ export interface SyncLogEntry {
   error_message: string | null;
   started_at: string;
   finished_at: string;
+}
+
+export interface SyncRunSummary {
+  attempted_peers: number;
+  successful_peers: number;
+  failed_peers: number;
+  message: string;
+}
+
+interface DiscoverPeerPayload {
+  service?: string;
+  name?: string;
+  ip?: string;
+  port?: number;
+  server_id?: string;
+}
+
+function getLocalServerBaseUrl(): string {
+  const port = Number(process.env.PORT ?? 3000);
+  const host =
+    process.env.SYNC_SERVER_URL?.trim().replace(/\/$/, "") ||
+    process.env.PUBLIC_BASE_URL?.trim().replace(/\/$/, "") ||
+    `http://127.0.0.1:${port}`;
+  return normalizePeerUrl(host);
 }
 
 // ---------------------------------------------------------------------------
@@ -246,7 +271,11 @@ export async function syncWithPeer(
   // Pull: get changes from peer
   const pullUrl = `${peerUrl.replace(/\/$/, "")}/api/sync/changes?since=${encodeURIComponent(cursor)}`;
   const pullResponse = await fetch(pullUrl, {
-    headers: { "X-Sync-Server-Id": getServerId(database) },
+    headers: {
+      "X-Sync-Server-Id": getServerId(database),
+      "X-Sync-Server-Name": "HealthAI",
+      "X-Sync-Server-Url": getLocalServerBaseUrl(),
+    },
     signal: AbortSignal.timeout(15000),
   });
 
@@ -273,6 +302,8 @@ export async function syncWithPeer(
       headers: {
         "Content-Type": "application/json",
         "X-Sync-Server-Id": getServerId(database),
+        "X-Sync-Server-Name": "HealthAI",
+        "X-Sync-Server-Url": getLocalServerBaseUrl(),
       },
       body: JSON.stringify({
         server_id: getServerId(database),
@@ -322,6 +353,86 @@ export async function syncWithPeer(
   };
 }
 
+function normalizePeerUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return trimmed;
+
+  try {
+    const parsed = new URL(trimmed.endsWith("/") ? trimmed : `${trimmed}/`);
+    parsed.pathname = "/";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+async function registerPeerByUrl(
+  peerUrl: string,
+  database: DatabaseSync
+): Promise<SyncPeer> {
+  const normalizedUrl = normalizePeerUrl(peerUrl);
+  const discoverUrl = `${normalizedUrl.replace(/\/$/, "")}/api/discover`;
+  const response = await fetch(discoverUrl, {
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`发现节点失败: ${response.status}`);
+  }
+
+  const payload = (await response.json()) as DiscoverPeerPayload;
+  if (payload.service !== "vital-command") {
+    throw new Error("发现的服务不是 HealthAI 节点");
+  }
+
+  const peerServerId = payload.server_id;
+  if (!peerServerId) {
+    throw new Error("发现信息缺少 server_id");
+  }
+
+  const localServerId = getServerId(database);
+  if (peerServerId === localServerId) {
+    throw new Error("目标节点与当前服务器使用了相同的 server_id，请先修复实例标识");
+  }
+
+  const peerName = payload.name?.trim() || normalizedUrl;
+  const peerBaseUrl =
+    payload.ip && payload.port
+      ? normalizePeerUrl(`http://${payload.ip}:${payload.port}/`)
+      : normalizedUrl;
+  const now = new Date().toISOString();
+
+  const existing = database
+    .prepare("SELECT server_id FROM sync_peer WHERE server_id = ?")
+    .get(peerServerId) as { server_id: string } | undefined;
+
+  if (existing) {
+    database
+      .prepare(
+        "UPDATE sync_peer SET name = ?, url = ?, last_seen_at = ? WHERE server_id = ?"
+      )
+      .run(peerName, peerBaseUrl, now, peerServerId);
+  } else {
+    database
+      .prepare(
+        "INSERT INTO sync_peer (server_id, name, url, last_seen_at, created_at) VALUES (?, ?, ?, ?, ?)"
+      )
+      .run(peerServerId, peerName, peerBaseUrl, now, now);
+  }
+
+  return {
+    server_id: peerServerId,
+    name: peerName,
+    url: peerBaseUrl,
+    last_seen_at: now,
+    last_sync_at: null,
+    last_sync_cursor: null,
+    created_at: now,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Sync with all known peers
 // ---------------------------------------------------------------------------
@@ -329,17 +440,67 @@ export async function syncWithPeer(
 let isSyncing = false;
 
 export async function syncWithAllPeers(
+  options: { candidatePeerUrls?: string[] } = {},
   database: DatabaseSync = getDatabase()
-): Promise<void> {
-  if (isSyncing) return;
+): Promise<SyncRunSummary> {
+  if (isSyncing) {
+    return {
+      attempted_peers: 0,
+      successful_peers: 0,
+      failed_peers: 0,
+      message: "同步任务已在进行中，请稍后再试。",
+    };
+  }
   isSyncing = true;
 
   try {
-    const peers = database
+    const registrationErrors: string[] = [];
+    const candidateUrls = [...new Set(
+      (options.candidatePeerUrls ?? [])
+        .map((url) => normalizePeerUrl(url))
+        .filter(Boolean)
+    )];
+
+    for (const peerUrl of candidateUrls) {
+      try {
+        await registerPeerByUrl(peerUrl, database);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        registrationErrors.push(`${peerUrl}: ${message}`);
+      }
+    }
+
+    const recentPeers = database
       .prepare(
         "SELECT server_id, url, name FROM sync_peer WHERE last_seen_at > datetime('now', '-5 minutes')"
       )
       .all() as unknown as SyncPeer[];
+
+    const fallbackPeers = recentPeers.length > 0
+      ? []
+      : (database
+          .prepare(
+            "SELECT server_id, url, name FROM sync_peer ORDER BY COALESCE(last_seen_at, created_at) DESC LIMIT 12"
+          )
+          .all() as unknown as SyncPeer[]);
+
+    const peers = [...recentPeers, ...fallbackPeers].filter((peer, index, all) =>
+      all.findIndex((candidate) => candidate.server_id === peer.server_id) == index
+    );
+
+    if (peers.length === 0) {
+      return {
+        attempted_peers: 0,
+        successful_peers: 0,
+        failed_peers: registrationErrors.length,
+        message: registrationErrors.length === 0
+          ? "当前没有可同步的其他节点，请先扫描或保存另一台服务器地址。"
+          : `没有可同步的其他节点。${registrationErrors.join("；")}`,
+      };
+    }
+
+    let successfulPeers = 0;
+    let failedPeers = registrationErrors.length;
 
     for (const peer of peers) {
       try {
@@ -347,9 +508,11 @@ export async function syncWithAllPeers(
         console.log(
           `[Sync] ✅ ${peer.name}: pulled ${result.pulled.applied}, pushed ${result.pushed.rows_sent}`
         );
+        successfulPeers += 1;
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         console.error(`[Sync] ❌ ${peer.name}: ${msg}`);
+        failedPeers += 1;
 
         // Log error
         database
@@ -366,6 +529,21 @@ export async function syncWithAllPeers(
           );
       }
     }
+
+    const attemptedPeers = peers.length;
+    const message =
+      successfulPeers > 0
+        ? `已完成 ${successfulPeers}/${attemptedPeers} 个节点同步。`
+        : failedPeers > 0
+          ? "没有节点同步成功，请检查另一台服务器地址、登录和网络连通性。"
+          : "当前没有可执行的同步任务。";
+
+    return {
+      attempted_peers: attemptedPeers,
+      successful_peers: successfulPeers,
+      failed_peers: failedPeers,
+      message,
+    };
   } finally {
     isSyncing = false;
   }

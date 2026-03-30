@@ -56,6 +56,7 @@ public enum ImporterKey: String, Codable, CaseIterable, Sendable, Identifiable {
     case bodyScale = "body_scale"
     case activity
     case genetic
+    case diet
 
     public var id: String { rawValue }
 }
@@ -122,6 +123,8 @@ public struct HealthSourceDimensionCard: Codable, Sendable, Identifiable {
     public let status: SourceDimensionStatus
     public let summary: String
     public let highlight: String
+    /// AI insight summary from cache (only present when user has previously viewed insights)
+    public let insightSummary: String?
 
     public var id: String { key }
 }
@@ -387,6 +390,17 @@ public struct HealthOverviewCard: Codable, Sendable, Identifiable {
     public var id: String { metricCode }
 }
 
+public struct DietOverviewSnapshot: Codable, Sendable {
+    public let aggregateDate: String
+    public let recognizedFoods: [String]
+    public let estimatedCaloriesKcal: Double
+    public let mealUploadCount: Int
+    public let latestRecognizedAt: String
+    public let sourceFile: String?
+    public let provider: String?
+    public let model: String?
+}
+
 public struct HealthHomePageData: Codable, Sendable {
     public let generatedAt: String
     public let disclaimer: String
@@ -401,6 +415,7 @@ public struct HealthHomePageData: Codable, Sendable {
     public let overviewCards: [HealthOverviewCard]
     public let annualExam: AnnualExamView?
     public let geneticFindings: [GeneticFindingView]
+    public let dietOverview: DietOverviewSnapshot?
     public let keyReminders: [HealthReminderItem]
     public let watchItems: [HealthReminderItem]
     public let latestNarrative: HealthSummaryGenerationResult
@@ -413,6 +428,7 @@ public struct HealthCharts: Codable, Sendable {
     public let bodyComposition: HealthTrendChartModel
     public let activity: HealthTrendChartModel
     public let recovery: HealthTrendChartModel
+    public let diet: HealthTrendChartModel
 }
 
 public struct ReportsIndexData: Codable, Sendable {
@@ -466,6 +482,7 @@ public struct ImportTaskSummary: Codable, Sendable, Identifiable {
     public let successRecords: Int
     public let failedRecords: Int
     public let parseMode: String?
+    public let completionPreview: ImportTaskCompletionPreview?
 
     public var id: String { importTaskId }
 
@@ -477,6 +494,17 @@ public struct ImportTaskSummary: Codable, Sendable, Identifiable {
             true
         }
     }
+}
+
+public struct ImportTaskCompletionPreview: Codable, Sendable {
+    public let headline: String
+    public let detail: String
+    public let actionTitle: String?
+    public let actionTarget: String?
+    public let aggregateDate: String?
+    public let recognizedFoods: [String]?
+    public let estimatedCaloriesKcal: Double?
+    public let mealUploadCount: Int?
 }
 
 public struct ImportTaskListResponse: Codable, Sendable {
@@ -501,6 +529,11 @@ public enum HealthKitMetricKind: String, Codable, Sendable, CaseIterable, Identi
     case activeEnergy
     case exerciseMinutes
     case sleepMinutes
+    case restingHeartRate
+    case walkingHeartRateAverage
+    case heartRateVariability
+    case oxygenSaturation
+    case respiratoryRate
 
     public var id: String { rawValue }
 }
@@ -722,13 +755,120 @@ public struct VerifyCodeResponse: Codable, Sendable {
     public let user: UserInfo
 }
 
+public enum AuthProviderKind: String, Codable, Sendable, Identifiable {
+    case device
+    case phone
+    case apple
+
+    public var id: String { rawValue }
+}
+
+public struct AuthProviderLink: Codable, Sendable, Identifiable {
+    public let provider: AuthProviderKind
+    public let linkedAt: String?
+    public let email: String?
+
+    public var id: AuthProviderKind { provider }
+}
+
 public struct UserInfo: Codable, Sendable {
     public let id: String
     public let displayName: String
     public let phoneNumber: String?
+    public let email: String?
+    public let authProviders: [AuthProviderLink]
+    public let hasAppleLinked: Bool
+
+    public init(
+        id: String,
+        displayName: String,
+        phoneNumber: String? = nil,
+        email: String? = nil,
+        authProviders: [AuthProviderLink] = [],
+        hasAppleLinked: Bool = false
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.phoneNumber = phoneNumber
+        self.email = email
+        self.authProviders = authProviders
+        self.hasAppleLinked = hasAppleLinked || authProviders.contains(where: { $0.provider == .apple })
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName
+        case phoneNumber
+        case email
+        case authProviders
+        case hasAppleLinked
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        displayName = try container.decode(String.self, forKey: .displayName)
+        phoneNumber = try container.decodeIfPresent(String.self, forKey: .phoneNumber)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        authProviders = try container.decodeIfPresent([AuthProviderLink].self, forKey: .authProviders) ?? []
+        hasAppleLinked =
+            try container.decodeIfPresent(Bool.self, forKey: .hasAppleLinked)
+            ?? authProviders.contains(where: { $0.provider == .apple })
+    }
 }
 
 public struct UserMeResponse: Codable, Sendable {
+    public let user: UserInfo
+}
+
+public struct AppleSignInRequest: Codable, Sendable {
+    public let identityToken: String
+    public let authorizationCode: String?
+    public let email: String?
+    public let displayName: String?
+    public let deviceLabel: String?
+
+    public init(
+        identityToken: String,
+        authorizationCode: String? = nil,
+        email: String? = nil,
+        displayName: String? = nil,
+        deviceLabel: String? = nil
+    ) {
+        self.identityToken = identityToken
+        self.authorizationCode = authorizationCode
+        self.email = email
+        self.displayName = displayName
+        self.deviceLabel = deviceLabel
+    }
+}
+
+public struct AppleLinkRequest: Codable, Sendable {
+    public let identityToken: String
+    public let authorizationCode: String?
+    public let email: String?
+    public let displayName: String?
+
+    public init(
+        identityToken: String,
+        authorizationCode: String? = nil,
+        email: String? = nil,
+        displayName: String? = nil
+    ) {
+        self.identityToken = identityToken
+        self.authorizationCode = authorizationCode
+        self.email = email
+        self.displayName = displayName
+    }
+}
+
+public struct AppleSignInResponse: Codable, Sendable {
+    public let token: String
+    public let user: UserInfo
+    public let isNewUser: Bool
+}
+
+public struct AppleLinkResponse: Codable, Sendable {
     public let user: UserInfo
 }
 
@@ -995,11 +1135,23 @@ public struct SyncStatusResponse: Codable, Sendable {
     public let recentLogs: [SyncLogEntry]
 }
 
+public struct SyncTriggerRequest: Codable, Sendable {
+    public let peerUrls: [String]
+
+    public init(peerUrls: [String]) {
+        self.peerUrls = peerUrls
+    }
+}
+
 public struct SyncTriggerResponse: Codable, Sendable {
     public let triggered: Bool
     public let serverId: String
     public let peers: [SyncPeer]
     public let recentLogs: [SyncLogEntry]
+    public let attemptedPeers: Int
+    public let successfulPeers: Int
+    public let failedPeers: Int
+    public let message: String
 }
 
 // MARK: - AI Model Status
@@ -1048,6 +1200,32 @@ public struct PlanProgressReport: Codable, Sendable {
     public let aiNudge: String
 }
 
+// MARK: - Account Switching
+
+public struct UserListItem: Codable, Sendable, Identifiable {
+    public let id: String
+    public let displayName: String?
+    public let phoneNumber: String?
+    public let deviceId: String?
+    public let createdAt: String?
+}
+
+public struct UserListResponse: Codable, Sendable {
+    public let users: [UserListItem]
+    public let currentUserId: String
+    public let canSwitchUser: Bool?
+}
+
+public struct SwitchUserRequest: Codable, Sendable {
+    public let targetUserId: String
+    public init(targetUserId: String) { self.targetUserId = targetUserId }
+}
+
+public struct SwitchUserResponse: Codable, Sendable {
+    public let token: String
+    public let user: UserInfo
+}
+
 // MARK: - Document AI Insights
 
 public struct InsightItem: Codable, Sendable, Identifiable {
@@ -1057,12 +1235,15 @@ public struct InsightItem: Codable, Sendable, Identifiable {
     public let action: String?
     public let severity: String   // "high" | "medium" | "low" | "positive"
     public let relatedMetrics: [String]?
+    public let categoryLabel: String?
 }
 
 public struct DocumentInsightResponse: Codable, Sendable {
     public let documentType: String  // "medical_exam" | "genetic"
     public let hasData: Bool
     public let summary: String
+    public let summaryHeadline: String?
+    public let summaryHighlights: [String]?
     public let urgentItems: [InsightItem]
     public let attentionItems: [InsightItem]
     public let positiveItems: [InsightItem]

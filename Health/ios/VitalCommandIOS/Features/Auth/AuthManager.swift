@@ -1,5 +1,6 @@
 import SwiftUI
 import LocalAuthentication
+import AuthenticationServices
 import VitalCommandMobileCore
 
 @MainActor
@@ -8,7 +9,7 @@ final class AuthManager: ObservableObject {
     @Published var currentUser: UserInfo?
     @Published var isLoading = true
 
-    private(set) var token: String?
+    @Published private(set) var token: String?
 
     private static let tokenKey = "vital-command.auth-token"
     private static let userKey = "vital-command.auth-user"
@@ -22,6 +23,10 @@ final class AuthManager: ObservableObject {
 
     /// Stable per-installation device identifier (persisted in Keychain to survive reinstalls)
     var deviceId: String {
+        Self.persistedDeviceId()
+    }
+
+    static func persistedDeviceId() -> String {
         if let saved = KeychainHelper.read(key: Self.deviceIdKey) {
             return saved
         }
@@ -49,13 +54,25 @@ final class AuthManager: ObservableObject {
 
     func login(token: String, user: UserInfo) {
         self.token = token
-        self.currentUser = user
         self.isAuthenticated = true
 
         KeychainHelper.save(key: Self.tokenKey, value: token)
+        persistCurrentUser(user)
+    }
+
+    func updateCurrentUser(_ user: UserInfo) {
+        persistCurrentUser(user)
+    }
+
+    private func persistCurrentUser(_ user: UserInfo) {
+        self.currentUser = user
         if let userData = try? JSONEncoder().encode(user) {
             UserDefaults.standard.set(userData, forKey: Self.userKey)
         }
+    }
+
+    func switchUser(token: String, user: UserInfo) {
+        login(token: token, user: user)
     }
 
     func logout() {
@@ -79,6 +96,33 @@ final class AuthManager: ObservableObject {
         login(token: response.token, user: response.user)
     }
 
+    func signInWithApple(_ payload: AppleAuthorizationPayload, using settings: AppSettingsStore) async throws {
+        let client = try settings.makeClient()
+        let response = try await client.signInWithApple(
+            AppleSignInRequest(
+                identityToken: payload.identityToken,
+                authorizationCode: payload.authorizationCode,
+                email: payload.email,
+                displayName: payload.displayName,
+                deviceLabel: UIDevice.current.name
+            )
+        )
+        login(token: response.token, user: response.user)
+    }
+
+    func linkAppleIdentity(_ payload: AppleAuthorizationPayload, using settings: AppSettingsStore) async throws {
+        let client = try settings.makeClient(token: token)
+        let response = try await client.linkAppleIdentity(
+            AppleLinkRequest(
+                identityToken: payload.identityToken,
+                authorizationCode: payload.authorizationCode,
+                email: payload.email,
+                displayName: payload.displayName
+            )
+        )
+        updateCurrentUser(response.user)
+    }
+
     // MARK: - Offline mode
 
     /// Allow user to enter app in offline/cached mode when server is unreachable
@@ -100,6 +144,7 @@ final class AuthManager: ObservableObject {
         case .faceID: return "面容 ID"
         case .touchID: return "指纹"
         case .opticID: return "Optic ID"
+        case .none: return "生物识别"
         @unknown default: return "生物识别"
         }
     }
@@ -108,6 +153,7 @@ final class AuthManager: ObservableObject {
         switch biometricType {
         case .faceID: return "faceid"
         case .touchID: return "touchid"
+        case .none: return "lock.shield"
         default: return "lock.shield"
         }
     }
@@ -140,12 +186,9 @@ final class AuthManager: ObservableObject {
         do {
             let client = try settings.makeClient(token: token)
             let response = try await client.fetchCurrentUser()
-            currentUser = response.user
+            persistCurrentUser(response.user)
             isAuthenticated = true
             isLoading = false
-            if let userData = try? JSONEncoder().encode(response.user) {
-                UserDefaults.standard.set(userData, forKey: Self.userKey)
-            }
         } catch {
             let isUnauthorized = (error as? HealthAPIClientError).map {
                 if case let .server(statusCode, _) = $0 { return statusCode == 401 }
@@ -164,6 +207,49 @@ final class AuthManager: ObservableObject {
                 }
             }
             isLoading = false
+        }
+    }
+}
+
+struct AppleAuthorizationPayload: Sendable {
+    let identityToken: String
+    let authorizationCode: String?
+    let email: String?
+    let displayName: String?
+
+    init(credential: ASAuthorizationAppleIDCredential) throws {
+        guard let identityTokenData = credential.identityToken,
+              let identityToken = String(data: identityTokenData, encoding: .utf8),
+              identityToken.isEmpty == false else {
+            throw AppleAuthorizationPayloadError.missingIdentityToken
+        }
+
+        let authorizationCode =
+            credential.authorizationCode.flatMap { String(data: $0, encoding: .utf8) }
+
+        let givenName = credential.fullName?.givenName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let familyName = credential.fullName?.familyName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let combinedName = [familyName, givenName]
+            .compactMap { value in
+                guard let value, value.isEmpty == false else { return nil }
+                return value
+            }
+            .joined()
+
+        self.identityToken = identityToken
+        self.authorizationCode = authorizationCode
+        self.email = credential.email
+        self.displayName = combinedName.isEmpty ? nil : combinedName
+    }
+}
+
+enum AppleAuthorizationPayloadError: LocalizedError {
+    case missingIdentityToken
+
+    var errorDescription: String? {
+        switch self {
+        case .missingIdentityToken:
+            return "Apple 授权结果缺少身份令牌，请重试。"
         }
     }
 }

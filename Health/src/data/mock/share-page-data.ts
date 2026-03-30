@@ -797,6 +797,27 @@ export const shareHealthHomePageData: HealthHomePageData = {
         { key: "sleepHours", label: "睡眠时长", color: "#0f766e", unit: "h", yAxisId: "left" },
         { key: "restingHr", label: "静息心率", color: "#2563eb", unit: "bpm", yAxisId: "right" }
       ]
+    },
+    diet: {
+      title: "饮食热量样例",
+      description: "按天汇总的热量趋势与记录次数，用于演示饮食模块的反馈方式。",
+      defaultRange: "30d",
+      data: [
+        createTrendPoint("2026-03-01", { caloriesIntakeKcal: 2140, mealUploadCount: 2 }),
+        createTrendPoint("2026-03-02", { caloriesIntakeKcal: 2280, mealUploadCount: 3 }),
+        createTrendPoint("2026-03-03", { caloriesIntakeKcal: 2050, mealUploadCount: 2 }),
+        createTrendPoint("2026-03-04", { caloriesIntakeKcal: 2360, mealUploadCount: 3 }),
+        createTrendPoint("2026-03-05", { caloriesIntakeKcal: 2210, mealUploadCount: 2 }),
+        createTrendPoint("2026-03-06", { caloriesIntakeKcal: 1980, mealUploadCount: 2 }),
+        createTrendPoint("2026-03-07", { caloriesIntakeKcal: 2075, mealUploadCount: 2 }),
+        createTrendPoint("2026-03-08", { caloriesIntakeKcal: 2010, mealUploadCount: 2 }),
+        createTrendPoint("2026-03-09", { caloriesIntakeKcal: 2330, mealUploadCount: 3 }),
+        createTrendPoint("2026-03-10", { caloriesIntakeKcal: 2090, mealUploadCount: 2 })
+      ],
+      lines: [
+        { key: "caloriesIntakeKcal", label: "热量", color: "#f59e0b", unit: "kcal", yAxisId: "left" },
+        { key: "mealUploadCount", label: "记录次数", color: "#b45309", unit: "count", yAxisId: "right" }
+      ]
     }
   },
   latestReports

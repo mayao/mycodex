@@ -5,6 +5,7 @@ struct ReportDetailScreen: View {
     let reportID: String
 
     @EnvironmentObject private var settings: AppSettingsStore
+    @EnvironmentObject private var authManager: AuthManager
     @StateObject private var viewModel = ReportDetailViewModel()
     @State private var expandedInsightID: String? = nil
 
@@ -28,6 +29,12 @@ struct ReportDetailScreen: View {
             case let .loaded(report):
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
+                        if viewModel.isUsingCache {
+                            OfflineCacheBanner(
+                                title: "当前为离线缓存报告详情",
+                                cachedAt: viewModel.cacheDate
+                            )
+                        }
                         reportHero(report)
                         metricsSection(report)
                         planReviewSection(report)
@@ -44,17 +51,16 @@ struct ReportDetailScreen: View {
         .task(id: settings.dashboardReloadKey + reportID) {
             await reload()
         }
-        .onAppear {
-            Task {
-                await reload()
-            }
-        }
     }
 
     private func reload() async {
         do {
             let client = try settings.makeClient()
-            await viewModel.load(reportID: reportID, using: client)
+            await viewModel.load(
+                reportID: reportID,
+                using: client,
+                cacheScope: settings.cacheScope(userID: authManager.currentUser?.id)
+            )
         } catch {
             viewModel.setError(error.localizedDescription)
         }
@@ -175,15 +181,16 @@ struct ReportDetailScreen: View {
 
                     // AI comment
                     if !review.aiComment.isEmpty {
-                        HStack(alignment: .top, spacing: 8) {
+                        HStack(alignment: .top, spacing: 10) {
                             Image(systemName: "sparkles")
                                 .foregroundStyle(.blue)
-                                .font(.footnote)
+                                .font(.subheadline)
                             Text(review.aiComment)
-                                .font(.footnote)
+                                .font(.subheadline)
                                 .foregroundStyle(.secondary)
+                                .lineSpacing(3)
                         }
-                        .padding(12)
+                        .padding(16)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(Color.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
@@ -366,39 +373,40 @@ private struct InsightBlockCard: View {
     let items: [String]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Image(systemName: icon)
                     .foregroundStyle(color)
-                    .font(.subheadline)
+                    .font(.headline)
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.headline)
                 Spacer()
                 Text("\(items.count)条")
-                    .font(.caption2)
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(color.opacity(0.8))
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
                         Text("\(idx + 1)")
-                            .font(.caption2.weight(.bold))
+                            .font(.caption.weight(.bold))
                             .foregroundStyle(color)
-                            .frame(width: 16, height: 16)
+                            .frame(width: 20, height: 20)
                             .background(color.opacity(0.12), in: Circle())
-                            .padding(.top, 2)
+                            .padding(.top, 1)
                         Text(item)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary.opacity(0.85))
                             .fixedSize(horizontal: false, vertical: true)
+                            .lineSpacing(3)
                     }
                 }
             }
         }
-        .padding(16)
+        .padding(18)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(color.opacity(0.06), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(color.opacity(0.05), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
@@ -494,48 +502,51 @@ private struct InsightExpandRow: View {
                 // Expanded content
                 if isExpanded {
                     Divider()
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, 16)
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 14) {
                         if !insight.evidence.summary.isEmpty {
                             Label {
                                 Text(insight.evidence.summary)
-                                    .font(.footnote)
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .lineSpacing(3)
                             } icon: {
                                 Image(systemName: "chart.xyaxis.line")
                                     .foregroundStyle(severityColor)
-                                    .font(.caption)
+                                    .font(.subheadline)
                             }
                         }
 
                         if !insight.possibleReason.isEmpty {
                             Label {
                                 Text(insight.possibleReason)
-                                    .font(.footnote)
+                                    .font(.subheadline)
                                     .foregroundStyle(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
+                                    .lineSpacing(3)
                             } icon: {
                                 Image(systemName: "brain.head.profile")
                                     .foregroundStyle(.indigo)
-                                    .font(.caption)
+                                    .font(.subheadline)
                             }
                         }
 
                         Label {
                             Text(insight.suggestedAction)
-                                .font(.footnote.weight(.medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundStyle(.primary)
                                 .fixedSize(horizontal: false, vertical: true)
+                                .lineSpacing(3)
                         } icon: {
                             Image(systemName: "arrow.right.circle.fill")
                                 .foregroundStyle(.blue)
-                                .font(.caption)
+                                .font(.subheadline)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
                 }
             }
         }

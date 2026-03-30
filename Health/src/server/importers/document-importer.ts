@@ -6,6 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 
 import { getAppEnv } from "../config/env";
+import { getKimiOpenAIHeaders } from "../services/llm-provider-routing";
 import { importHealthData } from "./import-service";
 import { importerSpecs } from "./specs";
 import type { ImportExecutionResult, ImportRequest, ImporterKey } from "./types";
@@ -213,7 +214,8 @@ async function tryParseWithOpenAI(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
+      Authorization: `Bearer ${apiKey}`,
+      ...(getKimiOpenAIHeaders(apiKey) ?? {})
     },
     body: JSON.stringify({
       model,

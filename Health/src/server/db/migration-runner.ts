@@ -3,6 +3,8 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 
 export const unifiedTables = [
+  "users",
+  "user_identity",
   "metric_definition",
   "metric_record",
   "data_source",

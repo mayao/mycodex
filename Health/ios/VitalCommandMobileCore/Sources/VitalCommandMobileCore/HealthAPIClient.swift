@@ -45,7 +45,12 @@ public final class HealthAPIClient: @unchecked Sendable {
     private let session: URLSessioning
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
-    public var token: String?
+    private let tokenLock = NSLock()
+    private var _token: String?
+    public var token: String? {
+        get { tokenLock.lock(); defer { tokenLock.unlock() }; return _token }
+        set { tokenLock.lock(); defer { tokenLock.unlock() }; _token = newValue }
+    }
 
     public init(
         configuration: AppServerConfiguration,
@@ -54,7 +59,7 @@ public final class HealthAPIClient: @unchecked Sendable {
     ) {
         self.configuration = configuration
         self.session = session
-        self.token = token
+        self._token = token
 
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
@@ -83,8 +88,24 @@ public final class HealthAPIClient: @unchecked Sendable {
         try await sendJSON(path: "api/auth/device-login", body: input)
     }
 
+    public func signInWithApple(_ input: AppleSignInRequest) async throws -> AppleSignInResponse {
+        try await sendJSON(path: "api/auth/apple/sign-in", body: input)
+    }
+
+    public func linkAppleIdentity(_ input: AppleLinkRequest) async throws -> AppleLinkResponse {
+        try await sendJSON(path: "api/auth/apple/link", body: input)
+    }
+
     public func logoutSession() async throws {
         let _: [String: Bool] = try await sendJSON(path: "api/auth/logout", body: [String: String]())
+    }
+
+    public func fetchUsers() async throws -> UserListResponse {
+        try await send(path: "api/auth/users")
+    }
+
+    public func switchUser(_ input: SwitchUserRequest) async throws -> SwitchUserResponse {
+        try await sendJSON(path: "api/auth/switch-user", body: input)
     }
 
     public func fetchDashboard() async throws -> HealthHomePageData {
@@ -96,7 +117,7 @@ public final class HealthAPIClient: @unchecked Sendable {
     }
 
     public func fetchReportDetail(snapshotId: String) async throws -> HealthReportSnapshotRecord {
-        try await send(path: "api/reports/\(snapshotId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? snapshotId)")
+        try await send(path: "api/reports/\(encodePathSegment(snapshotId))")
     }
 
     public func fetchImportTasks() async throws -> ImportTaskListResponse {
@@ -104,7 +125,7 @@ public final class HealthAPIClient: @unchecked Sendable {
     }
 
     public func fetchImportTask(taskID: String) async throws -> ImportTaskResponse {
-        try await send(path: "api/imports/\(taskID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? taskID)")
+        try await send(path: "api/imports/\(encodePathSegment(taskID))")
     }
 
     public func importData(
@@ -143,6 +164,52 @@ public final class HealthAPIClient: @unchecked Sendable {
 
     public func chatWithAI(_ input: AIChatRequest) async throws -> AIChatResponse {
         try await sendJSON(path: "api/ai/chat", body: input)
+    }
+
+    /// Stream AI chat response via SSE. Yields content chunks as they arrive.
+    public func streamChatWithAI(_ input: AIChatRequest) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    var request = makeRequest(path: "api/ai/chat/stream", method: "POST")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+                    request.timeoutInterval = 120
+                    request.httpBody = try encoder.encode(input)
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+                    if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                        continuation.finish(throwing: HealthAPIClientError.server(
+                            statusCode: httpResponse.statusCode,
+                            message: "AI 对话流式响应失败（\(httpResponse.statusCode)）"
+                        ))
+                        return
+                    }
+
+                    for try await line in bytes.lines {
+                        if line.hasPrefix("data: ") {
+                            let data = String(line.dropFirst(6))
+                            if data == "[DONE]" {
+                                break
+                            }
+                            // Parse OpenAI-compatible SSE chunk
+                            if let jsonData = data.data(using: .utf8),
+                               let chunk = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                               let choices = chunk["choices"] as? [[String: Any]],
+                               let delta = choices.first?["delta"] as? [String: Any],
+                               let content = delta["content"] as? String {
+                                continuation.yield(content)
+                            }
+                        }
+                    }
+
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
     }
 
     public func authorizeDevice(_ input: DeviceAuthorizeRequest) async throws -> DeviceAuthorizeResponse {
@@ -196,8 +263,8 @@ public final class HealthAPIClient: @unchecked Sendable {
         try await send(path: "api/sync/status")
     }
 
-    public func triggerSync() async throws -> SyncTriggerResponse {
-        try await sendEmpty(path: "api/sync/trigger")
+    public func triggerSync(peerURLs: [String] = []) async throws -> SyncTriggerResponse {
+        try await sendJSON(path: "api/sync/trigger", body: SyncTriggerRequest(peerUrls: peerURLs))
     }
 
     // MARK: - Privacy
@@ -278,6 +345,11 @@ public final class HealthAPIClient: @unchecked Sendable {
 
     public func fetchModelStatus() async throws -> AIModelStatusResponse {
         try await send(path: "api/ai/model-status")
+    }
+
+    private func encodePathSegment(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
     }
 
     public func setPreferredProvider(_ provider: String) async throws -> AIModelStatusResponse {
