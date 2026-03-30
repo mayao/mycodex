@@ -92,11 +92,19 @@ struct AccountsScreen: View {
     }
 
     private func refresh(force: Bool) async {
-        do {
-            let client = try await settings.makeValidatedClient()
-            await dashboardStore.refreshVisible(using: client)
-        } catch {
-            dashboardStore.setError(error.localizedDescription)
+        if settings.canAccessRemoteData {
+            do {
+                let client = try settings.makeClient()
+                await dashboardStore.refreshVisible(using: client)
+            } catch {
+                dashboardStore.setError(error.localizedDescription)
+            }
+            return
+        }
+        if settings.canUseLongbridgeSession {
+            await dashboardStore.refreshLocalFirst(using: settings)
+        } else {
+            dashboardStore.setNotice("当前没有可用服务器，先展示手机缓存。")
         }
     }
 

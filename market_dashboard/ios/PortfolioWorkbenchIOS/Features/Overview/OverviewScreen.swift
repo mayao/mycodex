@@ -23,6 +23,9 @@ struct OverviewScreen: View {
         NavigationStack {
             AppBackdrop {
                 Group {
+#if DEBUG
+                    debugSessionSection
+#endif
                     switch dashboardStore.state {
                     case .idle, .loading:
                         LoadingStageCard(
@@ -101,21 +104,63 @@ struct OverviewScreen: View {
         }
     }
 
+#if DEBUG
+    private var debugSessionSection: some View {
+        SectionPanel(title: "调试会话", subtitle: "仅用于确认当前运行时登录态。") {
+            VStack(alignment: .leading, spacing: 8) {
+                LabelValueRow(
+                    label: "是否已登录",
+                    value: settings.isAuthenticated ? "是" : "否"
+                )
+                LabelValueRow(
+                    label: "当前用户",
+                    value: settings.effectiveCurrentUser.map { "\($0.authProvider):\($0.userId)" } ?? "nil"
+                )
+                LabelValueRow(
+                    label: "会话 token",
+                    value: settings.effectiveSessionToken?.isEmpty == false ? "len \(settings.effectiveSessionToken?.count ?? 0)" : "nil"
+                )
+                LabelValueRow(
+                    label: "当前服务器",
+                    value: settings.trimmedServerURLString
+                )
+            }
+        }
+        .padding(16)
+    }
+#endif
+
     private func refresh(force: Bool) async {
-        do {
-            let client = try await settings.makeValidatedClient()
-            await dashboardStore.refreshVisible(using: client)
-        } catch {
-            dashboardStore.setError(error.localizedDescription)
+        if settings.canAccessRemoteData {
+            do {
+                let client = try settings.makeClient()
+                await dashboardStore.refreshVisible(using: client)
+            } catch {
+                dashboardStore.setError(error.localizedDescription)
+            }
+            return
+        }
+        if settings.canUseLongbridgeSession {
+            await dashboardStore.refreshLocalFirst(using: settings)
+        } else {
+            dashboardStore.setNotice("当前没有可用服务器，先显示手机缓存。")
         }
     }
 
     private func refreshAI(force: Bool) async {
-        do {
-            let client = try await settings.makeValidatedClient()
-            await dashboardStore.refreshAI(using: client, force: force)
-        } catch {
-            dashboardStore.setError(error.localizedDescription)
+        if settings.canAccessRemoteData {
+            do {
+                let client = try settings.makeClient()
+                await dashboardStore.refreshAI(using: client, force: force)
+            } catch {
+                dashboardStore.setError(error.localizedDescription)
+            }
+            return
+        }
+        if settings.canUseLongbridgeSession {
+            await dashboardStore.refreshLocalFirst(using: settings)
+        } else {
+            dashboardStore.setNotice("当前没有可用 AI 数据源，先显示手机缓存。")
         }
     }
 

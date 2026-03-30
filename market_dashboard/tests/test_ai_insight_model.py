@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from market_dashboard import ai_insight_model
+try:
+    import ai_insight_model
+except ModuleNotFoundError:
+    from market_dashboard import ai_insight_model
 
 
 class AIInsightModelTests(unittest.TestCase):
@@ -46,19 +49,29 @@ class AIInsightModelTests(unittest.TestCase):
             ],
         }
 
-        anthropic = ai_insight_model._provider_runtime_settings(
-            "anthropic",
-            ai_request_config=request_config,
-        )
-        kimi = ai_insight_model._provider_runtime_settings(
-            "kimi",
-            ai_request_config=request_config,
-        )
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            previous_path = os.environ.get("MARKET_DASHBOARD_AI_CONFIG_PATH")
+            os.environ["MARKET_DASHBOARD_AI_CONFIG_PATH"] = str(Path(tmp_dir) / "missing-service-config.json")
+            try:
+                anthropic = ai_insight_model._provider_runtime_settings(
+                    "anthropic",
+                    ai_request_config=request_config,
+                )
+                kimi = ai_insight_model._provider_runtime_settings(
+                    "kimi",
+                    ai_request_config=request_config,
+                )
+            finally:
+                if previous_path is None:
+                    os.environ.pop("MARKET_DASHBOARD_AI_CONFIG_PATH", None)
+                else:
+                    os.environ["MARKET_DASHBOARD_AI_CONFIG_PATH"] = previous_path
 
         self.assertIsNotNone(anthropic)
         self.assertEqual(anthropic["candidate_models"], ["claude-picked-by-user"])
         self.assertIsNotNone(kimi)
-        self.assertEqual(kimi["candidate_models"], ["moonshot-picked-by-user"])
+        self.assertEqual(kimi["candidate_models"][0], "moonshot-picked-by-user")
+        self.assertEqual(kimi["candidate_models"].count("moonshot-picked-by-user"), 1)
 
     def test_failure_note_surfaces_network_hint(self) -> None:
         result = ai_insight_model._provider_failure_result(

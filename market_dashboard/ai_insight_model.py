@@ -18,7 +18,10 @@ except ModuleNotFoundError:
 
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-KIMI_API_BASE_URL = "https://api.moonshot.cn/v1"
+KIMI_MOONSHOT_API_BASE_URL = "https://api.moonshot.cn/v1"
+KIMI_CODING_API_BASE_URL = "https://api.kimi.com/coding/v1"
+# Backward-compat alias for old imports/constants.
+KIMI_API_BASE_URL = KIMI_MOONSHOT_API_BASE_URL
 GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 REQUEST_TIMEOUT_SECONDS = 40.0
 AI_CACHE_TTL_SECONDS = 900
@@ -34,11 +37,15 @@ DEFAULT_ANTHROPIC_MODELS = (
     "claude-haiku-4-5-20251001",
     "claude-3-haiku-20240307",
 )
-DEFAULT_KIMI_MODELS = (
-    "kimi-for-coding",
+DEFAULT_KIMI_MOONSHOT_MODELS = (
     "moonshot-v1-8k",
     "moonshot-v1-32k",
     "moonshot-v1-128k",
+)
+DEFAULT_KIMI_CODING_MODELS = (
+    "kimi-k2-0711-preview",
+    "kimi-for-coding",
+    "kimi-latest",
 )
 DEFAULT_GEMINI_MODELS = (
     "gemini-2.5-flash",
@@ -389,12 +396,13 @@ def _anthropic_candidate_models(preferred_model: str | None) -> list[str]:
     )
 
 
-def _kimi_candidate_models(preferred_model: str | None) -> list[str]:
+def _kimi_candidate_models(preferred_model: str | None, *, preset: str | None = None) -> list[str]:
+    defaults = DEFAULT_KIMI_CODING_MODELS if preset == "kimi_coding" else DEFAULT_KIMI_MOONSHOT_MODELS
     return _candidate_models(
         preferred_model,
         env_names=("KIMI_MODEL", "MOONSHOT_MODEL"),
         candidate_env_names=("KIMI_MODEL_CANDIDATES", "MOONSHOT_MODEL_CANDIDATES"),
-        defaults=DEFAULT_KIMI_MODELS,
+        defaults=defaults,
     )
 
 
@@ -511,20 +519,38 @@ def _provider_runtime_settings(
         )
         if not api_key:
             return None
-        configured_model = _trimmed_string(request_provider.get("model")) or _trimmed_string(preferred_model)
-        candidate_models = _single_model_or_candidates(configured_model, _kimi_candidate_models)
-        configured_model = configured_model or _trimmed_string(os.getenv("KIMI_MODEL")) or _trimmed_string(os.getenv("MOONSHOT_MODEL"))
+        configured_model = (
+            _trimmed_string(request_provider.get("model"))
+            or _trimmed_string(preferred_model)
+            or _trimmed_string(os.getenv("KIMI_MODEL"))
+            or _trimmed_string(os.getenv("MOONSHOT_MODEL"))
+        )
         preset = infer_kimi_preset(
             request_provider.get("preset"),
             base_url=request_provider.get("base_url"),
             model=configured_model,
+            api_key=api_key,
         )
-        base_url = (
+        if preset == "kimi_coding" and configured_model.lower().startswith("moonshot-"):
+            configured_model = ""
+        candidate_models = _kimi_candidate_models(configured_model, preset=preset)
+        raw_base_url = (
             _trimmed_string(request_provider.get("base_url"))
             or _trimmed_string(os.getenv("KIMI_BASE_URL"))
-            or _trimmed_string(os.getenv("MOONSHOT_BASE_URL"))
-            or KIMI_API_BASE_URL
+            or (
+                _trimmed_string(os.getenv("KIMI_CODING_BASE_URL"))
+                if preset == "kimi_coding"
+                else _trimmed_string(os.getenv("MOONSHOT_BASE_URL"))
+            )
         )
+        if preset == "kimi_coding":
+            expected_host = "api.kimi.com/coding"
+            base_url = raw_base_url if expected_host in raw_base_url.lower() else KIMI_CODING_API_BASE_URL
+            request_format = "anthropic"
+        else:
+            expected_host = "api.moonshot.cn"
+            base_url = raw_base_url if expected_host in raw_base_url.lower() else KIMI_MOONSHOT_API_BASE_URL
+            request_format = "openai"
         return {
             "provider": provider,
             "label": _provider_label(provider),
@@ -533,6 +559,7 @@ def _provider_runtime_settings(
             "configured_model": configured_model,
             "base_url": base_url.rstrip("/"),
             "preset": preset,
+            "request_format": request_format,
         }
 
     if provider == "gemini":
@@ -673,6 +700,15 @@ def _build_openai_chat_completions_url(base_url: str) -> str:
     return normalized + "/chat/completions"
 
 
+def _build_anthropic_messages_url(base_url: str) -> str:
+    normalized = base_url.rstrip("/")
+    if normalized.endswith("/messages"):
+        return normalized
+    if normalized.endswith("/v1"):
+        return normalized + "/messages"
+    return normalized + "/v1/messages"
+
+
 def _request_anthropic_response(
     *,
     api_key: str,
@@ -681,6 +717,7 @@ def _request_anthropic_response(
     messages: list[dict[str, str]],
     max_tokens: int,
     temperature: float,
+    base_url: str = ANTHROPIC_API_URL,
 ) -> tuple[str, str, int]:
     request_body = json.dumps(
         {
@@ -693,7 +730,7 @@ def _request_anthropic_response(
         ensure_ascii=False,
     ).encode("utf-8")
     request = Request(
-        ANTHROPIC_API_URL,
+        _build_anthropic_messages_url(base_url),
         data=request_body,
         method="POST",
         headers={
@@ -811,6 +848,16 @@ def _request_provider_response(
             temperature=temperature,
         )
     if provider == "kimi":
+        if provider_settings.get("request_format") == "anthropic":
+            return _request_anthropic_response(
+                api_key=provider_settings["api_key"],
+                model=model,
+                system_prompt=system_prompt,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                base_url=provider_settings["base_url"],
+            )
         return _request_openai_compatible_response(
             base_url=provider_settings["base_url"],
             api_key=provider_settings["api_key"],
@@ -831,6 +878,167 @@ def _request_provider_response(
             temperature=temperature,
         )
     raise ValueError(f"unsupported provider: {provider}")
+
+
+def _probe_provider(
+    provider_settings: dict[str, Any],
+    *,
+    timeout_seconds: float = 8.0,
+) -> tuple[str, int]:
+    candidate_models = [item for item in (provider_settings.get("candidate_models") or []) if item]
+    if not candidate_models:
+        raise RuntimeError("未配置可探测的模型")
+    model = candidate_models[0]
+
+    provider = provider_settings.get("provider")
+    if provider == "anthropic":
+        request_body = json.dumps(
+            {
+                "model": model,
+                "max_tokens": 16,
+                "temperature": 0,
+                "messages": [{"role": "user", "content": [{"type": "text", "text": "ping"}]}],
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = Request(
+            ANTHROPIC_API_URL,
+            data=request_body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": provider_settings["api_key"],
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        started_at = time.time()
+        with urlopen(request, timeout=timeout_seconds) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+        return str(response_payload.get("model") or model), int((time.time() - started_at) * 1000)
+
+    if provider == "kimi":
+        probe_errors: list[str] = []
+        for probe_model in candidate_models:
+            try:
+                if provider_settings.get("request_format") == "anthropic":
+                    request_body = json.dumps(
+                        {
+                            "model": probe_model,
+                            "max_tokens": 16,
+                            "temperature": 0,
+                            "messages": [{"role": "user", "content": [{"type": "text", "text": "ping"}]}],
+                        },
+                        ensure_ascii=False,
+                    ).encode("utf-8")
+                    request = Request(
+                        _build_anthropic_messages_url(provider_settings["base_url"]),
+                        data=request_body,
+                        method="POST",
+                        headers={
+                            "Content-Type": "application/json",
+                            "x-api-key": provider_settings["api_key"],
+                            "anthropic-version": "2023-06-01",
+                        },
+                    )
+                    started_at = time.time()
+                    with urlopen(request, timeout=timeout_seconds) as response:
+                        response_payload = json.loads(response.read().decode("utf-8"))
+                    return str(response_payload.get("model") or probe_model), int((time.time() - started_at) * 1000)
+
+                request_body = json.dumps(
+                    {
+                        "model": probe_model,
+                        "max_tokens": 16,
+                        "temperature": 0,
+                        "messages": [{"role": "user", "content": "ping"}],
+                    },
+                    ensure_ascii=False,
+                ).encode("utf-8")
+                request = Request(
+                    _build_openai_chat_completions_url(provider_settings["base_url"]),
+                    data=request_body,
+                    method="POST",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {provider_settings['api_key']}",
+                    },
+                )
+                started_at = time.time()
+                with urlopen(request, timeout=timeout_seconds) as response:
+                    response_payload = json.loads(response.read().decode("utf-8"))
+                return str(response_payload.get("model") or probe_model), int((time.time() - started_at) * 1000)
+            except Exception as exc:  # noqa: BLE001
+                probe_errors.append(str(exc))
+                continue
+        raise RuntimeError(probe_errors[-1] if probe_errors else "Kimi 探测失败")
+
+    if provider == "gemini":
+        request_body = {
+            "contents": [{"role": "user", "parts": [{"text": "ping"}]}],
+            "generationConfig": {"temperature": 0, "maxOutputTokens": 16},
+        }
+        request = Request(
+            f"{provider_settings['base_url'].rstrip('/')}/models/{quote(model, safe='')}:generateContent?key={quote(provider_settings['api_key'], safe='')}",
+            data=json.dumps(request_body, ensure_ascii=False).encode("utf-8"),
+            method="POST",
+            headers={"Content-Type": "application/json"},
+        )
+        started_at = time.time()
+        with urlopen(request, timeout=timeout_seconds) as response:
+            json.loads(response.read().decode("utf-8"))
+        return model, int((time.time() - started_at) * 1000)
+
+    raise ValueError(f"unsupported provider: {provider}")
+
+
+def _probe_ai_providers(
+    ai_request_config: dict[str, Any] | None = None,
+    *,
+    timeout_seconds: float = 8.0,
+) -> None:
+    resolved = _resolved_ai_request_config(ai_request_config)
+    provider_order = _configured_provider_order(ai_request_config)
+    provider_names: list[str] = []
+    for provider in [*provider_order, *DEFAULT_PROVIDER_ORDER, *(resolved.get("providers") or {}).keys()]:
+        normalized_provider = _normalize_provider_name(provider)
+        if not normalized_provider or normalized_provider in provider_names:
+            continue
+        provider_names.append(normalized_provider)
+
+    for provider in provider_names:
+        runtime = _provider_runtime_settings(provider, ai_request_config=ai_request_config)
+        if runtime is None:
+            _record_provider_status(
+                provider,
+                label=_provider_label(provider),
+                state="missing_key",
+                message="服务端未配置可用 API Key。",
+                model=None,
+                base_url=None,
+                latency_ms=None,
+            )
+            continue
+        try:
+            resolved_model, latency_ms = _probe_provider(runtime, timeout_seconds=timeout_seconds)
+            _record_provider_status(
+                provider,
+                label=runtime["label"],
+                state="success",
+                message=f"{runtime['label']} 探测成功。",
+                model=resolved_model,
+                base_url=runtime.get("base_url"),
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _record_provider_status(
+                provider,
+                label=runtime["label"],
+                state="error",
+                message=f"{runtime['label']} 探测失败：{_provider_error_detail(str(exc))}",
+                model=(runtime.get("candidate_models") or [""])[0] or runtime.get("configured_model"),
+                base_url=runtime.get("base_url"),
+                latency_ms=None,
+            )
 
 
 def _success_note(
@@ -878,6 +1086,8 @@ def _no_external_provider_result(entrypoint: str) -> dict[str, Any]:
 
 def _provider_error_detail(raw_error: str) -> str:
     lowered = raw_error.lower()
+    if "access_terminated_error" in lowered or "only available for coding agents" in lowered:
+        return "当前 Key 属于 Kimi Coding，请改用 Anthropic 兼容入口（/coding/v1/messages + x-api-key）。"
     if any(token in lowered for token in ("timed out", "timeout", "deadline exceeded")):
         return "请求超时，远程服务器到模型服务的外网链路可能不通。"
     if any(token in lowered for token in ("name or service not known", "temporary failure in name resolution", "nodename nor servname")):
@@ -914,7 +1124,14 @@ def _provider_failure_result(errors: list[str], entrypoint: str) -> dict[str, An
     }
 
 
-def get_ai_service_status(ai_request_config: dict[str, Any] | None = None) -> dict[str, Any]:
+def get_ai_service_status(
+    ai_request_config: dict[str, Any] | None = None,
+    *,
+    probe: bool = False,
+) -> dict[str, Any]:
+    if probe:
+        _probe_ai_providers(ai_request_config=ai_request_config)
+
     resolved = _resolved_ai_request_config(ai_request_config)
     service_config = _normalize_ai_request_config(load_service_ai_request_config())
     provider_order = _configured_provider_order(ai_request_config)
@@ -932,8 +1149,8 @@ def get_ai_service_status(ai_request_config: dict[str, Any] | None = None) -> di
         service_provider = (service_config.get("providers") or {}).get(provider) or {}
         cached_status = _provider_status_snapshot(provider) or {}
         effective_model = (
-            _trimmed_string(provider_config.get("model"))
-            or _trimmed_string(cached_status.get("model"))
+            _trimmed_string(cached_status.get("model"))
+            or _trimmed_string(provider_config.get("model"))
             or (runtime.get("configured_model") if runtime else "")
             or ((runtime.get("candidate_models") or [""])[0] if runtime else "")
         )
@@ -947,6 +1164,11 @@ def get_ai_service_status(ai_request_config: dict[str, Any] | None = None) -> di
                 service_provider.get("preset"),
                 base_url=effective_base_url,
                 model=effective_model,
+                api_key=(
+                    _trimmed_string(provider_config.get("api_key"))
+                    or _trimmed_string(service_provider.get("api_key"))
+                    or (runtime.get("api_key") if runtime else "")
+                ),
             )
             if provider == "kimi"
             else ""

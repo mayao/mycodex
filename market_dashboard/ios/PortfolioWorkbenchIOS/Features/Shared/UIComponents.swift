@@ -1,3 +1,5 @@
+import AuthenticationServices
+import Foundation
 import SwiftUI
 import PortfolioWorkbenchMobileCore
 
@@ -72,6 +74,69 @@ func loadStatusLabel(_ status: String?) -> String {
         return "异常"
     default:
         return "待检查"
+    }
+}
+
+struct AppleSignInControl: View {
+    let onStart: (() -> Void)?
+    let onSuccess: (_ userIdentifier: String, _ displayName: String?, _ emailAddress: String?) -> Void
+    let onFailure: (_ message: String) -> Void
+
+    init(
+        onStart: (() -> Void)? = nil,
+        onSuccess: @escaping (_ userIdentifier: String, _ displayName: String?, _ emailAddress: String?) -> Void,
+        onFailure: @escaping (_ message: String) -> Void
+    ) {
+        self.onStart = onStart
+        self.onSuccess = onSuccess
+        self.onFailure = onFailure
+    }
+
+    var body: some View {
+        SignInWithAppleButton(.signIn) { request in
+            request.requestedScopes = [.fullName, .email]
+            onStart?()
+        } onCompletion: { result in
+            handleCompletion(result)
+        }
+        .signInWithAppleButtonStyle(.white)
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func handleCompletion(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                onFailure("Apple 登录返回了无法识别的身份信息。")
+                return
+            }
+            onSuccess(
+                credential.user,
+                displayName(from: credential.fullName),
+                credential.email?.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        case let .failure(error):
+            onFailure(message(for: error))
+        }
+    }
+
+    private func displayName(from components: PersonNameComponents?) -> String? {
+        guard let components else {
+            return nil
+        }
+        let resolved = PersonNameComponentsFormatter().string(from: components)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return resolved.isEmpty ? nil : resolved
+    }
+
+    private func message(for error: Error) -> String {
+        if let authorizationError = error as? ASAuthorizationError,
+           authorizationError.code == .canceled {
+            return "已取消 Apple 登录。"
+        }
+        let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return message.isEmpty ? "Apple 登录暂时不可用，请稍后重试。" : message
     }
 }
 
@@ -687,14 +752,17 @@ struct SparklineShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        guard values.count > 1, let minValue = values.min(), let maxValue = values.max() else {
+        let renderableValues = values.filter(\.isFinite)
+        guard renderableValues.count > 1,
+              let minValue = renderableValues.min(),
+              let maxValue = renderableValues.max() else {
             return path
         }
 
         let span = max(maxValue - minValue, 0.0001)
 
-        for (index, value) in values.enumerated() {
-            let x = rect.minX + CGFloat(index) / CGFloat(values.count - 1) * rect.width
+        for (index, value) in renderableValues.enumerated() {
+            let x = rect.minX + CGFloat(index) / CGFloat(renderableValues.count - 1) * rect.width
             let normalized = (value - minValue) / span
             let y = rect.maxY - CGFloat(normalized) * rect.height
 
@@ -713,9 +781,13 @@ struct SparklineView: View {
     let points: [Double]
     let color: Color
 
+    private var renderablePoints: [Double] {
+        points.filter(\.isFinite)
+    }
+
     var body: some View {
-        if points.count > 1 {
-            SparklineShape(values: points)
+        if renderablePoints.count > 1 {
+            SparklineShape(values: renderablePoints)
                 .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                 .frame(width: 96, height: 34)
         } else {

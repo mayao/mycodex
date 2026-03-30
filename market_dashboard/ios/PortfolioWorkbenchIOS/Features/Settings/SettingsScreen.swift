@@ -1,5 +1,7 @@
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 import PortfolioWorkbenchMobileCore
 
 struct SettingsScreen: View {
@@ -11,6 +13,8 @@ struct SettingsScreen: View {
     @State private var isImporting = false
     @State private var isUploading = false
     @State private var isRefreshing = false
+    @State private var isLoggingInApple = false
+    @State private var isLoggingInDevice = false
     @State private var refreshMessage: String?
     @State private var uploadTarget: StatementUploadTarget?
     @State private var uploadIssues: [String: String] = [:]
@@ -18,6 +22,7 @@ struct SettingsScreen: View {
     @State private var isLoadingAIServiceStatus = false
     @State private var aiModelDrafts: [AppAIProvider: String] = [:]
     @State private var didLoadAISettings = false
+    @State private var longbridgeDiagnosticsReport = LongbridgeDiagnosticsStore.shared.report()
 
     var body: some View {
         NavigationStack {
@@ -29,6 +34,9 @@ struct SettingsScreen: View {
                         dataStatusSection
                         cacheSection
                         aiModelSection
+                        #if DEBUG
+                        debugSection
+                        #endif
                     }
                     .padding(16)
                     .padding(.bottom, 24)
@@ -39,6 +47,17 @@ struct SettingsScreen: View {
             .task {
                 await loadAIServiceStatus()
                 loadAISettingsIfNeeded()
+                longbridgeDiagnosticsReport = LongbridgeDiagnosticsStore.shared.report()
+            }
+            .onDisappear {
+                discovery.stopScanning()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .longbridgeDiagnosticsDidChange)) { notification in
+                if let report = notification.object as? String {
+                    longbridgeDiagnosticsReport = report
+                } else {
+                    longbridgeDiagnosticsReport = LongbridgeDiagnosticsStore.shared.report()
+                }
             }
             .fileImporter(isPresented: $isImporting, allowedContentTypes: [.pdf, .image]) { result in
                 switch result {
@@ -54,10 +73,13 @@ struct SettingsScreen: View {
     private var accountSection: some View {
         SectionPanel(title: "账户", subtitle: "当前设备已登录到你的个人投资数据。") {
             VStack(alignment: .leading, spacing: 12) {
-                if let currentUser = settings.currentUser {
+                if let currentUser = settings.effectiveCurrentUser {
                     LabelValueRow(label: "显示名称", value: currentUser.displayName)
                     LabelValueRow(label: "用户 ID", value: currentUser.userId)
                     LabelValueRow(label: "登录方式", value: authProviderLabel(currentUser.authProvider))
+                    if settings.isLocalOnlySession {
+                        LabelValueRow(label: "会话模式", value: "本机身份")
+                    }
                     if currentUser.authProvider == "device" {
                         LabelValueRow(label: "设备名称", value: settings.deviceAccountProfile.deviceLabel)
                         if let defaultPassword = settings.deviceAccountProfile.defaultPassword, !defaultPassword.isEmpty {
@@ -77,6 +99,8 @@ struct SettingsScreen: View {
                         TagBadge(text: authProviderLabel(currentUser.authProvider), tint: BrokerPalette.teal)
                         TagBadge(text: "个人数据", tint: BrokerPalette.gold)
                     }
+
+                    biometricLoginButton
 
                     if currentUser.authProvider == "device" {
                         if settings.supportsBiometricUnlock {
@@ -105,9 +129,32 @@ struct SettingsScreen: View {
                     .tint(BrokerPalette.red)
                     .foregroundStyle(Color.black)
                 } else {
-                    Text("当前未登录。返回首页将看到登录入口。")
-                        .font(.subheadline)
-                        .foregroundStyle(BrokerPalette.muted)
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("当前未登录。默认建议先用 Apple ID 登录；如果你更想沿用这台设备的本机身份，也可以继续用设备账号。")
+                            .font(.subheadline)
+                            .foregroundStyle(BrokerPalette.muted)
+
+                        AppleSignInControl(
+                            onStart: {
+                                refreshMessage = "正在请求 Apple 授权…"
+                            },
+                            onSuccess: { userIdentifier, displayName, emailAddress in
+                                Task {
+                                    await loginWithAppleAccount(
+                                        userIdentifier: userIdentifier,
+                                        displayName: displayName,
+                                        emailAddress: emailAddress
+                                    )
+                                }
+                            },
+                            onFailure: { message in
+                                refreshMessage = message
+                            }
+                        )
+                        .disabled(isLoggingInApple || isLoggingInDevice)
+
+                        biometricLoginButton
+                    }
                 }
             }
         }
@@ -116,12 +163,83 @@ struct SettingsScreen: View {
     private var connectionSection: some View {
         SectionPanel(title: "服务连接", subtitle: "支持远端与本机双部署，可手工切换多个服务器地址。") {
             VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("当前连接：\(settings.trimmedServerURLString)")
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(BrokerPalette.ink)
+                        .lineLimit(1)
+
+                    if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                        Text("本机构建：\(suggestedBuildURL)")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundStyle(BrokerPalette.muted)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("当前 Mac 局域网地址")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(BrokerPalette.muted)
+                                Text(suggestedBuildURL)
+                                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(BrokerPalette.ink)
+                                    .lineLimit(1)
+                            }
+                            Spacer()
+                            Button {
+                                UIPasteboard.general.string = suggestedBuildURL
+                                refreshMessage = "已复制当前 Mac 地址"
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .foregroundStyle(BrokerPalette.cyan)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Text("这是安装脚本写入手机的本机服务入口。如果自动探测没有找到，就直接用这个地址。")
+                            .font(.footnote)
+                            .foregroundStyle(BrokerPalette.muted)
+                    }
+                    .padding(12)
+                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                }
+
                 TextField(AppSettingsStore.defaultServerURLString, text: $settings.serverURLString)
                     .appURLTextEntry()
                     .focused($isEditingURL)
                     .padding(14)
                     .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                     .foregroundStyle(BrokerPalette.ink)
+
+                if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("当前构建地址")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(BrokerPalette.muted)
+
+                        serverRow(
+                            title: "本机默认",
+                            subtitle: "\(suggestedBuildURL) · 安装脚本会把当前 Mac 的局域网地址写入这里",
+                            isSelected: settings.trimmedServerURLString == suggestedBuildURL,
+                            tint: BrokerPalette.gold
+                        ) {
+                            settings.selectServerURL(suggestedBuildURL, name: "本机默认", rememberSelection: true)
+                            refreshMessage = "已切换到当前构建地址"
+                        } trailing: {
+                            Button {
+                                UIPasteboard.general.string = suggestedBuildURL
+                                refreshMessage = "已复制本机地址"
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .foregroundStyle(BrokerPalette.cyan)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
 
                 Button {
                     Task { await refreshNow() }
@@ -414,11 +532,15 @@ struct SettingsScreen: View {
 
     private var quickServerEndpoints: [SavedServerEndpoint] {
         var endpoints: [SavedServerEndpoint] = [
-            SavedServerEndpoint(name: "远端部署", url: AppSettingsStore.defaultServerURLString),
+            SavedServerEndpoint(name: "远端部署", url: AppSettingsStore.remoteDefaultServerURLString),
         ]
         if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
             endpoints.append(SavedServerEndpoint(name: "本机部署", url: suggestedBuildURL))
         }
+        for discovered in discovery.discoveredServers.prefix(3) {
+            endpoints.append(SavedServerEndpoint(name: discovered.name, url: discovered.urlString))
+        }
+        endpoints.append(contentsOf: settings.savedServers)
         var seen = Set<String>()
         return endpoints.filter { endpoint in
             guard !endpoint.url.isEmpty else { return false }
@@ -799,8 +921,14 @@ struct SettingsScreen: View {
         isRefreshing = true
         isEditingURL = false
 
+        guard settings.canAccessRemoteData else {
+            refreshMessage = "当前是本机身份，服务端刷新会在连接服务器后再执行。"
+            isRefreshing = false
+            return
+        }
+
         do {
-            let client = try await settings.makeValidatedClient(forceSessionCheck: true)
+            let client = try settings.makeClient()
             await dashboardStore.load(using: client, force: true)
             await loadAIServiceStatus(probe: true, autoSelectFastest: true)
             refreshMessage = "已连接 \(settings.trimmedServerURLString)"
@@ -812,8 +940,12 @@ struct SettingsScreen: View {
     }
 
     private func refreshDashboard() async {
+        guard settings.canAccessRemoteData else {
+            dashboardStore.setNotice("当前是本机身份，先展示手机缓存。")
+            return
+        }
         do {
-            let client = try await settings.makeValidatedClient()
+            let client = try settings.makeClient()
             await dashboardStore.refreshVisible(using: client)
         } catch {
             dashboardStore.setError(error.localizedDescription)
@@ -821,8 +953,12 @@ struct SettingsScreen: View {
     }
 
     private func refreshAI() async {
+        guard settings.canAccessRemoteData else {
+            dashboardStore.setNotice("当前是本机身份，AI 页已切换到 Longbridge 与本地缓存。")
+            return
+        }
         do {
-            let client = try await settings.makeValidatedClient()
+            let client = try settings.makeClient()
             await dashboardStore.refreshAI(using: client, force: true)
         } catch {
             dashboardStore.setError(error.localizedDescription)
@@ -848,7 +984,7 @@ struct SettingsScreen: View {
     }
 
     private func loadAIServiceStatus(probe: Bool = false, autoSelectFastest: Bool = false) async {
-        guard settings.isAuthenticated else {
+        guard settings.canAccessRemoteData else {
             aiServiceStatus = nil
             return
         }
@@ -857,7 +993,7 @@ struct SettingsScreen: View {
         defer { isLoadingAIServiceStatus = false }
 
         do {
-            let client = try await settings.makeValidatedClient()
+            let client = try settings.makeClient()
             let status = try await client.fetchAIServiceStatus(probe: probe)
             aiServiceStatus = status
             guard autoSelectFastest else { return }
@@ -883,11 +1019,13 @@ struct SettingsScreen: View {
     }
 
     private func logout() async {
-        do {
-            let client = try await settings.makeValidatedClient()
-            _ = try await client.logout()
-        } catch {
-            refreshMessage = error.localizedDescription
+        if settings.canAccessRemoteData {
+            do {
+                let client = try settings.makeClient()
+                _ = try await client.logout()
+            } catch {
+                refreshMessage = error.localizedDescription
+            }
         }
         settings.logoutCurrentSession()
     }
@@ -900,6 +1038,50 @@ struct SettingsScreen: View {
             } else {
                 try await settings.enableBiometricUnlock()
                 refreshMessage = "已启用 \(settings.biometryType.displayName) 解锁。"
+            }
+        } catch {
+            refreshMessage = error.localizedDescription
+        }
+    }
+
+    private func loginWithDeviceAccount() async {
+        isLoggingInDevice = true
+        defer { isLoggingInDevice = false }
+        do {
+            _ = try await settings.loginWithDeviceAccount(requireLocalAuthentication: false)
+            refreshMessage = "设备账号登录成功。"
+            do {
+                let client = try settings.makeClient()
+                await dashboardStore.refreshVisible(using: client)
+            } catch {
+                // Keep login success; dashboard can refresh later.
+            }
+        } catch {
+            refreshMessage = error.localizedDescription
+        }
+    }
+
+    private func loginWithAppleAccount(
+        userIdentifier: String,
+        displayName: String?,
+        emailAddress: String?
+    ) async {
+        isLoggingInApple = true
+        defer { isLoggingInApple = false }
+        do {
+            _ = try await settings.loginWithAppleAccount(
+                userIdentifier: userIdentifier,
+                displayName: displayName,
+                emailAddress: emailAddress
+            )
+            refreshMessage = settings.isLocalOnlySession ? "已进入本机 Apple 身份。" : "Apple ID 登录成功。"
+            if settings.canAccessRemoteData {
+                do {
+                    let client = try settings.makeClient()
+                    await dashboardStore.refreshVisible(using: client)
+                } catch {
+                    // Keep login success; dashboard can refresh later.
+                }
             }
         } catch {
             refreshMessage = error.localizedDescription
@@ -1012,7 +1194,7 @@ struct SettingsScreen: View {
             let fileData = try Data(contentsOf: url)
             let fileName = url.lastPathComponent
             let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/pdf"
-            let client = try await settings.makeValidatedClient()
+            let client = try settings.makeClient()
 
             isUploading = true
             refreshMessage = "正在上传并校验结单…"
@@ -1081,10 +1263,144 @@ struct SettingsScreen: View {
             return "微信授权"
         case "owner":
             return "本机账户"
+        case "apple":
+            return "Apple ID"
+        case "apple-local":
+            return "本机身份"
         default:
             return provider
         }
     }
 
-    
+    #if DEBUG
+    private var debugSection: some View {
+        SectionPanel(title: "调试状态", subtitle: "用于排查当前会话恢复和 Longbridge 拉数。") {
+            VStack(alignment: .leading, spacing: 8) {
+                LabelValueRow(label: "是否已登录", value: settings.isAuthenticated ? "是" : "否")
+                LabelValueRow(
+                    label: "会话 token",
+                    value: settings.sessionToken?.isEmpty == false ? "len \(settings.sessionToken?.count ?? 0)" : "nil"
+                )
+                LabelValueRow(
+                    label: "当前用户",
+                    value: settings.effectiveCurrentUser.map { "\($0.authProvider):\($0.userId)" } ?? "nil"
+                )
+                LabelValueRow(label: "Longbridge", value: settings.longbridgeSessionState.rawValue)
+                LabelValueRow(label: "Longbridge 端点", value: settings.longbridgeEndpointLabel)
+
+                HStack(spacing: 8) {
+                    Button {
+                        Task { await dashboardStore.refreshLocalFirst(using: settings) }
+                    } label: {
+                        Label(
+                            dashboardStore.isRefreshing ? "诊断中…" : "重新跑 Longbridge 诊断",
+                            systemImage: "waveform.path.ecg"
+                        )
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.teal)
+                    .disabled(dashboardStore.isRefreshing || !settings.canUseLongbridgeSession)
+
+                    Button {
+                        UIPasteboard.general.string = longbridgeDiagnosticsReport
+                        refreshMessage = longbridgeDiagnosticsReport.isEmpty ? "当前没有可复制的诊断日志。" : "已复制 Longbridge 诊断日志。"
+                    } label: {
+                        Label("复制", systemImage: "doc.on.doc")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.gold)
+
+                    Button {
+                        LongbridgeDiagnosticsStore.shared.clear()
+                        refreshMessage = "已清空 Longbridge 诊断日志。"
+                    } label: {
+                        Label("清空", systemImage: "trash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.red)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Longbridge 拉数诊断")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(BrokerPalette.muted)
+                    Text(longbridgeDiagnosticsReport.isEmpty ? "暂无诊断日志。启动 App 或点击上方按钮后，这里会显示真机可读的 Longbridge 拉数过程。" : longbridgeDiagnosticsReport)
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(BrokerPalette.ink)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+            }
+        }
+    }
+    #endif
+
+    private var biometricLoginButton: some View {
+        Button {
+            Task { await performBiometricLoginAction() }
+        } label: {
+            HStack {
+                if isLoggingInDevice {
+                    ProgressView().tint(Color.black)
+                } else {
+                    Image(systemName: settings.supportsBiometricUnlock ? "faceid" : "person.crop.circle.badge.checkmark")
+                }
+                Text(deviceLoginButtonTitle)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(BrokerPalette.teal)
+        .foregroundStyle(Color.black)
+        .disabled(isLoggingInDevice)
+    }
+
+    private var deviceLoginButtonTitle: String {
+        if isLoggingInDevice {
+            return "验证中…"
+        }
+        if settings.isAuthenticated {
+            if !settings.supportsBiometricUnlock {
+                return "当前会话已登录"
+            }
+            return settings.biometricUnlockEnabled ? "使用 Face ID 解锁" : "启用 Face ID 解锁"
+        }
+        return settings.supportsBiometricUnlock ? "使用 Face ID 登录" : "使用设备账号登录"
+    }
+
+    private func performBiometricLoginAction() async {
+        do {
+            isLoggingInDevice = true
+            defer { isLoggingInDevice = false }
+
+            if settings.isAuthenticated {
+                guard settings.supportsBiometricUnlock else {
+                    refreshMessage = "当前设备不支持 Face ID / Touch ID，已保持当前会话。"
+                    return
+                }
+                if settings.biometricUnlockEnabled {
+                    try await settings.unlockActiveSession()
+                    refreshMessage = "已通过 Face ID 解锁当前会话。"
+                } else {
+                    try await settings.enableBiometricUnlock()
+                    refreshMessage = "已启用 Face ID 解锁。"
+                }
+            } else {
+                let payload = try await settings.loginWithDeviceAccount(
+                    requireLocalAuthentication: settings.supportsBiometricUnlock
+                )
+                refreshMessage = payload.message ?? settings.connectionStatusMessage ?? (
+                    settings.supportsBiometricUnlock ? "设备账号已通过 Face ID 登录。" : "设备账号已登录。"
+                )
+            }
+        } catch {
+            refreshMessage = error.localizedDescription
+        }
+    }
+
 }

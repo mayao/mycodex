@@ -536,6 +536,42 @@ final class PortfolioWorkbenchAPIClientTests: XCTestCase {
         XCTAssertEqual(String(data: session.lastRequest?.httpBody ?? Data(), encoding: .utf8), "{}")
     }
 
+    func testBuildsAppleLoginRequest() async throws {
+        let session = MockSession(
+            statusCode: 200,
+            body: """
+            {
+              "session_token": "apple-token",
+              "user": {
+                "user_id": "usr_apple_123",
+                "display_name": "Matt",
+                "phone_number_masked": null,
+                "auth_provider": "apple",
+                "is_owner": true
+              },
+              "message": "Apple 登录成功。"
+            }
+            """
+        )
+        let client = PortfolioWorkbenchAPIClient(
+            configuration: AppServerConfiguration(baseURL: URL(string: "http://localhost:8008/")!),
+            session: session
+        )
+
+        let payload = try await client.loginWithApple(
+            userIdentifier: "apple-user-123",
+            displayName: "Matt",
+            emailAddress: "matt@example.com"
+        )
+
+        XCTAssertEqual(payload.user.authProvider, "apple")
+        XCTAssertEqual(session.lastRequest?.httpMethod, "POST")
+        XCTAssertEqual(session.lastRequest?.url?.path, "/api/mobile/auth/apple/login")
+        let body = String(data: session.lastRequest?.httpBody ?? Data(), encoding: .utf8) ?? ""
+        XCTAssertTrue(body.contains("apple-user-123"))
+        XCTAssertTrue(body.contains("matt@example.com"))
+    }
+
     func testBuildsDeviceBootstrapRequest() async throws {
         let session = MockSession(
             statusCode: 200,

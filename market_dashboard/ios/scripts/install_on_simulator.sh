@@ -6,10 +6,36 @@ IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PROJECT_PATH="$IOS_DIR/PortfolioWorkbenchIOS.xcodeproj"
 SCHEME="PortfolioWorkbenchIOS"
 CONFIGURATION="${CONFIGURATION:-Debug}"
+PORT="${PORT:-8008}"
 SERVER_URL="${SERVER_URL:-http://127.0.0.1:8008/}"
 SIMULATOR_NAME="${SIMULATOR_NAME:-}"
 SIMULATOR_ID="${SIMULATOR_ID:-}"
 SKIP_XCODEGEN="${SKIP_XCODEGEN:-auto}"
+
+detect_lan_ip() {
+  if [[ -n "${LAN_IP:-}" ]]; then
+    printf '%s\n' "$LAN_IP"
+    return 0
+  fi
+
+  local iface=""
+  local candidate=""
+
+  iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')"
+  if [[ "$iface" == utun* ]]; then
+    iface=""
+  fi
+
+  for candidate in "$iface" en0 en1 en2; do
+    [[ -n "$candidate" ]] || continue
+    if ipconfig getifaddr "$candidate" >/dev/null 2>&1; then
+      ipconfig getifaddr "$candidate"
+      return 0
+    fi
+  done
+
+  ifconfig | awk '/inet / && $2 != "127.0.0.1" && $2 !~ /^169\.254\./ {print $2; exit}'
+}
 
 should_generate_project() {
   case "$SKIP_XCODEGEN" in
@@ -23,6 +49,13 @@ should_generate_project() {
 
   [[ ! -d "$PROJECT_PATH" ]]
 }
+
+if [[ "$SERVER_URL" == "http://127.0.0.1:8008/" ]]; then
+  LAN_IP="$(detect_lan_ip || true)"
+  if [[ -n "$LAN_IP" ]]; then
+    SERVER_URL="http://$LAN_IP:$PORT/"
+  fi
+fi
 
 resolve_simulator_id() {
   python3 - "$SIMULATOR_NAME" <<'PY'
@@ -137,6 +170,28 @@ fi
 echo
 echo "== Installing on simulator =="
 xcrun simctl install "$SIMULATOR_ID" "$INSTALL_APP_PATH"
+
+DATA_CONTAINER="$(xcrun simctl get_app_container "$SIMULATOR_ID" "$BUNDLE_ID" data)"
+PREFS_FILE="$DATA_CONTAINER/Library/Preferences/${BUNDLE_ID}.plist"
+mkdir -p "$(dirname "$PREFS_FILE")"
+python3 - "$PREFS_FILE" "$SERVER_URL" <<'PY'
+import plistlib
+import pathlib
+import sys
+
+prefs_path = pathlib.Path(sys.argv[1])
+server_url = sys.argv[2]
+data = {}
+if prefs_path.exists():
+    try:
+        with prefs_path.open('rb') as handle:
+            data = plistlib.load(handle)
+    except Exception:
+        data = {}
+data['portfolio-workbench-ios.server-url'] = server_url
+with prefs_path.open('wb') as handle:
+    plistlib.dump(data, handle)
+PY
 
 echo
 echo "== Launching =="

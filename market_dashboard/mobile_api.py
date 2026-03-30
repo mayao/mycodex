@@ -66,6 +66,19 @@ def _extract_sparkline_points(holding: dict[str, Any]) -> list[float]:
 
 def _compact_position(holding: dict[str, Any], note_by_symbol: dict[str, dict[str, Any]]) -> dict[str, Any]:
     note = note_by_symbol.get(holding["symbol"], {})
+    accounts = [item for item in (holding.get("accounts") or []) if isinstance(item, dict)]
+    account_ids = [
+        str(item.get("account_id") or "").strip()
+        for item in accounts
+        if str(item.get("account_id") or "").strip()
+    ]
+    brokers = [
+        str(item.get("broker") or "").strip()
+        for item in accounts
+        if str(item.get("broker") or "").strip()
+    ]
+    unique_account_ids = list(dict.fromkeys(account_ids))
+    unique_brokers = list(dict.fromkeys(brokers))
     return {
         "symbol": holding["symbol"],
         "name": holding["name"],
@@ -95,6 +108,8 @@ def _compact_position(holding: dict[str, Any], note_by_symbol: dict[str, dict[st
         "macro_signal": holding.get("macro_signal"),
         "news_signal": holding.get("news_signal"),
         "account_count": holding.get("account_count"),
+        "account_ids": unique_account_ids,
+        "brokers": unique_brokers,
         "stance": note.get("stance") or "继续跟踪",
         "role": note.get("role") or holding["style_label"],
         "summary": note.get("thesis") or holding.get("business_note"),

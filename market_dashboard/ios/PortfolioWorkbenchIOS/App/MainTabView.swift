@@ -2,6 +2,7 @@ import SwiftUI
 import PortfolioWorkbenchMobileCore
 
 private enum AppTab: String, Hashable {
+    case ai
     case overview
     case holdings
     case settings
@@ -23,6 +24,9 @@ private enum AppLaunchOptions {
         if rawValue == "accounts" {
             return .holdings
         }
+        if rawValue == "insight" {
+            return .ai
+        }
         return AppTab(rawValue: rawValue) ?? .overview
     }
 }
@@ -42,6 +46,12 @@ struct MainTabView: View {
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
+                AITabScreen()
+                    .tag(AppTab.ai)
+                    .tabItem {
+                        Label("AI", systemImage: "sparkles")
+                    }
+
                 OverviewScreen()
                     .tag(AppTab.overview)
                     .tabItem {
@@ -88,7 +98,27 @@ struct MainTabView: View {
         .task {
             guard !hasStartedBootstrap else { return }
             hasStartedBootstrap = true
+            if settings.shouldPreferAITabOnLaunch {
+                selectedTab = .ai
+            }
+            await settings.ensureLaunchSessionIfPossible()
+            dashboardStore.setSessionUserID(settings.cacheNamespace)
             await bootstrap()
+        }
+        .onChange(of: settings.cacheNamespace) { _, _ in
+            dashboardStore.setSessionUserID(settings.cacheNamespace)
+            Task { await bootstrap(force: true) }
+        }
+        .onChange(of: settings.canAccessRemoteData) { _, _ in
+            Task { await bootstrap(force: true) }
+        }
+        .onChange(of: settings.longbridgeSessionState) { _, _ in
+            Task { await bootstrap(force: true) }
+        }
+        .onChange(of: settings.shouldPreferAITabOnLaunch) { _, shouldPreferAITabOnLaunch in
+            if shouldPreferAITabOnLaunch {
+                selectedTab = .ai
+            }
         }
         .sheet(isPresented: $isShowingServerConfig) {
             ServerConnectionConfigSheet()
@@ -101,6 +131,9 @@ struct MainTabView: View {
     }
 
     private var shouldShowBootOverlay: Bool {
+        guard settings.canAccessRemoteData else {
+            return false
+        }
         if case .ready = bootPhase {
             return false
         }
@@ -139,12 +172,15 @@ struct MainTabView: View {
     }
 
     private func prefetchHoldingDetails() async {
+        guard settings.canAccessRemoteData else {
+            return
+        }
         guard !orderedHoldingSymbols.isEmpty else {
             return
         }
 
         do {
-            let client = try await settings.makeValidatedClient()
+            let client = try settings.makeClient()
             await HoldingDetailViewModel.prefetch(
                 symbols: orderedHoldingSymbols,
                 using: client,
@@ -183,29 +219,29 @@ struct MainTabView: View {
     }
 
     private func runBootstrapDataFlow() async {
+        if !settings.canAccessRemoteData {
+            if settings.canUseLongbridgeSession {
+                bootStatusText = "正在同步 Longbridge 本地快照…"
+                await dashboardStore.refreshLocalFirst(using: settings)
+            } else {
+                dashboardStore.setNotice("当前为本机身份或未连接服务器，手机缓存会优先展示。")
+            }
+            await releaseBootOverlayIfNeeded(minimumVisibleDuration: 0)
+            return
+        }
         do {
             bootStatusText = "正在连接数据服务…"
-            let client = try await settings.makeValidatedClient(forceSessionCheck: true)
+            let client = try settings.makeClient()
             bootStatusText = "正在拉取核心行情…"
+            await dashboardStore.refreshVisible(using: client)
 
-            let fastTask = Task { try await client.fetchDashboard(refresh: true, fast: true) }
-            let fullTask = Task { try await client.fetchDashboard(refresh: true, fast: false) }
-
-            if let fastPayload = try? await fastTask.value {
-                dashboardStore.apply(fastPayload, message: "核心数据已就绪")
-                bootStatusText = "核心信息已就绪，正在补齐洞察…"
-                await releaseBootOverlayIfNeeded(minimumVisibleDuration: 1.0)
+            if settings.canUseLongbridgeSession {
+                bootStatusText = "正在切换到 Longbridge 直连快照…"
+                await dashboardStore.refreshLocalFirst(using: settings)
             }
 
-            do {
-                let payload = try await fullTask.value
-                dashboardStore.apply(payload, message: "行情与洞察已同步到 \(payload.analysisDateCn)")
-                bootStatusText = "正在预热持仓详情与新闻…"
-                await prewarmBootData(using: client, payload: payload)
-                await releaseBootOverlayIfNeeded(minimumVisibleDuration: 1.0)
-            } catch {
-                let message = friendlyBootErrorMessage(error)
-                dashboardStore.setError(message)
+            guard let payload = dashboardStore.state.value else {
+                let message = dashboardStore.activityMessage ?? "服务暂时不可用，请稍后重试。"
                 bootStatusText = message
                 if isConnectionAvailabilityFailure(message) {
                     bootPhase = .failed
@@ -213,7 +249,14 @@ struct MainTabView: View {
                 } else {
                     await releaseBootOverlayIfNeeded(minimumVisibleDuration: 1.0)
                 }
+                return
             }
+
+            bootStatusText = payload.summaryCards.isEmpty
+                ? "核心信息已就绪，正在补齐洞察…"
+                : "行情与洞察已同步到 \(payload.analysisDateCn)"
+            await prewarmBootData(using: client, payload: payload)
+            await releaseBootOverlayIfNeeded(minimumVisibleDuration: 1.0)
         } catch {
             if error.localizedDescription.contains("请先登录") {
                 settings.clearAuthentication()
@@ -221,12 +264,16 @@ struct MainTabView: View {
                 return
             }
             let message = friendlyBootErrorMessage(error)
-            dashboardStore.setError(message)
             bootStatusText = message
             if isConnectionAvailabilityFailure(message) {
                 bootPhase = .failed
                 bootActionHint = "没有可用服务器时，请点击“配置服务器”后再重试。"
             } else {
+                if dashboardStore.state.value == nil {
+                    dashboardStore.setError(message)
+                } else {
+                    dashboardStore.setNotice(message)
+                }
                 await releaseBootOverlayIfNeeded(minimumVisibleDuration: 0.8)
             }
         }

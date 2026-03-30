@@ -62,6 +62,24 @@ public enum PortfolioWorkbenchLocalMock {
         )
     }
 
+    public static func makeAppleSession(userIdentifier: String, displayName: String? = nil) -> MobileSessionPayload {
+        let trimmedIdentifier = userIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedName = displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackName = resolvedName?.isEmpty == false ? resolvedName! : "Apple 用户"
+        let user = MobileUser(
+            userId: "apple-\(trimmedIdentifier)",
+            displayName: fallbackName,
+            phoneNumberMasked: nil,
+            authProvider: "apple-local",
+            isOwner: true
+        )
+        return MobileSessionPayload(
+            sessionToken: "local-apple-\(trimmedIdentifier)",
+            user: user,
+            message: "已进入本地 Apple 身份登录，服务器可用时会再同步到云端账户。"
+        )
+    }
+
     public static func makeClient(
         currentUser: MobileUser?,
         sessionToken: String?
@@ -142,6 +160,19 @@ private final class LocalMockURLSession: URLSessioning {
                 url: url,
                 statusCode: 200,
                 payload: PortfolioWorkbenchLocalMock.makeWeChatSession(displayName: displayName)
+            )
+
+        case ("POST", "/api/mobile/auth/apple/login"):
+            let body = request.jsonBody()
+            let userIdentifier = String(describing: body["user_identifier"] ?? body["userIdentifier"] ?? "")
+            let displayName = body["display_name"] as? String ?? body["displayName"] as? String
+            return try response(
+                url: url,
+                statusCode: 200,
+                payload: PortfolioWorkbenchLocalMock.makeAppleSession(
+                    userIdentifier: userIdentifier,
+                    displayName: displayName
+                )
             )
 
         case ("GET", "/api/mobile/auth/session"):
@@ -236,6 +267,9 @@ private final class LocalMockURLSession: URLSessioning {
     private var authenticatedUser: MobileUser? {
         if let currentUser {
             return currentUser
+        }
+        if sessionToken?.contains("apple") == true {
+            return PortfolioWorkbenchLocalMock.makeAppleSession(userIdentifier: "mock-apple").user
         }
         if sessionToken?.contains("wechat") == true {
             return PortfolioWorkbenchLocalMock.makeWeChatSession().user

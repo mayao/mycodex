@@ -24,6 +24,7 @@ from uuid import uuid4
 try:
     from auth_store import (
         create_or_login_device_session,
+        create_or_login_apple_session,
         create_owner_session,
         create_session_for_phone,
         create_wechat_dev_session,
@@ -65,6 +66,7 @@ try:
 except ModuleNotFoundError:
     from market_dashboard.auth_store import (
         create_or_login_device_session,
+        create_or_login_apple_session,
         create_owner_session,
         create_session_for_phone,
         create_wechat_dev_session,
@@ -553,13 +555,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return host in {"localhost"}
 
     def _require_mobile_session(self) -> dict[str, Any] | None:
-        session = get_session(self._session_token())
+        token = self._session_token()
+        token_length = len(token or "")
+        token_prefix = f"{token[:8]}..." if token else "none"
+        print(
+            f"[MOBILE-AUTH] route={self.path} client={self.client_address[0]} "
+            f"token_len={token_length} token_prefix={token_prefix}"
+        )
+        session = get_session(token)
         if session is None:
+            print(f"[MOBILE-AUTH] unauthorized route={self.path}")
             self._send_json(
                 {"error": {"id": "unauthorized", "message": "请先登录，再访问个人投资数据。"}},
                 status=HTTPStatus.UNAUTHORIZED,
             )
             return None
+        user = session.get("user") or {}
+        print(
+            f"[MOBILE-AUTH] authorized route={self.path} "
+            f"user={user.get('user_id', 'unknown')}"
+        )
         return session
 
     def _portfolio_user_id_for_session(self, session: dict[str, Any] | None) -> str | None:
@@ -785,6 +800,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if path == "/api/mobile/auth/wechat/login":
             self._handle_mobile_wechat_login()
             return
+        if path == "/api/mobile/auth/apple/login":
+            self._handle_mobile_apple_login()
+            return
         if path == "/api/mobile/auth/dev/owner":
             self._handle_mobile_owner_dev_login()
             return
@@ -836,6 +854,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
             body = self._read_json_body()
             display_name = str(body.get("display_name") or "").strip() or None
             payload = create_wechat_dev_session(display_name=display_name)
+        except ValueError as exc:
+            self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+            return
+        self._send_json(payload)
+
+    def _handle_mobile_apple_login(self) -> None:
+        try:
+            body = self._read_json_body()
+            user_identifier = str(body.get("user_identifier") or body.get("userIdentifier") or "").strip()
+            display_name = str(body.get("display_name") or body.get("displayName") or "").strip() or None
+            email_address = str(body.get("email_address") or body.get("emailAddress") or "").strip() or None
+            payload = create_or_login_apple_session(
+                user_identifier=user_identifier,
+                display_name=display_name,
+                email_address=email_address,
+            )
         except ValueError as exc:
             self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
             return

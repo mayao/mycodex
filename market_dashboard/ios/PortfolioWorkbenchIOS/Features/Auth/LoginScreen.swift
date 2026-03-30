@@ -9,7 +9,6 @@ struct LoginScreen: View {
     @State private var hasTriggeredAutoLogin = false
     @State private var hasAttemptedServerRecovery = false
     @State private var isShowingServerConfig = false
-    @State private var showManualActions = false
 
     var body: some View {
         ZStack {
@@ -56,20 +55,48 @@ struct LoginScreen: View {
                         .tint(BrokerPalette.cyan)
                         .foregroundStyle(Color.black)
                         .disabled(isSubmitting || settings.isRestoringDeviceSession)
-
-                        if settings.hasProvisionedDeviceAccount {
-                            Button {
-                                Task { await loginWithDevice(requireLocalAuthentication: false) }
-                            } label: {
-                                Text("跳过生物识别继续")
-                                    .frame(maxWidth: .infinity)
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(BrokerPalette.teal)
-                            .disabled(isSubmitting || settings.isRestoringDeviceSession)
-                        }
-
                     }
+
+                    AppleSignInControl(
+                        onStart: {
+                            statusMessage = "正在请求 Apple 授权…"
+                        },
+                        onSuccess: { userIdentifier, displayName, emailAddress in
+                            Task {
+                                await loginWithApple(
+                                    userIdentifier: userIdentifier,
+                                    displayName: displayName,
+                                    emailAddress: emailAddress
+                                )
+                            }
+                        },
+                        onFailure: { message in
+                            statusMessage = message
+                        }
+                    )
+                    .disabled(isSubmitting || settings.isRestoringDeviceSession)
+
+                    Button {
+                        Task { await loginWithDevice(requireLocalAuthentication: shouldUseBiometricForDeviceLogin) }
+                    } label: {
+                        Text(deviceLoginButtonTitle)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.teal)
+                    .disabled(isSubmitting || settings.isRestoringDeviceSession)
+
+                    Button {
+                        settings.enableStandaloneAIEntry()
+                    } label: {
+                        Text("先进入 AI 模式")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(BrokerPalette.gold)
+                    .foregroundStyle(Color.black)
+                    .disabled(isSubmitting || settings.isRestoringDeviceSession)
+
                     Button {
                         isShowingServerConfig = true
                     } label: {
@@ -82,6 +109,25 @@ struct LoginScreen: View {
                 .padding(.top, 2)
                 .padding(.horizontal, 20)
 
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("连接信息")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.72))
+
+                    Text("当前服务器：\(settings.trimmedServerURLString)")
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.66))
+                        .lineLimit(1)
+
+                    if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                        Text("本机构建：\(suggestedBuildURL)")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundStyle(Color.white.opacity(0.58))
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 20)
+
                 if let message = settings.connectionStatusMessage,
                    message.contains("未找到可连接的服务器") || message.contains("暂无可探测服务器地址") {
                     Text("如果自动切换失败，可以直接点上方“配置服务器”手工切换。")
@@ -90,24 +136,12 @@ struct LoginScreen: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
-
-                Text(settings.trimmedServerURLString)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(Color.white.opacity(0.62))
-                    .lineLimit(1)
-                    .padding(.top, 4)
             }
             .padding(.bottom, 32)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .task {
             await attemptAutomaticLogin()
-        }
-        .task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            if !settings.isAuthenticated {
-                showManualActions = true
-            }
         }
         .onChange(of: settings.connectionStatusMessage) { _, newValue in
             guard let newValue, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -123,14 +157,27 @@ struct LoginScreen: View {
 
     private var shouldShowRetryActions: Bool {
         let lowered = displayStatusMessage.lowercased()
-        return showManualActions
-            || lowered.contains("失败")
+        return lowered.contains("失败")
             || lowered.contains("错误")
             || lowered.contains("超时")
             || lowered.contains("无法")
             || lowered.contains("未找到可连接的服务器")
             || lowered.contains("暂未发现可用服务器")
             || lowered.contains("暂无可探测服务器地址")
+    }
+
+    private var shouldUseBiometricForDeviceLogin: Bool {
+        settings.supportsBiometricUnlock && settings.hasProvisionedDeviceAccount
+    }
+
+    private var deviceLoginButtonTitle: String {
+        if shouldUseBiometricForDeviceLogin {
+            return "使用 \(settings.biometryType.displayName) 登录设备账号"
+        }
+        if settings.hasProvisionedDeviceAccount {
+            return "使用设备账号登录"
+        }
+        return "继续用本机设备身份"
     }
 
     private var displayStatusMessage: String {
@@ -147,24 +194,23 @@ struct LoginScreen: View {
         }
         hasTriggeredAutoLogin = true
 
+        guard settings.hasProvisionedDeviceAccount else {
+            statusMessage = "默认建议先用 Apple ID 登录；也可以继续进入 AI 模式。"
+            return
+        }
+
         if settings.canAttemptAutomaticDeviceLogin {
             statusMessage = "正在恢复设备会话…"
             await settings.restoreDeviceSessionIfPossible()
             if settings.isAuthenticated {
-                showManualActions = false
                 statusMessage = "已恢复会话。"
                 return
             }
         }
 
-        let shouldUseBiometric = settings.supportsBiometricUnlock
-            && settings.hasProvisionedDeviceAccount
-            && settings.canAttemptAutomaticDeviceLogin
-
-        statusMessage = shouldUseBiometric
-            ? "请完成 \(settings.biometryType.displayName) 验证…"
-            : "正在登录设备账号…"
-        await loginWithDevice(requireLocalAuthentication: shouldUseBiometric)
+        statusMessage = settings.supportsBiometricUnlock
+            ? "可以继续使用 \(settings.biometryType.displayName) 或 Apple ID 登录。"
+            : "可以继续使用设备账号或 Apple ID 登录。"
     }
 
     private func loginWithDevice(requireLocalAuthentication: Bool) async {
@@ -181,7 +227,6 @@ struct LoginScreen: View {
             } else {
                 statusMessage = "登录成功，正在进入首页…"
             }
-            showManualActions = false
         } catch {
             if !hasAttemptedServerRecovery, await settings.recoverServerConnectionIfNeeded() {
                 hasAttemptedServerRecovery = true
@@ -194,16 +239,35 @@ struct LoginScreen: View {
                     } else {
                         statusMessage = "已切换到可用服务器，正在进入首页…"
                     }
-                    showManualActions = false
                     return
                 } catch {
                     statusMessage = friendlyErrorMessage(error)
-                    showManualActions = true
                     return
                 }
             }
             statusMessage = friendlyErrorMessage(error)
-            showManualActions = true
+        }
+    }
+
+    private func loginWithApple(
+        userIdentifier: String,
+        displayName: String?,
+        emailAddress: String?
+    ) async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        do {
+            _ = try await settings.loginWithAppleAccount(
+                userIdentifier: userIdentifier,
+                displayName: displayName,
+                emailAddress: emailAddress
+            )
+            statusMessage = settings.isLocalOnlySession
+                ? "已进入本机 Apple 身份，正在进入首页…"
+                : "Apple 登录成功，正在进入首页…"
+        } catch {
+            statusMessage = friendlyErrorMessage(error)
         }
     }
 
@@ -245,7 +309,22 @@ struct ServerConnectionConfigSheet: View {
                             subtitle: "先试自动探测；如果仍无可用服务器，再手工填写服务地址。"
                         ) {
                             VStack(alignment: .leading, spacing: 12) {
-                                TextField("http://10.8.144.16:8008/", text: $settings.serverURLString)
+                                if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("当前 Mac 局域网地址")
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundStyle(BrokerPalette.muted)
+                                        Text(suggestedBuildURL)
+                                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                            .foregroundStyle(BrokerPalette.ink)
+                                            .lineLimit(1)
+                                    }
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                }
+
+                                TextField(AppSettingsStore.defaultServerURLString, text: $settings.serverURLString)
                                     .appURLTextEntry()
                                     .padding(14)
                                     .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -253,7 +332,7 @@ struct ServerConnectionConfigSheet: View {
 
                                 HStack(spacing: 10) {
                                     Button {
-                                        settings.selectServerURL(AppSettingsStore.defaultServerURLString, name: "远端默认服务器", rememberSelection: true)
+                                        settings.selectServerURL(AppSettingsStore.remoteDefaultServerURLString, name: "远端默认服务器", rememberSelection: true)
                                         helperMessage = "已切换到远端默认服务器。"
                                     } label: {
                                         Text("远端默认")
@@ -464,7 +543,7 @@ struct ServerConnectionConfigSheet: View {
 
         let candidates = [
             ("当前地址", settings.trimmedServerURLString),
-            ("远端默认", AppSettingsStore.defaultServerURLString)
+            ("远端默认", AppSettingsStore.remoteDefaultServerURLString)
         ]
 
         var rows: [ServerStatusItem] = []

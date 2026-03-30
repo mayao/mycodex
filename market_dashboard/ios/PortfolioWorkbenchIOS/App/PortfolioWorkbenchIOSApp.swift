@@ -21,15 +21,16 @@ private struct RootScreen: View {
 
     var body: some View {
         Group {
-            if settings.isAuthenticated {
-                if settings.requiresBiometricUnlock {
-                    BiometricUnlockScreen()
-                } else {
-                    MainTabView()
-                }
+            if settings.requiresBiometricUnlock && settings.isAuthenticated {
+                BiometricUnlockScreen()
+            } else if settings.isAuthenticated || settings.supportsStandaloneAIEntry {
+                MainTabView()
             } else {
                 LoginScreen()
             }
+        }
+        .onOpenURL { url in
+            Task { await settings.handleLongbridgeOAuthCallback(url: url) }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {

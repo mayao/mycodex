@@ -96,31 +96,45 @@ struct HoldingDetailScreen: View {
     }
 
     private func load(force: Bool, intent: HoldingDetailRefreshIntent) async {
-        do {
-            let client = try await settings.makeValidatedClient()
-            await viewModel.load(
-                symbol: symbol,
-                using: client,
-                cacheNamespace: settings.cacheNamespace,
-                force: force,
-                intent: intent
-            )
-        } catch {
-            viewModel.setError(error.localizedDescription)
+        if settings.canAccessRemoteData {
+            do {
+                let client = try settings.makeClient()
+                await viewModel.load(
+                    symbol: symbol,
+                    using: client,
+                    cacheNamespace: settings.cacheNamespace,
+                    force: force,
+                    intent: intent
+                )
+            } catch {
+                viewModel.setError(error.localizedDescription)
+            }
+            return
+        }
+        viewModel.restoreCachedSnapshot(symbol: symbol, cacheNamespace: settings.cacheNamespace)
+        if viewModel.state.value == nil {
+            viewModel.setError("当前没有可用的本地详情缓存。")
         }
     }
 
     private func refreshAI(force: Bool) async {
-        do {
-            let client = try await settings.makeValidatedClient()
-            await viewModel.refreshAI(
-                symbol: symbol,
-                using: client,
-                cacheNamespace: settings.cacheNamespace,
-                force: force
-            )
-        } catch {
-            viewModel.setError(error.localizedDescription)
+        if settings.canAccessRemoteData {
+            do {
+                let client = try settings.makeClient()
+                await viewModel.refreshAI(
+                    symbol: symbol,
+                    using: client,
+                    cacheNamespace: settings.cacheNamespace,
+                    force: force
+                )
+            } catch {
+                viewModel.setError(error.localizedDescription)
+            }
+            return
+        }
+        viewModel.restoreCachedSnapshot(symbol: symbol, cacheNamespace: settings.cacheNamespace)
+        if viewModel.state.value == nil {
+            viewModel.setError("当前没有可用的本地详情缓存。")
         }
     }
 
@@ -223,7 +237,7 @@ struct HoldingDetailScreen: View {
         SectionPanel(title: "价格轨迹") {
             VStack(alignment: .leading, spacing: 16) {
                 Chart {
-                    ForEach(payload.history.compactMap(chartPoint(for:)), id: \.date) { point in
+                    ForEach(Array(payload.history.compactMap(chartPoint(for:)).enumerated()), id: \.offset) { _, point in
                         AreaMark(
                             x: .value("日期", point.date),
                             y: .value("价格", point.value)
@@ -269,7 +283,7 @@ struct HoldingDetailScreen: View {
                                     }
 
                                     Chart {
-                                        ForEach(row.points.compactMap(chartPoint(for:)), id: \.date) { point in
+                                        ForEach(Array(row.points.compactMap(chartPoint(for:)).enumerated()), id: \.offset) { _, point in
                                             LineMark(
                                                 x: .value("日期", point.date),
                                                 y: .value("价格", point.value)
@@ -594,7 +608,8 @@ struct HoldingDetailScreen: View {
     }
 
     private func chartPoint(for point: HoldingDetailSeriesPoint) -> (date: String, value: Double)? {
-        guard let value = point.price else {
+        guard let value = point.price,
+              value.isFinite else {
             return nil
         }
         return (point.date, value)

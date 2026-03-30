@@ -8,6 +8,7 @@ SCHEME="PortfolioWorkbenchIOS"
 DEFAULT_APP_BUNDLE_ID="com.xmly.portfolioworkbenchios"
 PORT="${PORT:-8008}"
 SKIP_XCODEGEN="${SKIP_XCODEGEN:-auto}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$IOS_DIR/build/DerivedDataDevice}"
 DEFAULT_TEAM_ID="$(
   sed -n 's/^[[:space:]]*DEVELOPMENT_TEAM: //p' "$IOS_DIR/project.yml" 2>/dev/null \
     | head -n 1
@@ -45,9 +46,9 @@ detect_lan_ip() {
 }
 
 if [[ -z "$SERVER_URL" ]]; then
-  DETECTED_LAN_IP="$(detect_lan_ip || true)"
-  if [[ -n "$DETECTED_LAN_IP" ]]; then
-    SERVER_URL="http://$DETECTED_LAN_IP:$PORT/"
+  LAN_IP="$(detect_lan_ip || true)"
+  if [[ -n "$LAN_IP" ]]; then
+    SERVER_URL="http://$LAN_IP:$PORT/"
   else
     SERVER_URL="http://10.8.144.16:$PORT/"
   fi
@@ -72,15 +73,19 @@ has_xcode_account() {
   [[ "$accounts_dump" == *"identifier ="* ]]
 }
 
+connected_device_core_ids() {
+  xcrun devicectl list devices \
+    --filter "State == 'connected'" \
+    --hide-default-columns \
+    --columns Identifier \
+    --hide-headers 2>/dev/null \
+    | awk 'NF { print $1 }'
+}
+
 if [[ -z "$TEAM_ID" ]]; then
   echo "Missing TEAM_ID."
   echo "Usage: TEAM_ID=<your_team_id> $0 [TEAM_ID] [DEVICE_DESTINATION_ID] [DEVICE_CORE_ID]"
   exit 1
-fi
-
-if [[ -z "$BUNDLE_ID" ]]; then
-  TEAM_ID_LOWER="$(printf '%s' "$TEAM_ID" | tr '[:upper:]' '[:lower:]')"
-  BUNDLE_ID="com.${TEAM_ID_LOWER}.PortfolioWorkbenchIOS"
 fi
 
 if ! has_xcode_account; then
@@ -101,14 +106,24 @@ if [[ -z "$DEVICE_DESTINATION_ID" ]]; then
 fi
 
 if [[ -z "$DEVICE_CORE_ID" ]]; then
-  DEVICE_CORE_ID="$(
-    xcrun devicectl list devices 2>/dev/null \
-      | awk 'NR > 2 && $1 != "Name" && $1 != "----" {print $3; exit}'
-  )"
+  CONNECTED_DEVICE_IDS=()
+  while IFS= read -r connected_device_id; do
+    [[ -n "$connected_device_id" ]] || continue
+    CONNECTED_DEVICE_IDS+=("$connected_device_id")
+  done < <(connected_device_core_ids)
+
+  if [[ "${#CONNECTED_DEVICE_IDS[@]}" -eq 1 ]]; then
+    DEVICE_CORE_ID="${CONNECTED_DEVICE_IDS[0]}"
+  elif [[ "${#CONNECTED_DEVICE_IDS[@]}" -gt 1 ]]; then
+    echo "Multiple connected iPhones detected."
+    echo "Pass DEVICE_CORE_ID explicitly to choose one:"
+    printf '  %s\n' "${CONNECTED_DEVICE_IDS[@]}"
+    exit 1
+  fi
 fi
 
 if [[ -z "$DEVICE_CORE_ID" ]]; then
-  echo "No trusted iPhone found via devicectl."
+  echo "No connected trusted iPhone found via devicectl."
   echo "Before retrying:"
   echo "1. Connect the iPhone with USB."
   echo "2. Tap Trust on the phone."
@@ -140,10 +155,12 @@ CURRENT_BUNDLE_ID="$(
     | head -n 1
 )"
 
-if [[ "$CURRENT_BUNDLE_ID" =~ ^[A-Za-z0-9.-]+\.[A-Za-z0-9.-]+$ ]] && [[ "$BUNDLE_ID" != "$CURRENT_BUNDLE_ID" ]]; then
+if [[ -z "$BUNDLE_ID" ]]; then
+  BUNDLE_ID="$CURRENT_BUNDLE_ID"
+fi
+
+if [[ "$CURRENT_BUNDLE_ID" =~ ^[A-Za-z0-9.-]+\.[A-Za-z0-9.-]+$ ]] && [[ -n "$BUNDLE_ID" ]] && [[ "$BUNDLE_ID" != "$CURRENT_BUNDLE_ID" ]]; then
   perl -0pi -e "s/\Q$CURRENT_BUNDLE_ID\E/$BUNDLE_ID/g" "$PROJECT_PATH/project.pbxproj"
-elif [[ "$BUNDLE_ID" != "$DEFAULT_APP_BUNDLE_ID" ]]; then
-  perl -0pi -e "s/\Q$DEFAULT_APP_BUNDLE_ID\E/$BUNDLE_ID/g" "$PROJECT_PATH/project.pbxproj"
 fi
 
 uninstall_if_present() {
@@ -163,26 +180,33 @@ uninstall_if_present() {
 }
 
 declare -a UNINSTALL_BUNDLE_IDS=()
-for candidate in "$BUNDLE_ID" "$CURRENT_BUNDLE_ID" "$DEFAULT_APP_BUNDLE_ID"; do
+for candidate in "$CURRENT_BUNDLE_ID" "$DEFAULT_APP_BUNDLE_ID"; do
   already_added=0
   if [[ -z "$candidate" ]]; then
     continue
   fi
-  for existing in "${UNINSTALL_BUNDLE_IDS[@]:-}"; do
-    if [[ "$existing" == "$candidate" ]]; then
-      already_added=1
-      break
-    fi
-  done
+  if [[ "$candidate" == "$BUNDLE_ID" ]]; then
+    continue
+  fi
+  if [[ -n "${UNINSTALL_BUNDLE_IDS[*]-}" ]]; then
+    for existing in "${UNINSTALL_BUNDLE_IDS[@]}"; do
+      if [[ "$existing" == "$candidate" ]]; then
+        already_added=1
+        break
+      fi
+    done
+  fi
   if [[ "$already_added" -eq 1 ]]; then
     continue
   fi
   UNINSTALL_BUNDLE_IDS+=("$candidate")
 done
 
-for candidate in "${UNINSTALL_BUNDLE_IDS[@]}"; do
-  uninstall_if_present "$candidate"
-done
+if [[ -n "${UNINSTALL_BUNDLE_IDS[*]-}" ]]; then
+  for candidate in "${UNINSTALL_BUNDLE_IDS[@]}"; do
+    uninstall_if_present "$candidate"
+  done
+fi
 
 echo
 echo "== Building for iPhone =="
@@ -191,6 +215,7 @@ BUILD_ARGS=(
   -scheme "$SCHEME"
   -configuration "$CONFIGURATION"
   -destination "generic/platform=iOS"
+  -derivedDataPath "$DERIVED_DATA_PATH"
   -allowProvisioningUpdates
   -allowProvisioningDeviceRegistration
   DEVELOPMENT_TEAM="$TEAM_ID"
@@ -202,28 +227,14 @@ fi
 
 xcodebuild "${BUILD_ARGS[@]}" build
 
-APP_PATH="$IOS_DIR/build/${CONFIGURATION}-iphoneos/${SCHEME}.app"
-
-if [[ ! -d "$APP_PATH" ]]; then
-  APP_PATH="$(
-    find "$HOME/Library/Developer/Xcode/DerivedData" \
-      -path "*/Build/Products/${CONFIGURATION}-iphoneos/${SCHEME}.app" \
-      ! -path "*/Index.noindex/*" \
-      -type d \
-      -print \
-      | head -n 1
-  )"
-fi
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/${CONFIGURATION}-iphoneos/${SCHEME}.app"
 
 if [[ ! -d "$APP_PATH" ]]; then
   echo "Built app not found at: $APP_PATH"
   exit 1
 fi
 
-STAGING_DIR="$(mktemp -d /tmp/portfolio-workbench-device.XXXXXX)"
-INSTALL_APP_PATH="$STAGING_DIR/${SCHEME}.app"
-rm -rf "$INSTALL_APP_PATH"
-ditto "$APP_PATH" "$INSTALL_APP_PATH"
+INSTALL_APP_PATH="$APP_PATH"
 
 ACTUAL_BUNDLE_ID="$(
   /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL_APP_PATH/Info.plist" 2>/dev/null || true

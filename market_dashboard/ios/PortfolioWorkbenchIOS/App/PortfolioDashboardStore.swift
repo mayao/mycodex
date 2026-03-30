@@ -10,6 +10,7 @@ final class PortfolioDashboardStore: ObservableObject {
     @Published private(set) var lastUpdatedAt: Date?
 
     private static let dashboardCacheKeyPrefix = "portfolio-workbench-ios.dashboard-cache"
+    private static let dashboardGlobalCacheKey = "portfolio-workbench-ios.dashboard-cache.global"
     private static let refreshInterval: TimeInterval = 3 * 60
     private var cacheKey = "portfolio-workbench-ios.dashboard-cache.anonymous"
 
@@ -31,6 +32,16 @@ final class PortfolioDashboardStore: ObservableObject {
             lastUpdatedAt = cachedSnapshot.cachedAt
             activityMessage = "已载入最近一次同步结果"
             isShowingCachedSnapshot = true
+        } else if let cachedSnapshot = Self.restoreCachedPayload(cacheKey: Self.dashboardGlobalCacheKey) {
+            state = .loaded(cachedSnapshot.payload)
+            lastUpdatedAt = cachedSnapshot.cachedAt
+            activityMessage = "已载入最近一次同步结果"
+            isShowingCachedSnapshot = true
+        } else if let cachedSnapshot = Self.restoreMostRecentCachedPayload() {
+            state = .loaded(cachedSnapshot.payload)
+            lastUpdatedAt = cachedSnapshot.cachedAt
+            activityMessage = "已载入最近一次同步结果"
+            isShowingCachedSnapshot = true
         } else {
             state = .idle
             lastUpdatedAt = nil
@@ -48,6 +59,12 @@ final class PortfolioDashboardStore: ObservableObject {
             state = .failed(message)
             activityMessage = nil
         }
+    }
+
+    func setNotice(_ message: String) {
+        isRefreshing = false
+        activityMessage = message
+        isShowingCachedSnapshot = state.value != nil
     }
 
     func prime(using client: PortfolioWorkbenchAPIClient) async {
@@ -96,6 +113,79 @@ final class PortfolioDashboardStore: ObservableObject {
         activityMessage = message ?? "组合已更新"
         lastUpdatedAt = .now
         Self.storeCachedPayload(payload, cacheKey: cacheKey)
+        Self.storeCachedPayload(payload, cacheKey: Self.dashboardGlobalCacheKey)
+    }
+
+    func refreshLocalFirst(using settings: AppSettingsStore) async {
+        if isRefreshing {
+            return
+        }
+
+        isRefreshing = true
+        isShowingCachedSnapshot = state.value != nil
+        activityMessage = "正在同步 Longbridge 本地快照…"
+        LongbridgeDiagnosticsStore.shared.append("Dashboard 开始应用 Longbridge 本地快照。")
+
+        do {
+            let orchestrator = MarketDataOrchestrator(settings: settings)
+            let loadedSnapshot = try await orchestrator.loadSnapshot()
+            let referenceSnapshot = state.value.map(ServiceDashboardSnapshotFactory.makeSnapshot(from:))
+            var snapshot = loadedSnapshot.fillingMissingFields(from: referenceSnapshot)
+
+            guard snapshot.isMeaningful else {
+                LongbridgeDiagnosticsStore.shared.append("Longbridge 新快照无有效数据，保留当前结果。")
+                isRefreshing = false
+                if state.value != nil {
+                    activityMessage = "Longbridge 当前没有可覆盖的新数据，已保留现有快照"
+                    isShowingCachedSnapshot = true
+                } else {
+                    state = .failed("Longbridge 当前没有返回可用数据，请先确认授权或切换到可达的服务器后重试。")
+                    activityMessage = nil
+                }
+                return
+            }
+
+            if snapshot.isSafeReplacement(for: referenceSnapshot) == false {
+                LongbridgeDiagnosticsStore.shared.append("Longbridge 新快照不完整，尝试用稳定快照补齐。")
+                let recoveredSnapshot = snapshot.recoveringMissingCoreData(from: referenceSnapshot)
+                if recoveredSnapshot.isSafeReplacement(for: referenceSnapshot) {
+                    snapshot = recoveredSnapshot
+                    LongbridgeDiagnosticsStore.shared.append("Longbridge 稳定快照补齐成功，继续应用。")
+                } else {
+                    LongbridgeDiagnosticsStore.shared.append("Longbridge 补齐后仍不完整，保留当前结果。")
+                    isRefreshing = false
+                    if state.value != nil {
+                        activityMessage = "Longbridge 新快照不完整，已保留当前结果"
+                        isShowingCachedSnapshot = true
+                    } else {
+                        state = .failed("Longbridge 新快照不完整，请稍后重试。")
+                        activityMessage = nil
+                    }
+                    return
+                }
+            }
+
+            let payload = LongbridgeDashboardSnapshotFactory.makePayload(from: snapshot)
+            apply(
+                payload,
+                message: snapshot.fallbackUsage.isEmpty
+                    ? "Longbridge 数据已同步到本机"
+                    : "Longbridge 数据已同步，部分字段已回退"
+            )
+            LongbridgeDiagnosticsStore.shared.append(
+                "Dashboard 已应用 Longbridge 快照: positions=\(snapshot.positions.count), news=\(snapshot.topNews.count), fallback=\(snapshot.fallbackUsage.isEmpty ? "none" : snapshot.fallbackUsage.joined(separator: "、"))"
+            )
+        } catch {
+            LongbridgeDiagnosticsStore.shared.append("Dashboard 刷新 Longbridge 快照失败: \(error.localizedDescription)")
+            isRefreshing = false
+            if state.value != nil {
+                activityMessage = "Longbridge 快照暂时不可用，先保留当前结果"
+                isShowingCachedSnapshot = true
+            } else {
+                state = .failed(error.localizedDescription)
+                activityMessage = nil
+            }
+        }
     }
 
     func refreshVisible(using client: PortfolioWorkbenchAPIClient) async {
@@ -209,6 +299,17 @@ final class PortfolioDashboardStore: ObservableObject {
 
         do {
             let payload = try await client.fetchDashboard(refresh: force, fast: fast)
+            guard payload.isMeaningful else {
+                isRefreshing = false
+                if hasVisibleData {
+                    activityMessage = "服务返回了空快照，已保留当前结果"
+                    isShowingCachedSnapshot = true
+                } else {
+                    state = .failed("服务返回了空快照，请稍后重试或切换可用服务器。")
+                    activityMessage = nil
+                }
+                return
+            }
             state = .loaded(payload)
             isShowingCachedSnapshot = false
             activityMessage = fast ? "核心数据已就绪" : "行情与洞察已同步到 \(payload.analysisDateCn)"
@@ -271,5 +372,24 @@ final class PortfolioDashboardStore: ObservableObject {
             return
         }
         UserDefaults.standard.set(data, forKey: cacheKey)
+    }
+
+    private static func restoreMostRecentCachedPayload() -> CachedSnapshot<MobileDashboardPayload>? {
+        let keys = UserDefaults.standard.dictionaryRepresentation().keys
+            .filter { $0.hasPrefix(dashboardCacheKeyPrefix) }
+        var best: CachedSnapshot<MobileDashboardPayload>?
+        for key in keys {
+            guard let snapshot = restoreCachedPayload(cacheKey: key) else {
+                continue
+            }
+            if let current = best {
+                if snapshot.cachedAt > current.cachedAt {
+                    best = snapshot
+                }
+            } else {
+                best = snapshot
+            }
+        }
+        return best
     }
 }

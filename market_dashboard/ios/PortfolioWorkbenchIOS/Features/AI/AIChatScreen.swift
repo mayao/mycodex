@@ -27,15 +27,15 @@ enum AIChatContext: Identifiable, Equatable {
         switch self {
         case .dashboard:
             return [
-                "今天组合最该先处理什么？",
-                "哪些持仓最受宏观影响？",
-                "给我一个下周执行框架。",
+                "请先判断这组组合里谁是主仓、谁是事件仓。",
+                "哪些持仓最容易被宏观和国际政治变化放大波动？",
+                "如果只允许我下周做一次动作，优先减谁、加谁？",
             ]
         case .holding:
             return [
-                "这只股票为什么现在还该持有？",
-                "什么情况下加仓或减仓？",
-                "最先盯的验证点是什么？",
+                "这只标的当前最关键的催化是什么？",
+                "什么信号出现时我应该先减仓？",
+                "最先盯的验证点和失效条件是什么？",
             ]
         }
     }
@@ -260,7 +260,7 @@ struct AIChatScreen: View {
         statusMessage = "正在向已配置的大模型请求更细的上下文回复…"
 
         do {
-            let client = try await settings.makeValidatedClient()
+            let client = try settings.makeClient()
             let response = try await client.sendAIChat(
                 context: context.apiContext,
                 messages: messages.map {

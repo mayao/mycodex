@@ -240,6 +240,17 @@ final class HoldingDetailViewModel: ObservableObject {
         }
     }
 
+    func restoreCachedSnapshot(symbol: String, cacheNamespace: String? = nil) {
+        prepareStateIfNeeded(for: symbol, cacheNamespace: cacheNamespace)
+        if state.value != nil {
+            isShowingCachedSnapshot = true
+            activityMessage = "已载入 \(symbol) 的最近结果"
+            return
+        }
+        state = .failed("当前没有 \(symbol) 的本地缓存。")
+        activityMessage = nil
+    }
+
     private var isCacheFresh: Bool {
         guard let lastUpdatedAt else {
             return false
