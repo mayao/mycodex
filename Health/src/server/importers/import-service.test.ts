@@ -9,6 +9,10 @@ import XLSX from "xlsx";
 import { runPendingMigrations } from "../db/migration-runner";
 import { seedDatabase } from "../db/seed";
 import { createInMemoryDatabase } from "../db/sqlite";
+import { formatAppDate } from "../utils/app-time";
+import { importDietData } from "./diet-importer";
+import { importGeneticData } from "./genetic-importer";
+import { createImportTask, ensureDataSource } from "./import-task-support";
 import { getFailedImportRowLogs, getImportRowLogs, importHealthData } from "./import-service";
 
 function setupDatabase() {
@@ -29,7 +33,7 @@ function writeTempFile(fileName: string, content: string) {
   };
 }
 
-function withEnv<T>(entries: Record<string, string | undefined>, run: () => T): T {
+async function withEnv<T>(entries: Record<string, string | undefined>, run: () => Promise<T> | T): Promise<T> {
   const previous = Object.fromEntries(
     Object.keys(entries).map((key) => [key, process.env[key]])
   );
@@ -43,7 +47,7 @@ function withEnv<T>(entries: Record<string, string | undefined>, run: () => T): 
   }
 
   try {
-    return run();
+    return await run();
   } finally {
     for (const [key, value] of Object.entries(previous)) {
       if (value === undefined) {
@@ -246,6 +250,52 @@ test("activity importer converts duration seconds and distance meters", () => {
   }
 });
 
+test("ensureDataSource scopes unified source ids by user", () => {
+  const database = setupDatabase();
+
+  database.prepare(`
+    INSERT INTO users (id, display_name, sex, birth_year, height_cm, note)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run("user-other", "其他用户", "female", 1990, 165, "test user");
+
+  const selfSourceId = ensureDataSource(database, "user-self", {
+    sourceType: "apple_health",
+    sourceName: "Apple 健康同步",
+    ingestChannel: "healthkit",
+    notes: "self"
+  });
+  const otherSourceId = ensureDataSource(database, "user-other", {
+    sourceType: "apple_health",
+    sourceName: "Apple 健康同步",
+    ingestChannel: "healthkit",
+    notes: "other"
+  });
+
+  assert.equal(selfSourceId, "data-source::user-self::apple_health");
+  assert.equal(otherSourceId, "data-source::user-other::apple_health");
+  assert.notEqual(selfSourceId, otherSourceId);
+
+  const rows = database.prepare(`
+    SELECT id, user_id, source_type
+    FROM data_source
+    WHERE source_type = 'apple_health'
+    ORDER BY user_id
+  `).all() as Array<{ id: string; user_id: string; source_type: string }>;
+
+  assert.deepEqual(rows.map((row) => ({ ...row })), [
+    {
+      id: "data-source::user-other::apple_health",
+      user_id: "user-other",
+      source_type: "apple_health"
+    },
+    {
+      id: "data-source::user-self::apple_health",
+      user_id: "user-self",
+      source_type: "apple_health"
+    }
+  ]);
+});
+
 test("invalid rows are tracked and import task becomes completed_with_errors", () => {
   const database = setupDatabase();
   const temp = writeTempFile(
@@ -307,6 +357,515 @@ test("invalid rows are tracked and import task becomes completed_with_errors", (
     assert.doesNotMatch(task.notes, /missing-date|invalid-duration/);
     assert.equal(task.source_file, "activity-invalid.csv");
   } finally {
+    rmSync(temp.directory, { recursive: true, force: true });
+  }
+});
+
+test("genetic importer stores structured findings from JSON into genetic_findings", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile(
+    "genetic.json",
+    JSON.stringify([
+      {
+        trait: "Lp(a) 背景倾向",
+        gene: "LPA",
+        rsid: "rs123",
+        risk_level: "高风险",
+        evidence_level: "A",
+        summary: "提示 Lp(a) 长期偏高倾向。",
+        suggestion: "建议 6-12 个月复查一次。",
+        date: "2026-03-10"
+      },
+      {
+        trait: "未知平台自定义 trait",
+        gene_symbol: "GENE1",
+        variant: "rs999",
+        risk: "medium",
+        evidence: "B",
+        explanation: "这是未知 trait，也应保留。",
+        advice: "继续观察。"
+      }
+    ]),
+  );
+
+  try {
+    const dataSourceId = ensureDataSource(database, "user-self", {
+      sourceType: "genetic_report",
+      sourceName: "基因报告导入",
+      ingestChannel: "document"
+    });
+    const importTaskId = createImportTask(
+      database,
+      { userId: "user-self" },
+      {
+        dataSourceId,
+        taskType: "genetic_import",
+        sourceType: "genetic_report",
+        sourceFile: "genetic.json"
+      }
+    );
+    const result = await importGeneticData(database, {
+      userId: "user-self",
+      filePath: temp.filePath,
+      sourceFileName: "genetic.json",
+      importTaskId,
+      dataSourceId
+    });
+
+    assert.equal(result.taskStatus, "completed");
+
+    const rows = database.prepare(`
+      SELECT trait_code, gene_symbol, summary
+      FROM genetic_findings
+      WHERE source_id = ?
+      ORDER BY trait_code
+    `).all(dataSourceId) as Array<{
+      trait_code: string;
+      gene_symbol: string;
+      summary: string;
+    }>;
+
+    assert.equal(rows.length, 2);
+    assert.equal(rows[0]?.trait_code, "custom.未知平台自定义.trait");
+    assert.equal(rows[1]?.trait_code, "lipid.lpa_background");
+    assert.ok(rows.some((row) => row.summary.includes("未知 trait")));
+  } finally {
+    rmSync(temp.directory, { recursive: true, force: true });
+  }
+});
+
+test("genetic importer parses OCR text with line-pair and broader risk expressions", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile("genetic-report.jpg", "fake-image");
+
+  try {
+    const dataSourceId = ensureDataSource(database, "user-self", {
+      sourceType: "genetic_report",
+      sourceName: "基因报告导入",
+      ingestChannel: "document"
+    });
+    const importTaskId = createImportTask(
+      database,
+      { userId: "user-self" },
+      {
+        dataSourceId,
+        taskType: "genetic_import",
+        sourceType: "genetic_report",
+        sourceFile: "genetic-report.jpg"
+      }
+    );
+    const result = await importGeneticData(database, {
+      userId: "user-self",
+      filePath: temp.filePath,
+      sourceFileName: "genetic-report.jpg",
+      importTaskId,
+      dataSourceId,
+      extractedText: [
+        "Lp(a) 背景倾向",
+        "较高",
+        "咖啡因代谢",
+        "正常",
+        "餐后血糖敏感性 高风险"
+      ].join("\n")
+    });
+
+    assert.equal(result.taskStatus, "completed");
+
+    const rows = database.prepare(`
+      SELECT trait_code, risk_level
+      FROM genetic_findings
+      WHERE source_id = ?
+      ORDER BY trait_code
+    `).all(dataSourceId) as Array<{ trait_code: string; risk_level: string }>;
+
+    assert.ok(rows.some((row) => row.trait_code === "lipid.lpa_background" && row.risk_level === "high"));
+    assert.ok(rows.some((row) => row.trait_code === "sleep.caffeine_sensitivity" && row.risk_level === "low"));
+    assert.ok(rows.some((row) => row.trait_code === "glycemic.postprandial_response" && row.risk_level === "high"));
+  } finally {
+    rmSync(temp.directory, { recursive: true, force: true });
+  }
+});
+
+test("genetic importer falls back to vision parsing when OCR text is empty", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile("genetic-photo.jpg", "fake-image");
+  const dataSourceId = ensureDataSource(database, "user-self", {
+    sourceType: "genetic_report",
+    sourceName: "基因报告导入",
+    ingestChannel: "document"
+  });
+  const importTaskId = createImportTask(
+    database,
+    { userId: "user-self" },
+    {
+      dataSourceId,
+      taskType: "genetic_import",
+      sourceType: "genetic_report",
+      sourceFile: "genetic-photo.jpg"
+    }
+  );
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                findings: [
+                  {
+                    trait_label: "Lp(a) 背景倾向",
+                    trait_code: "lipid.lpa_background",
+                    risk_level: "high",
+                    evidence_level: "A",
+                    summary: "提示 Lp(a) 背景偏高倾向。",
+                    suggestion: "建议结合血脂长期复查。",
+                    gene_symbol: "LPA",
+                    variant_id: "rs123",
+                    recorded_at: "2026-03-20"
+                  }
+                ]
+              })
+            }
+          }
+        ],
+        model: "vision-mock"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    ) as Response;
+
+  try {
+    const result = await withEnv(
+      {
+        HEALTH_LLM_PROVIDER: "openai-compatible",
+        HEALTH_LLM_API_KEY: "test-key",
+        HEALTH_LLM_BASE_URL: "https://example.com/v1"
+      },
+      () =>
+        importGeneticData(database, {
+          userId: "user-self",
+          filePath: temp.filePath,
+          sourceFileName: "genetic-photo.jpg",
+          importTaskId,
+          dataSourceId,
+          extractedText: ""
+        })
+    );
+
+    assert.equal(result.taskStatus, "completed");
+
+    const row = database.prepare(`
+      SELECT trait_code, gene_symbol
+      FROM genetic_findings
+      WHERE source_id = ?
+      LIMIT 1
+    `).get(dataSourceId) as { trait_code: string; gene_symbol: string };
+
+    assert.equal(row.trait_code, "lipid.lpa_background");
+    assert.equal(row.gene_symbol, "LPA");
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(temp.directory, { recursive: true, force: true });
+  }
+});
+
+test("diet importer fails with a clear error when no vision model is configured", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile("diet.jpg", "fake-image-content");
+  const dataSourceId = ensureDataSource(database, "user-self", {
+    sourceType: "diet_image",
+    sourceName: "饮食健康导入",
+    ingestChannel: "document"
+  });
+
+  await assert.rejects(
+    async () =>
+      withEnv(
+        {
+          HEALTH_LLM_PROVIDER: undefined,
+          HEALTH_LLM_API_KEY: undefined,
+          HEALTH_LLM_BASE_URL: undefined
+        },
+        () =>
+          importDietData(database, {
+            userId: "user-self",
+            filePath: temp.filePath,
+            sourceFileName: "diet.jpg",
+            importTaskId: "import-task::diet-no-model",
+            dataSourceId
+          })
+      ),
+    /图像分析模型|支持视觉|饮食图片无法识别/
+  );
+
+  rmSync(temp.directory, { recursive: true, force: true });
+});
+
+test("diet importer aggregates same-day calories and upload count", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile("diet.jpg", "fake-image-content");
+  const expectedAppDate = formatAppDate(new Date());
+  const dataSourceId = ensureDataSource(database, "user-self", {
+    sourceType: "diet_image",
+    sourceName: "饮食健康导入",
+    ingestChannel: "document"
+  });
+  const importTaskId1 = createImportTask(
+    database,
+    { userId: "user-self" },
+    {
+      dataSourceId,
+      taskType: "diet_import",
+      sourceType: "diet_image",
+      sourceFile: "diet.jpg"
+    }
+  );
+  const importTaskId2 = createImportTask(
+    database,
+    { userId: "user-self" },
+    {
+      dataSourceId,
+      taskType: "diet_import",
+      sourceType: "diet_image",
+      sourceFile: "diet.jpg"
+    }
+  );
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                foods: ["鸡胸肉", "米饭", "西兰花"],
+                estimated_calories_kcal: 620
+              })
+            }
+          }
+        ],
+        model: "vision-mock"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    ) as Response;
+
+  try {
+    await withEnv(
+      {
+        HEALTH_LLM_PROVIDER: "openai-compatible",
+        HEALTH_LLM_API_KEY: "test-key",
+        HEALTH_LLM_BASE_URL: "https://example.com/v1"
+      },
+      async () => {
+        await importDietData(database, {
+          userId: "user-self",
+          filePath: temp.filePath,
+          sourceFileName: "diet.jpg",
+          importTaskId: importTaskId1,
+          dataSourceId
+        });
+        await importDietData(database, {
+          userId: "user-self",
+          filePath: temp.filePath,
+          sourceFileName: "diet.jpg",
+          importTaskId: importTaskId2,
+          dataSourceId
+        });
+      }
+    );
+
+    const rows = database.prepare(`
+      SELECT metric_code, normalized_value
+      FROM metric_record
+      WHERE user_id = ? AND sample_time LIKE ?
+      ORDER BY metric_code
+    `).all("user-self", `${expectedAppDate}%`) as Array<{ metric_code: string; normalized_value: number }>;
+
+    assert.deepEqual(rows.map((row) => [row.metric_code, row.normalized_value]), [
+      ["diet.calories_intake_kcal", 1240],
+      ["diet.meal_upload_count", 2]
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(temp.directory, { recursive: true, force: true });
+  }
+});
+
+test("diet importer estimates calories when model omits numeric calories field", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile("diet-estimate.jpg", "fake-image-content");
+  const expectedAppDate = formatAppDate(new Date());
+  const dataSourceId = ensureDataSource(database, "user-self", {
+    sourceType: "diet_image",
+    sourceName: "饮食健康导入",
+    ingestChannel: "document"
+  });
+  const importTaskId = createImportTask(
+    database,
+    { userId: "user-self" },
+    {
+      dataSourceId,
+      taskType: "diet_import",
+      sourceType: "diet_image",
+      sourceFile: "diet-estimate.jpg"
+    }
+  );
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                foods: ["鸡胸肉", "米饭", "西兰花"]
+              })
+            }
+          }
+        ],
+        model: "vision-mock"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    ) as Response;
+
+  try {
+    const result = await withEnv(
+      {
+        HEALTH_LLM_PROVIDER: "openai-compatible",
+        HEALTH_LLM_API_KEY: "test-key",
+        HEALTH_LLM_BASE_URL: "https://example.com/v1"
+      },
+      () =>
+        importDietData(database, {
+          userId: "user-self",
+          filePath: temp.filePath,
+          sourceFileName: "diet-estimate.jpg",
+          importTaskId,
+          dataSourceId
+        })
+    );
+
+    assert.equal(result.taskStatus, "completed");
+
+    const rows = database.prepare(`
+      SELECT metric_code, normalized_value
+      FROM metric_record
+      WHERE import_task_id = ?
+      ORDER BY metric_code
+    `).all(importTaskId) as Array<{ metric_code: string; normalized_value: number }>;
+
+    assert.deepEqual(rows.map((row) => [row.metric_code, row.normalized_value]), [
+      ["diet.calories_intake_kcal", 550],
+      ["diet.meal_upload_count", 1]
+    ]);
+
+    const aggregateDate = database.prepare(`
+      SELECT sample_time
+      FROM metric_record
+      WHERE import_task_id = ? AND metric_code = 'diet.calories_intake_kcal'
+    `).get(importTaskId) as { sample_time: string };
+
+    assert.ok(aggregateDate.sample_time.startsWith(expectedAppDate));
+  } finally {
+    globalThis.fetch = originalFetch;
+    rmSync(temp.directory, { recursive: true, force: true });
+  }
+});
+
+test("diet importer falls back to gemini when the primary vision provider fails", async () => {
+  const database = setupDatabase();
+  const temp = writeTempFile("diet-fallback.jpg", "fake-image-content");
+  const dataSourceId = ensureDataSource(database, "user-self", {
+    sourceType: "diet_image",
+    sourceName: "饮食健康导入",
+    ingestChannel: "document"
+  });
+  const importTaskId = createImportTask(
+    database,
+    { userId: "user-self" },
+    {
+      dataSourceId,
+      taskType: "diet_import",
+      sourceType: "diet_image",
+      sourceFile: "diet-fallback.jpg"
+    }
+  );
+  const originalFetch = globalThis.fetch;
+
+  globalThis.fetch = async (input) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+
+    if (url.includes("api.anthropic.com")) {
+      return new Response("upstream error", { status: 500 }) as Response;
+    }
+
+    if (url.includes("generativelanguage.googleapis.com")) {
+      return new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  foods: ["鸡蛋", "酸奶", "香蕉"],
+                  estimated_calories_kcal: 430
+                })
+              }
+            }
+          ],
+          model: "gemini-vision-mock"
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        }
+      ) as Response;
+    }
+
+    throw new Error(`Unexpected fetch: ${url}`);
+  };
+
+  try {
+    const result = await withEnv(
+      {
+        HEALTH_LLM_PROVIDER: "anthropic",
+        HEALTH_LLM_API_KEY: "anthropic-key",
+        HEALTH_LLM_MODEL: "claude-opus-test",
+        HEALTH_LLM_FALLBACK_GEMINI_KEY: "gemini-key",
+        HEALTH_LLM_FALLBACK_GEMINI_MODEL: "gemini-2.5-flash"
+      },
+      () =>
+        importDietData(database, {
+          userId: "user-self",
+          filePath: temp.filePath,
+          sourceFileName: "diet-fallback.jpg",
+          importTaskId,
+          dataSourceId
+        })
+    );
+
+    assert.equal(result.taskStatus, "completed");
+
+    const row = database.prepare(`
+      SELECT normalized_value
+      FROM metric_record
+      WHERE import_task_id = ? AND metric_code = 'diet.calories_intake_kcal'
+    `).get(importTaskId) as { normalized_value: number };
+
+    assert.equal(row.normalized_value, 430);
+  } finally {
+    globalThis.fetch = originalFetch;
     rmSync(temp.directory, { recursive: true, force: true });
   }
 });

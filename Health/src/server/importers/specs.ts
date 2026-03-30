@@ -378,5 +378,37 @@ export const importerSpecs: Record<ImporterSpec["key"], ImporterSpec> = {
     sampleTimeAliases: ["sample_time", "日期", "检测日期"],
     noteAliases: ["notes", "备注"],
     fieldMappings: []
+  },
+  diet: {
+    key: "diet",
+    sourceType: "diet_image",
+    sourceName: "饮食健康导入",
+    taskType: "diet_import",
+    sampleTimeAliases: ["sample_time", "日期", "记录日期", "upload_date"],
+    noteAliases: ["notes", "备注", "食物", "foods"],
+    fieldMappings: [
+      {
+        metricCode: "diet.calories_intake_kcal",
+        metricName: "摄入热量",
+        category: "diet",
+        aliases: ["摄入热量", "热量", "总热量", "calories", "calories_intake_kcal", "kcal"],
+        canonicalUnit: "kcal",
+        betterDirection: "neutral",
+        description: "当日饮食总热量（同日多次上传按餐次累加）。",
+        defaultSourceUnit: "kcal",
+        normalizer: "energy"
+      },
+      {
+        metricCode: "diet.meal_upload_count",
+        metricName: "饮食记录次数",
+        category: "diet",
+        aliases: ["饮食记录次数", "餐次上传次数", "meal_upload_count", "meal_count", "upload_count"],
+        canonicalUnit: "count",
+        betterDirection: "up",
+        description: "当日饮食上传次数，用于评估记录覆盖率。",
+        defaultSourceUnit: "count",
+        normalizer: "identity"
+      }
+    ]
   }
 };

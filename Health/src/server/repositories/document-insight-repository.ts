@@ -211,31 +211,73 @@ function summarizeAnnualExam(digest: AnnualExamDigest): AnnualExamDigest {
   };
 }
 
+function parseReferenceRange(range: string | null): { low: number | null; high: number | null } {
+  if (!range) return { low: null, high: null };
+  // Normalize: strip unit suffixes like "mmol/L", "kg/m2" etc.
+  const cleaned = range.replace(/[a-zA-Z/%°·]+$/g, "").trim();
+  // Pattern: "3.9 - 6.09"
+  const dashMatch = cleaned.match(/^([\d.]+)\s*[-–—]\s*([\d.]+)/);
+  if (dashMatch) return { low: parseFloat(dashMatch[1]), high: parseFloat(dashMatch[2]) };
+  // Pattern: ">= 1.04" or "> 1.04"
+  const geMatch = cleaned.match(/^>=?\s*([\d.]+)/);
+  if (geMatch) return { low: parseFloat(geMatch[1]), high: null };
+  // Pattern: "<= 3.4" or "< 3.4"
+  const leMatch = cleaned.match(/^<=?\s*([\d.]+)/);
+  if (leMatch) return { low: null, high: parseFloat(leMatch[1]) };
+  return { low: null, high: null };
+}
+
 function loadAnnualExamRows(
   database: DatabaseSync,
   userId: string
 ): AnnualExamMetricRow[] {
-  return database
+  const rawRows = database
     .prepare(
       `
       SELECT
-        ms.id AS measurementSetId,
-        ms.title,
-        ms.recorded_at AS recordedAt,
-        ms.report_date AS reportDate,
-        m.metric_code AS metricCode,
-        m.normalized_value AS value,
-        m.normalized_unit AS unit,
-        m.abnormal_flag AS abnormalFlag,
-        m.reference_low AS referenceLow,
-        m.reference_high AS referenceHigh
-      FROM measurement_sets ms
-      JOIN measurements m ON m.measurement_set_id = ms.id
-      WHERE ms.user_id = ? AND ms.set_kind = 'annual_exam'
-      ORDER BY ms.recorded_at DESC, m.metric_code ASC
+        mr.data_source_id AS dataSourceId,
+        COALESCE(ds.source_name, '体检报告') AS title,
+        mr.sample_time AS recordedAt,
+        mr.sample_time AS reportDate,
+        mr.metric_code AS metricCode,
+        mr.normalized_value AS value,
+        mr.unit,
+        mr.abnormal_flag AS abnormalFlag,
+        mr.reference_range AS referenceRange
+      FROM metric_record mr
+      LEFT JOIN data_source ds ON ds.id = mr.data_source_id AND ds.user_id = mr.user_id
+      WHERE mr.user_id = ?
+        AND mr.source_type IN ('annual_exam_tabular', 'annual_exam_pdf')
+      ORDER BY mr.sample_time DESC, mr.metric_code ASC
     `
     )
-    .all(userId) as unknown as AnnualExamMetricRow[];
+    .all(userId) as unknown as Array<{
+      dataSourceId: string;
+      title: string;
+      recordedAt: string;
+      reportDate: string | null;
+      metricCode: string;
+      value: number;
+      unit: string;
+      abnormalFlag: AbnormalFlag;
+      referenceRange: string | null;
+    }>;
+
+  return rawRows.map((row) => {
+    const ref = parseReferenceRange(row.referenceRange);
+    return {
+      measurementSetId: row.dataSourceId,
+      title: row.title,
+      recordedAt: row.recordedAt,
+      reportDate: row.reportDate,
+      metricCode: row.metricCode,
+      value: row.value,
+      unit: row.unit,
+      abnormalFlag: row.abnormalFlag,
+      referenceLow: ref.low,
+      referenceHigh: ref.high
+    };
+  });
 }
 
 export function getAnnualExamDigest(

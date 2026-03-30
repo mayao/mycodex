@@ -25,14 +25,16 @@ export type HealthPlanSuggestionOutput = z.infer<typeof healthPlanSuggestionSche
  * Available metric codes the LLM can reference for auto-completion tracking.
  */
 const TRACKABLE_METRICS = [
-  { code: "steps", name: "步数", unit: "steps" },
-  { code: "active_energy", name: "活动消耗", unit: "kcal" },
-  { code: "exercise_minutes", name: "运动时长", unit: "minutes" },
-  { code: "sleep_minutes", name: "睡眠时长", unit: "minutes" },
-  { code: "weight", name: "体重", unit: "kg" },
-  { code: "body_fat_percentage", name: "体脂率", unit: "%" },
-  { code: "bmi", name: "BMI", unit: "kg/m²" },
-  { code: "walking_running_distance", name: "步行+跑步距离", unit: "km" }
+  { code: "activity.steps", name: "步数", unit: "count" },
+  { code: "activity.active_kcal", name: "活动消耗", unit: "kcal" },
+  { code: "activity.exercise_minutes", name: "运动时长", unit: "min" },
+  { code: "sleep.asleep_minutes", name: "睡眠时长", unit: "min" },
+  { code: "body.weight", name: "体重", unit: "kg" },
+  { code: "body.body_fat_pct", name: "体脂率", unit: "%" },
+  { code: "body.bmi", name: "BMI", unit: "kg/m²" },
+  { code: "activity.distance_km", name: "步行+跑步距离", unit: "km" },
+  { code: "diet.calories_intake_kcal", name: "饮食热量", unit: "kcal" },
+  { code: "diet.meal_upload_count", name: "饮食记录次数", unit: "count" }
 ];
 
 interface MetricSummary {

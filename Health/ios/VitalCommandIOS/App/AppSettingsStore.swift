@@ -2,9 +2,23 @@ import Foundation
 import SwiftUI
 import VitalCommandMobileCore
 
+enum AppTab: Hashable {
+    case home
+    case plan
+    case reports
+    case data
+}
+
+enum HomeDestination {
+    case medicalInsight
+    case geneticInsight
+    case dietInsight
+}
+
 @MainActor
 final class AppSettingsStore: ObservableObject {
-    static let defaultLANServerURL = "http://192.168.31.193:3000/"
+    static let currentRemoteServerURL = "http://10.8.144.16:3000/"
+    static let defaultLANServerURL = currentRemoteServerURL
     static let defaultSimulatorServerURL = "http://127.0.0.1:3000/"
     @Published var serverURLString: String {
         didSet {
@@ -12,10 +26,13 @@ final class AppSettingsStore: ObservableObject {
         }
     }
     @Published private(set) var dataRefreshVersion = 0
+    @Published var selectedTab: AppTab = .home
+    @Published var pendingHomeDestination: HomeDestination?
     var authToken: String?
 
     static let serverURLKey = "vital-command.server-url"
     static let savedServersKey = "vital-command.saved-servers"
+    static let discoveredServersKey = "vital-command.discovered-servers"
 
     struct SavedServer: Codable, Identifiable, Equatable {
         var id: String { url }
@@ -31,9 +48,32 @@ final class AppSettingsStore: ObservableObject {
             }
         }
     }
+    @Published private(set) var recentDiscoveredServerURLs: [String] {
+        didSet {
+            if let data = try? JSONEncoder().encode(recentDiscoveredServerURLs) {
+                UserDefaults.standard.set(data, forKey: Self.discoveredServersKey)
+            }
+        }
+    }
+
+    private static let legacyServerURLMap: [String: String] = [
+        "http://10.8.140.209:3000": currentRemoteServerURL,
+        "http://10.8.140.209:3000/": currentRemoteServerURL,
+        "http://10.8.144.16:3001": currentRemoteServerURL,
+        "http://10.8.144.16:3001/": currentRemoteServerURL,
+        "http://192.168.31.193:3000": currentRemoteServerURL,
+        "http://192.168.31.193:3000/": currentRemoteServerURL
+    ]
 
     init() {
-        let storedValue = UserDefaults.standard.string(forKey: Self.serverURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedValue = Self.migrateServerURL(
+            UserDefaults.standard.string(forKey: Self.serverURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        if let storedValue {
+            UserDefaults.standard.set(storedValue, forKey: Self.serverURLKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.serverURLKey)
+        }
 
 #if targetEnvironment(simulator)
         self.serverURLString = (storedValue?.isEmpty == false ? storedValue : Self.defaultSimulatorServerURL) ?? Self.defaultSimulatorServerURL
@@ -47,9 +87,16 @@ final class AppSettingsStore: ObservableObject {
 
         if let data = UserDefaults.standard.data(forKey: Self.savedServersKey),
            let servers = try? JSONDecoder().decode([SavedServer].self, from: data) {
-            self.savedServers = servers
+            self.savedServers = Self.migrateSavedServers(servers)
         } else {
             self.savedServers = []
+        }
+
+        if let data = UserDefaults.standard.data(forKey: Self.discoveredServersKey),
+           let urls = try? JSONDecoder().decode([String].self, from: data) {
+            self.recentDiscoveredServerURLs = urls.compactMap { HealthKitUploadTargetResolver.canonicalize($0) }
+        } else {
+            self.recentDiscoveredServerURLs = []
         }
     }
 
@@ -59,6 +106,12 @@ final class AppSettingsStore: ObservableObject {
 
     var dashboardReloadKey: String {
         "\(trimmedServerURLString)#\(dataRefreshVersion)"
+    }
+
+    func cacheScope(userID: String?) -> String {
+        let server = HealthKitUploadTargetResolver.canonicalize(trimmedServerURLString) ?? trimmedServerURLString
+        let user = userID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? userID! : "anonymous"
+        return "\(server)#\(user)"
     }
 
     func makeClient(token: String? = nil) throws -> HealthAPIClient {
@@ -74,6 +127,11 @@ final class AppSettingsStore: ObservableObject {
         dataRefreshVersion += 1
     }
 
+    func openHome(destination: HomeDestination? = nil) {
+        pendingHomeDestination = destination
+        selectedTab = .home
+    }
+
     func saveCurrentServer(name: String? = nil) {
         let url = trimmedServerURLString
         guard !url.isEmpty else { return }
@@ -82,7 +140,64 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    func rememberDiscoveredServerURLs(_ urls: [String]) {
+        let candidates =
+            urls
+            .compactMap { HealthKitUploadTargetResolver.canonicalize($0) }
+            .filter { HealthKitUploadTargetResolver.isLikelyLAN(urlString: $0) }
+
+        guard candidates.isEmpty == false else { return }
+
+        var merged: [String] = []
+        var seen = Set<String>()
+
+        for url in candidates + recentDiscoveredServerURLs {
+            guard seen.insert(url).inserted else { continue }
+            merged.append(url)
+        }
+
+        recentDiscoveredServerURLs = Array(merged.prefix(12))
+    }
+
+    func healthKitUploadTargetURLs() -> [String] {
+        return HealthKitUploadTargetResolver.prioritizeTargets(
+            discoveredServerURLs: recentDiscoveredServerURLs,
+            currentServerURL: trimmedServerURLString,
+            savedServerURLs: savedServers.map(\.url)
+        )
+    }
+
     func removeSavedServer(_ server: SavedServer) {
         savedServers.removeAll { $0.id == server.id }
+    }
+
+    private static func migrateServerURL(_ value: String?) -> String? {
+        guard let raw = value?.trimmingCharacters(in: .whitespacesAndNewlines), raw.isEmpty == false else {
+            return nil
+        }
+
+        return legacyServerURLMap[raw] ?? raw
+    }
+
+    private static func migrateSavedServers(_ servers: [SavedServer]) -> [SavedServer] {
+        var seen = Set<String>()
+        var migrated: [SavedServer] = []
+
+        for server in servers {
+            let nextURL = migrateServerURL(server.url) ?? server.url
+            guard seen.insert(nextURL).inserted else {
+                continue
+            }
+
+            migrated.append(
+                SavedServer(
+                    url: nextURL,
+                    name: server.name,
+                    addedAt: server.addedAt
+                )
+            )
+        }
+
+        return migrated
     }
 }

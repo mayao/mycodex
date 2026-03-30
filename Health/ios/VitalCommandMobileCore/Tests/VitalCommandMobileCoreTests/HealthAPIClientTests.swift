@@ -83,7 +83,8 @@ struct HealthAPIClientTests {
                 },
                 "bodyComposition": { "title": "体脂", "description": "desc", "defaultRange": "30d", "data": [], "lines": [] },
                 "activity": { "title": "运动", "description": "desc", "defaultRange": "30d", "data": [], "lines": [] },
-                "recovery": { "title": "恢复", "description": "desc", "defaultRange": "30d", "data": [], "lines": [] }
+                "recovery": { "title": "恢复", "description": "desc", "defaultRange": "30d", "data": [], "lines": [] },
+                "diet": { "title": "饮食", "description": "desc", "defaultRange": "30d", "data": [], "lines": [] }
               },
               "latestReports": []
             }
@@ -215,6 +216,55 @@ struct HealthAPIClientTests {
         #expect(request.httpMethod == "POST")
         #expect(request.url?.path == "/api/ai/chat")
         #expect(response.reply.role == .assistant)
+    }
+
+    @Test
+    func signsInWithAppleAndDecodesProviderMetadata() async throws {
+        let session = MockSession(
+            statusCode: 200,
+            body: """
+            {
+              "token": "apple-token",
+              "isNewUser": false,
+              "user": {
+                "id": "user-apple-1",
+                "displayName": "马尧",
+                "phoneNumber": null,
+                "email": "apple@example.com",
+                "authProviders": [
+                  { "provider": "device", "linkedAt": "2026-03-10T12:00:00Z", "email": null },
+                  { "provider": "apple", "linkedAt": "2026-03-10T12:01:00Z", "email": "apple@example.com" }
+                ],
+                "hasAppleLinked": true
+              }
+            }
+            """
+        )
+        let client = HealthAPIClient(
+            configuration: AppServerConfiguration(baseURL: URL(string: "http://localhost:3000")!),
+            session: session
+        )
+
+        let response = try await client.signInWithApple(
+            AppleSignInRequest(
+                identityToken: "identity-token",
+                authorizationCode: "auth-code",
+                email: "apple@example.com",
+                displayName: "马尧",
+                deviceLabel: "My iPhone"
+            )
+        )
+
+        let request = try #require(session.lastRequest)
+        let body = String(data: request.httpBody ?? Data(), encoding: .utf8) ?? ""
+
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/api/auth/apple/sign-in")
+        #expect(body.contains("identity_token"))
+        #expect(body.contains("device_label"))
+        #expect(response.user.email == "apple@example.com")
+        #expect(response.user.hasAppleLinked)
+        #expect(response.user.authProviders.contains(where: { $0.provider == .apple }))
     }
 }
 

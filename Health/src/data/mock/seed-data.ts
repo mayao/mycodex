@@ -64,6 +64,14 @@ export const dataSources: DataSourceSeed[] = [
     vendor: "Gene 微基因",
     ingestChannel: "mock",
     note: "当前为 schema 与演示 mock，后续再接真实报告"
+  },
+  {
+    id: "source-diet-photo",
+    sourceType: "diet_image",
+    name: "饮食照片记录",
+    vendor: "HealthAI Vision",
+    ingestChannel: "manual",
+    note: "当前仅保留每日热量汇总与上传次数。"
   }
 ];
 
@@ -322,6 +330,24 @@ export const metricCatalog: MetricCatalogItem[] = [
     defaultUnit: "min",
     betterDirection: "up",
     description: "用于观察日常恢复质量。"
+  },
+  {
+    code: "diet.calories_intake_kcal",
+    label: "摄入热量",
+    shortLabel: "热量",
+    category: "diet",
+    defaultUnit: "kcal",
+    betterDirection: "neutral",
+    description: "按自然日聚合的总摄入热量，用于观察热量趋势和体重联动。"
+  },
+  {
+    code: "diet.meal_upload_count",
+    label: "饮食记录次数",
+    shortLabel: "记录次数",
+    category: "diet",
+    defaultUnit: "count",
+    betterDirection: "up",
+    description: "同日饮食上传次数，用于评估记录覆盖率。"
   }
 ];
 
@@ -744,12 +770,38 @@ const sleepSets: MeasurementSetSeed[] = sleepDays.map(([date, inBed, asleep]) =>
   )
 );
 
+const dietDays = [
+  ["2026-03-02", 1980, 2],
+  ["2026-03-03", 2140, 3],
+  ["2026-03-04", 2260, 3],
+  ["2026-03-05", 2085, 2],
+  ["2026-03-06", 2410, 3],
+  ["2026-03-07", 2335, 2],
+  ["2026-03-08", 2050, 2]
+] as const;
+
+const dietSets: MeasurementSetSeed[] = dietDays.map(([date, calories, uploadCount]) =>
+  measurementSet(
+    `diet-${date}`,
+    "source-diet-photo",
+    "diet_daily",
+    `饮食记录 ${date}`,
+    `${date}T12:00:00+08:00`,
+    [
+      measurement("diet.calories_intake_kcal", calories, "kcal"),
+      measurement("diet.meal_upload_count", uploadCount, "count")
+    ],
+    "来自饮食照片识别后的每日聚合样例。"
+  )
+);
+
 export const measurementSets: MeasurementSetSeed[] = [
   ...annualExamSets,
   ...lipidPanelSets,
   ...bodyCompositionSets,
   ...activitySets,
-  ...sleepSets
+  ...sleepSets,
+  ...dietSets
 ];
 
 export const geneticFindings: GeneticFindingSeed[] = [

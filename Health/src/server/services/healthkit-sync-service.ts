@@ -24,7 +24,12 @@ export type HealthKitMetricKind =
   | "distanceWalkingRunning"
   | "activeEnergy"
   | "exerciseMinutes"
-  | "sleepMinutes";
+  | "sleepMinutes"
+  | "restingHeartRate"
+  | "walkingHeartRateAverage"
+  | "heartRateVariability"
+  | "oxygenSaturation"
+  | "respiratoryRate";
 
 export interface HealthKitSyncSampleInput {
   kind: HealthKitMetricKind;
@@ -166,6 +171,76 @@ const healthKitMappings: Record<HealthKitMetricKind, ImportFieldMapping> = {
     referenceHigh: 540,
     referenceRange: "420 - 540 min",
     normalizer: "duration"
+  },
+  restingHeartRate: {
+    metricCode: "activity.resting_heart_rate",
+    metricName: "静息心率",
+    category: "activity",
+    aliases: ["静息心率", "restingHeartRate"],
+    canonicalUnit: "count/min",
+    betterDirection: "down",
+    description: "Apple 健康同步的静息心率",
+    defaultSourceUnit: "count/min",
+    referenceLow: 45,
+    referenceHigh: 75,
+    referenceRange: "45 - 75 count/min",
+    normalizer: "heart_rate"
+  },
+  walkingHeartRateAverage: {
+    metricCode: "activity.walking_heart_rate_avg",
+    metricName: "步行平均心率",
+    category: "activity",
+    aliases: ["步行平均心率", "walkingHeartRateAverage"],
+    canonicalUnit: "count/min",
+    betterDirection: "down",
+    description: "Apple 健康同步的步行平均心率",
+    defaultSourceUnit: "count/min",
+    referenceLow: 60,
+    referenceHigh: 110,
+    referenceRange: "60 - 110 count/min",
+    normalizer: "heart_rate"
+  },
+  heartRateVariability: {
+    metricCode: "activity.hrv_sdnn",
+    metricName: "心率变异性",
+    category: "activity",
+    aliases: ["心率变异性", "heartRateVariability"],
+    canonicalUnit: "ms",
+    betterDirection: "up",
+    description: "Apple 健康同步的心率变异性 SDNN",
+    defaultSourceUnit: "ms",
+    referenceLow: 20,
+    referenceHigh: 120,
+    referenceRange: "20 - 120 ms",
+    normalizer: "identity"
+  },
+  oxygenSaturation: {
+    metricCode: "activity.oxygen_saturation_pct",
+    metricName: "血氧饱和度",
+    category: "activity",
+    aliases: ["血氧饱和度", "oxygenSaturation"],
+    canonicalUnit: "%",
+    betterDirection: "up",
+    description: "Apple 健康同步的血氧饱和度",
+    defaultSourceUnit: "%",
+    referenceLow: 95,
+    referenceHigh: 100,
+    referenceRange: "95 - 100 %",
+    normalizer: "percentage"
+  },
+  respiratoryRate: {
+    metricCode: "activity.respiratory_rate",
+    metricName: "呼吸频率",
+    category: "activity",
+    aliases: ["呼吸频率", "respiratoryRate"],
+    canonicalUnit: "count/min",
+    betterDirection: "neutral",
+    description: "Apple 健康同步的呼吸频率",
+    defaultSourceUnit: "count/min",
+    referenceLow: 12,
+    referenceHigh: 20,
+    referenceRange: "12 - 20 count/min",
+    normalizer: "heart_rate"
   }
 };
 

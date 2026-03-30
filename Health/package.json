@@ -12,7 +12,7 @@
     "prebuild": "node scripts/check-runtime.mjs",
     "build": "next build",
     "prestart": "node scripts/check-runtime.mjs",
-    "start": "next start",
+    "start": "node .next/standalone/server.js",
     "prelint": "node scripts/check-runtime.mjs",
     "lint": "eslint .",
     "pretypecheck": "node scripts/check-runtime.mjs",

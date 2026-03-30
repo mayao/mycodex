@@ -74,6 +74,8 @@ export interface HealthSourceDimensionCard {
   status: "ready" | "attention" | "background";
   summary: string;
   highlight: string;
+  /** AI insight summary from cache (only present when user has viewed insights) */
+  insightSummary?: string;
 }
 
 export interface HealthOverviewSpotlight {
@@ -189,6 +191,17 @@ export interface HealthImportOption {
   hints: string[];
 }
 
+export interface DietOverviewSnapshot {
+  aggregateDate: string;
+  recognizedFoods: string[];
+  estimatedCaloriesKcal: number;
+  mealUploadCount: number;
+  latestRecognizedAt: string;
+  sourceFile?: string;
+  provider?: string;
+  model?: string;
+}
+
 export interface HealthHomePageData {
   generatedAt: string;
   disclaimer: string;
@@ -203,6 +216,7 @@ export interface HealthHomePageData {
   overviewCards: HealthOverviewCard[];
   annualExam?: AnnualExamView;
   geneticFindings: GeneticFindingView[];
+  dietOverview?: DietOverviewSnapshot;
   keyReminders: HealthReminderItem[];
   watchItems: HealthReminderItem[];
   latestNarrative: HealthSummaryGenerationResult;
@@ -211,6 +225,7 @@ export interface HealthHomePageData {
     bodyComposition: HealthTrendChartModel;
     activity: HealthTrendChartModel;
     recovery: HealthTrendChartModel;
+    diet: HealthTrendChartModel;
   };
   latestReports: HealthReportSnapshotRecord[];
 }

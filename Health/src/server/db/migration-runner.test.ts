@@ -17,7 +17,15 @@ test("unified schema migrations create required tables and load 30+ metric recor
     "004_import_row_log.sql",
     "005_scrub_import_row_payloads.sql",
     "006_sync_seeded_genetic_findings.sql",
-    "007_auth_tables.sql"
+    "007_auth_tables.sql",
+    "008_device_auth.sql",
+    "009_health_plans.sql",
+    "010_sync_system.sql",
+    "011_genetic_findings_user_id.sql",
+    "012_user_scoped_data_source_ids.sql",
+    "013_diet_metric_category.sql",
+    "014_genetic_findings_unified_source_fk.sql",
+    "015_user_identity_and_merge.sql"
   ]);
   assert.deepEqual(listAppliedMigrations(database), applied);
 
@@ -73,4 +81,5 @@ test("metric_record supports same metric across years and different source types
   assert.ok(categorySet.has("lipid"));
   assert.ok(categorySet.has("body_composition"));
   assert.ok(categorySet.has("activity"));
+  assert.ok(categorySet.has("diet"));
 });

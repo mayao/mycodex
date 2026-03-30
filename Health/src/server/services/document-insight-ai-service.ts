@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { getAppEnv } from "../config/env";
 import { getDatabase } from "../db/sqlite";
+import { getKimiOpenAIHeaders, getProviderPriority } from "./llm-provider-routing";
 import {
   getAnnualExamDigest,
   listGeneticFindingDigests,
@@ -21,12 +22,15 @@ export interface InsightItem {
   action?: string;
   severity: InsightSeverity;
   relatedMetrics?: string[];
+  categoryLabel?: string;
 }
 
 export interface DocumentInsightResult {
   documentType: "medical_exam" | "genetic";
   hasData: boolean;
   summary: string;
+  summaryHeadline?: string;
+  summaryHighlights?: string[];
   urgentItems: InsightItem[];
   attentionItems: InsightItem[];
   positiveItems: InsightItem[];
@@ -200,12 +204,15 @@ ${findingsText}
 
 interface LLMInsightPayload {
   summary: string;
+  summaryHeadline?: string;
+  summaryHighlights?: string[];
   urgentItems: Array<{
     title: string;
     detail: string;
     action?: string;
     severity: InsightSeverity;
     relatedMetrics?: string[];
+    categoryLabel?: string;
   }>;
   attentionItems: Array<{
     title: string;
@@ -213,6 +220,7 @@ interface LLMInsightPayload {
     action?: string;
     severity: InsightSeverity;
     relatedMetrics?: string[];
+    categoryLabel?: string;
   }>;
   positiveItems: Array<{
     title: string;
@@ -220,6 +228,7 @@ interface LLMInsightPayload {
     action?: string;
     severity: InsightSeverity;
     relatedMetrics?: string[];
+    categoryLabel?: string;
   }>;
   recommendations: string[];
 }
@@ -227,7 +236,12 @@ interface LLMInsightPayload {
 function parseLLMResponse(text: string): LLMInsightPayload | null {
   try {
     // Strip markdown code fences if present
-    const cleaned = text.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
+    let cleaned = text.replace(/^```(?:json)?\n?/gm, "").replace(/\n?```$/gm, "").trim();
+    // Try to extract JSON object if there's extra text around it
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[0];
+    }
     const parsed = JSON.parse(cleaned) as LLMInsightPayload;
     if (!parsed.summary || !Array.isArray(parsed.recommendations)) {
       return null;
@@ -252,7 +266,7 @@ async function callAnthropicForInsights(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 2048,
+      max_tokens: 8192,
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -283,7 +297,7 @@ async function callKimiForInsights(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 2048,
+      max_tokens: 8192,
       messages: [{ role: "user", content: prompt }]
     })
   });
@@ -312,7 +326,7 @@ async function callGeminiForInsights(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 2048 }
+        generationConfig: { maxOutputTokens: 8192 }
       })
     }
   );
@@ -332,10 +346,10 @@ type LLMProviderFn = () => Promise<{ text: string; provider: string; model: stri
 
 export async function callLLMWithFallbacks(
   prompt: string,
-  options?: { preferredProvider?: string | null }
+  options?: { preferredProvider?: string | null; timeoutMs?: number }
 ): Promise<{ text: string; provider: string; model: string }> {
   const env = getAppEnv();
-  const TIMEOUT_MS = 18_000;
+  const TIMEOUT_MS = options?.timeoutMs ?? 30_000;
 
   function makeSignal(): AbortSignal {
     const ctrl = new AbortController();
@@ -349,8 +363,12 @@ export async function callLLMWithFallbacks(
     const baseUrl = env.HEALTH_LLM_BASE_URL.replace(/\/$/, "");
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", signal: makeSignal(),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${env.HEALTH_LLM_API_KEY}` },
-      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: "user", content: prompt }] })
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.HEALTH_LLM_API_KEY}`,
+        ...(getKimiOpenAIHeaders(env.HEALTH_LLM_API_KEY) ?? {})
+      },
+      body: JSON.stringify({ model, max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
     });
     if (!response.ok) throw new Error(`OpenAI-compat API ${response.status}`);
     const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
@@ -363,7 +381,7 @@ export async function callLLMWithFallbacks(
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST", signal: makeSignal(),
       headers: { "Content-Type": "application/json", "x-api-key": env.HEALTH_LLM_API_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: "user", content: prompt }] })
+      body: JSON.stringify({ model, max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
     });
     if (!response.ok) throw new Error(`Anthropic API ${response.status}`);
     const data = (await response.json()) as { content?: Array<{ type: string; text?: string }>; model?: string };
@@ -373,11 +391,15 @@ export async function callLLMWithFallbacks(
   const tryKimi: LLMProviderFn = async () => {
     const kimiKey = process.env.HEALTH_LLM_FALLBACK_KIMI_KEY;
     if (!kimiKey) throw new Error("not configured");
-    const model = process.env.HEALTH_LLM_FALLBACK_KIMI_MODEL ?? "kimi-for-coding";
-    const response = await fetch("https://api.kimi.com/coding/v1/chat/completions", {
+    const model = process.env.HEALTH_LLM_FALLBACK_KIMI_MODEL ?? "kimi-latest";
+    // sk-kimi-* keys use api.kimi.com; sk-* keys use api.moonshot.cn
+    const baseUrl = kimiKey.startsWith("sk-kimi-") ? "https://api.kimi.com/coding/v1" : "https://api.moonshot.cn/v1";
+    const headers: Record<string, string> = { "Content-Type": "application/json", Authorization: `Bearer ${kimiKey}` };
+    if (kimiKey.startsWith("sk-kimi-")) headers["User-Agent"] = "KimiCLI/1.3";
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST", signal: makeSignal(),
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${kimiKey}`, "User-Agent": "KimiCLI/1.3" },
-      body: JSON.stringify({ model, max_tokens: 2048, messages: [{ role: "user", content: prompt }] })
+      headers,
+      body: JSON.stringify({ model, max_tokens: 8192, messages: [{ role: "user", content: prompt }] })
     });
     if (!response.ok) throw new Error(`Kimi API ${response.status}`);
     const data = (await response.json()) as { choices?: Array<{ message?: { content?: string } }>; model?: string };
@@ -387,13 +409,13 @@ export async function callLLMWithFallbacks(
   const tryGemini: LLMProviderFn = async () => {
     const geminiKey = process.env.HEALTH_LLM_FALLBACK_GEMINI_KEY;
     if (!geminiKey) throw new Error("not configured");
-    const model = process.env.HEALTH_LLM_FALLBACK_GEMINI_MODEL ?? "gemini-2.0-flash";
+    const model = process.env.HEALTH_LLM_FALLBACK_GEMINI_MODEL ?? "gemini-2.5-flash";
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
       {
         method: "POST", signal: makeSignal(),
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048 } })
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 8192 } })
       }
     );
     if (!response.ok) throw new Error(`Gemini API ${response.status}`);
@@ -401,7 +423,6 @@ export async function callLLMWithFallbacks(
     return { text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? "", model, provider: "gemini" };
   };
 
-  // Default order: env primary → kimi → gemini → remaining
   const providerMap: Record<string, LLMProviderFn> = {
     anthropic: tryAnthropic,
     openai_compatible: tryOpenAI,
@@ -409,30 +430,41 @@ export async function callLLMWithFallbacks(
     gemini: tryGemini,
   };
 
-  // Build ordered list: preferred first, then remaining configured
-  const preferred = options?.preferredProvider;
-  const defaultOrder = [
-    env.HEALTH_LLM_PROVIDER === "anthropic" ? "anthropic" : "openai_compatible",
-    env.HEALTH_LLM_PROVIDER === "anthropic" ? "openai_compatible" : "anthropic",
-    "kimi",
-    "gemini",
-  ];
+  const order = getProviderPriority(env, options?.preferredProvider);
 
-  const order: string[] = preferred
-    ? [preferred, ...defaultOrder.filter(p => p !== preferred)]
-    : defaultOrder;
-
+  // Race ALL configured providers in parallel — fastest wins (like streaming does)
+  const raceCandidates: Array<Promise<{ text: string; provider: string; model: string }>> = [];
   for (const name of order) {
     const fn = providerMap[name];
     if (!fn) continue;
-    try {
-      return await fn();
-    } catch {
-      // fall through to next
-    }
+    raceCandidates.push(
+      fn()
+        .then(result => {
+          console.log(`[LLM] ✅ ${name} succeeded (${result.model})`);
+          return result;
+        })
+        .catch(error => {
+          const msg = error instanceof Error ? error.message : String(error);
+          console.warn(`[LLM] ❌ ${name} failed: ${msg}`);
+          throw error;
+        })
+    );
   }
 
-  throw new Error("all_providers_failed");
+  if (raceCandidates.length === 0) {
+    throw new Error("all_providers_failed");
+  }
+
+  // Global timeout
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("all_providers_timeout")), TIMEOUT_MS)
+  );
+
+  try {
+    return await Promise.any([...raceCandidates, timeoutPromise.catch(() => { throw new Error("all_providers_timeout"); })]);
+  } catch {
+    throw new Error("all_providers_failed");
+  }
 }
 
 // ─── Build result from parsed LLM payload ────────────────────────────────────
@@ -446,8 +478,38 @@ function buildInsightItems(
     detail: item.detail,
     action: item.action,
     severity: item.severity,
-    relatedMetrics: item.relatedMetrics ?? []
+    relatedMetrics: item.relatedMetrics ?? [],
+    categoryLabel: item.categoryLabel
   }));
+}
+
+function deriveSummaryHeadline(summary: string, documentType: DocumentInsightResult["documentType"]): string {
+  const firstSentence = summary.split(/[。.!?]/).map((item) => item.trim()).find(Boolean);
+  if (firstSentence) return firstSentence;
+  return documentType === "genetic" ? "基因背景已形成结构化洞察" : "体检结果已形成结构化洞察";
+}
+
+function deriveSummaryHighlights(
+  summary: string,
+  urgentItems: InsightItem[],
+  attentionItems: InsightItem[],
+  positiveItems: InsightItem[]
+): string[] {
+  const items = [
+    ...urgentItems.slice(0, 2).map((item) => item.title),
+    ...attentionItems.slice(0, 1).map((item) => item.title),
+    ...positiveItems.slice(0, 1).map((item) => item.title)
+  ];
+
+  if (items.length > 0) {
+    return items.slice(0, 3);
+  }
+
+  return summary
+    .split(/[。.!?]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 3);
 }
 
 // ─── Rule-based Fallbacks (when LLM is unavailable) ──────────────────────────
@@ -464,7 +526,8 @@ function buildRuleBasedMedicalExamResult(digest: AnnualExamDigest): DocumentInsi
     detail: `当前值 ${m.latestValue} ${m.unit}，参考范围 ${m.referenceRange ?? "—"}。${m.delta != null ? `较上次${m.delta > 0 ? "上升" : "下降"} ${Math.abs(m.delta).toFixed(2)} ${m.unit}。` : ""}`,
     action: "建议复查并咨询医生",
     severity: "high" as InsightSeverity,
-    relatedMetrics: [m.shortLabel]
+    relatedMetrics: [m.shortLabel],
+    categoryLabel: "异常指标"
   }));
 
   const positiveItems: InsightItem[] = normal.slice(0, 3).map((m) => ({
@@ -472,8 +535,13 @@ function buildRuleBasedMedicalExamResult(digest: AnnualExamDigest): DocumentInsi
     title: `${m.label} 正常`,
     detail: `当前值 ${m.latestValue} ${m.unit}，在参考范围内。`,
     severity: "positive" as InsightSeverity,
-    relatedMetrics: [m.shortLabel]
+    relatedMetrics: [m.shortLabel],
+    categoryLabel: "稳定项"
   }));
+
+  const summary = urgent.length > 0
+    ? `本次体检发现 ${urgent.length} 项异常指标（${urgent.map((m) => m.shortLabel).join("、")}），${normal.length} 项正常。建议重点关注异常项目并咨询医生。`
+    : `本次体检各项主要指标均在正常范围内（共 ${normal.length} 项正常），健康状态良好，请继续保持。`;
 
   const recommendations: string[] = [
     urgent.length > 0 ? `请重点关注 ${urgent.map((m) => m.label).slice(0, 3).join("、")} 等指标，建议咨询医生` : "各项指标整体正常，继续保持良好生活习惯",
@@ -485,9 +553,9 @@ function buildRuleBasedMedicalExamResult(digest: AnnualExamDigest): DocumentInsi
   return {
     documentType: "medical_exam",
     hasData: true,
-    summary: urgent.length > 0
-      ? `本次体检发现 ${urgent.length} 项异常指标（${urgent.map((m) => m.shortLabel).join("、")}），${normal.length} 项正常。建议重点关注异常项目并咨询医生。`
-      : `本次体检各项主要指标均在正常范围内（共 ${normal.length} 项正常），健康状态良好，请继续保持。`,
+    summary,
+    summaryHeadline: deriveSummaryHeadline(summary, "medical_exam"),
+    summaryHighlights: deriveSummaryHighlights(summary, urgentItems, [], positiveItems),
     urgentItems,
     attentionItems: [],
     positiveItems,
@@ -510,7 +578,8 @@ function buildRuleBasedGeneticResult(findings: GeneticFindingDigest[]): Document
     detail: `${f.summary}${f.linkedMetric && f.linkedMetric.abnormalFlag !== "normal" ? ` 实测 ${f.linkedMetric.metricName} 同时${f.linkedMetric.abnormalFlag === "high" ? "偏高" : "偏低"}（${f.linkedMetric.value} ${f.linkedMetric.unit}），基因风险与实测异常双重叠加，需重点关注。` : ""}`,
     action: f.suggestion,
     severity: "high" as InsightSeverity,
-    relatedMetrics: f.linkedMetric ? [f.linkedMetric.metricName] : []
+    relatedMetrics: f.linkedMetric ? [f.linkedMetric.metricName] : [],
+    categoryLabel: f.dimension
   }));
 
   const attentionItems: InsightItem[] = medRisk.map((f) => ({
@@ -519,7 +588,8 @@ function buildRuleBasedGeneticResult(findings: GeneticFindingDigest[]): Document
     detail: f.summary,
     action: f.suggestion,
     severity: "medium" as InsightSeverity,
-    relatedMetrics: []
+    relatedMetrics: [],
+    categoryLabel: f.dimension
   }));
 
   const positiveItems: InsightItem[] = lowRisk.slice(0, 3).map((f) => ({
@@ -527,15 +597,19 @@ function buildRuleBasedGeneticResult(findings: GeneticFindingDigest[]): Document
     title: `${f.traitLabel} — 低风险`,
     detail: f.summary,
     severity: "positive" as InsightSeverity,
-    relatedMetrics: []
+    relatedMetrics: [],
+    categoryLabel: f.dimension
   }));
 
   const allSuggestions = [...highRisk, ...medRisk].map((f) => f.suggestion).filter(Boolean).slice(0, 4);
+  const summary = `共检测 ${findings.length} 个基因维度：高风险 ${highRisk.length} 项、中风险 ${medRisk.length} 项、低风险 ${lowRisk.length} 项。${highRisk.length > 0 ? `请重点关注 ${highRisk.map((f) => f.traitLabel).join("、")}。` : ""}`;
 
   return {
     documentType: "genetic",
     hasData: true,
-    summary: `共检测 ${findings.length} 个基因维度：高风险 ${highRisk.length} 项、中风险 ${medRisk.length} 项、低风险 ${lowRisk.length} 项。${highRisk.length > 0 ? `请重点关注 ${highRisk.map((f) => f.traitLabel).join("、")}。` : ""}`,
+    summary,
+    summaryHeadline: deriveSummaryHeadline(summary, "genetic"),
+    summaryHighlights: deriveSummaryHighlights(summary, urgentItems, attentionItems, positiveItems),
     urgentItems,
     attentionItems,
     positiveItems,
@@ -549,6 +623,54 @@ function buildRuleBasedGeneticResult(findings: GeneticFindingDigest[]): Document
 
 // ─── Main exported functions ──────────────────────────────────────────────────
 
+// ─── Insight Cache (persistent until new upload invalidates) ─────────────────
+const insightCache = new Map<string, { result: DocumentInsightResult }>();
+
+function getCachedInsight(key: string): DocumentInsightResult | null {
+  const entry = insightCache.get(key);
+  return entry?.result ?? null;
+}
+
+function setCachedInsight(key: string, result: DocumentInsightResult): void {
+  insightCache.set(key, { result });
+}
+
+/**
+ * Invalidate insight cache for a user when new data is uploaded.
+ * Call this from the import pipeline after a successful import.
+ */
+export function invalidateInsightCache(userId: string, type?: "medical_exam" | "genetic"): void {
+  if (type) {
+    insightCache.delete(`${type}:${userId}`);
+  } else {
+    insightCache.delete(`medical_exam:${userId}`);
+    insightCache.delete(`genetic:${userId}`);
+  }
+  console.log(`[Insight Cache] Invalidated cache for user=${userId} type=${type ?? "all"}`);
+}
+
+/**
+ * Returns a short AI insight summary for a given type if it exists in cache.
+ * Used by health-home-service to enrich source dimension cards without calling LLM.
+ */
+export function getCachedInsightSummary(userId: string, type: "medical_exam" | "genetic"): string | null {
+  const key = `${type}:${userId}`;
+  const cached = getCachedInsight(key);
+  if (!cached || !cached.hasData) return null;
+  // Build a compact summary from urgent/attention items
+  const parts: string[] = [];
+  if (cached.urgentItems.length > 0) {
+    parts.push(`⚠️ ${cached.urgentItems.map(i => i.title).join("、")}`);
+  }
+  if (cached.attentionItems.length > 0) {
+    parts.push(`📋 ${cached.attentionItems.map(i => i.title).join("、")}`);
+  }
+  if (cached.recommendations.length > 0) {
+    parts.push(`💡 ${cached.recommendations[0]}`);
+  }
+  return parts.length > 0 ? parts.join(" | ") : cached.summary.slice(0, 100);
+}
+
 export async function getMedicalExamInsights(
   userId: string,
   database: DatabaseSync = getDatabase()
@@ -560,6 +682,8 @@ export async function getMedicalExamInsights(
       documentType: "medical_exam",
       hasData: false,
       summary: "尚未上传体检报告，无法生成洞察分析。请在数据页上传您的年度体检报告。",
+      summaryHeadline: "尚未上传体检报告",
+      summaryHighlights: ["上传体检报告后可生成结构化洞察", "支持 PDF 和图片", "上传后会自动解析并回流首页"],
       urgentItems: [],
       attentionItems: [],
       positiveItems: [],
@@ -571,15 +695,27 @@ export async function getMedicalExamInsights(
     };
   }
 
+  // Check cache
+  const cacheKey = `medical_exam:${userId}`;
+  const cached = getCachedInsight(cacheKey);
+  if (cached) return cached;
+
   const prompt = buildMedicalExamPrompt(digest);
   try {
-    const llmResult = await callLLMWithFallbacks(prompt);
+    console.log(`[Insight] Starting LLM call for medical_exam (user=${userId})`);
+    const startTime = Date.now();
+    const llmResult = await callLLMWithFallbacks(prompt, { timeoutMs: 45_000 });
+    console.log(`[Insight] LLM responded in ${Date.now() - startTime}ms via ${llmResult.provider}/${llmResult.model}, text length=${llmResult.text.length}`);
     const parsed = parseLLMResponse(llmResult.text);
-    if (!parsed) throw new Error("unparseable");
-    return {
+    if (!parsed) {
+      console.error(`[Insight] Failed to parse LLM response. First 500 chars: ${llmResult.text.slice(0, 500)}`);
+      throw new Error("unparseable");
+    }
+    const result: DocumentInsightResult = {
       documentType: "medical_exam",
       hasData: true,
       summary: parsed.summary,
+      summaryHeadline: parsed.summaryHeadline ?? deriveSummaryHeadline(parsed.summary, "medical_exam"),
       urgentItems: buildInsightItems(parsed.urgentItems),
       attentionItems: buildInsightItems(parsed.attentionItems),
       positiveItems: buildInsightItems(parsed.positiveItems),
@@ -589,7 +725,16 @@ export async function getMedicalExamInsights(
       disclaimer: "本分析仅供健康参考，不构成医疗诊断。如有异常指标，请咨询专业医疗人员。",
       generatedAt: new Date().toISOString()
     };
-  } catch {
+    result.summaryHighlights = parsed.summaryHighlights ?? deriveSummaryHighlights(
+      result.summary,
+      result.urgentItems,
+      result.attentionItems,
+      result.positiveItems
+    );
+    setCachedInsight(cacheKey, result);
+    return result;
+  } catch (error) {
+    console.error(`[Insight] medical_exam analysis failed:`, error instanceof Error ? error.message : error);
     return buildRuleBasedMedicalExamResult(digest);
   }
 }
@@ -605,6 +750,8 @@ export async function getGeneticInsights(
       documentType: "genetic",
       hasData: false,
       summary: "尚未上传基因检测报告，无法生成洞察分析。",
+      summaryHeadline: "尚未上传基因检测报告",
+      summaryHighlights: ["支持图片、PDF 与结构化文件", "上传后会生成长期背景洞察", "未知 trait 也会保留，不会直接丢弃"],
       urgentItems: [],
       attentionItems: [],
       positiveItems: [],
@@ -616,15 +763,27 @@ export async function getGeneticInsights(
     };
   }
 
+  // Check cache
+  const cacheKey = `genetic:${userId}`;
+  const cached = getCachedInsight(cacheKey);
+  if (cached) return cached;
+
   const prompt = buildGeneticPrompt(findings);
   try {
-    const llmResult = await callLLMWithFallbacks(prompt);
+    console.log(`[Insight] Starting LLM call for genetic (user=${userId})`);
+    const startTime = Date.now();
+    const llmResult = await callLLMWithFallbacks(prompt, { timeoutMs: 45_000 });
+    console.log(`[Insight] LLM responded in ${Date.now() - startTime}ms via ${llmResult.provider}/${llmResult.model}, text length=${llmResult.text.length}`);
     const parsed = parseLLMResponse(llmResult.text);
-    if (!parsed) throw new Error("unparseable");
-    return {
+    if (!parsed) {
+      console.error(`[Insight] Failed to parse genetic LLM response. First 500 chars: ${llmResult.text.slice(0, 500)}`);
+      throw new Error("unparseable");
+    }
+    const result: DocumentInsightResult = {
       documentType: "genetic",
       hasData: true,
       summary: parsed.summary,
+      summaryHeadline: parsed.summaryHeadline ?? deriveSummaryHeadline(parsed.summary, "genetic"),
       urgentItems: buildInsightItems(parsed.urgentItems),
       attentionItems: buildInsightItems(parsed.attentionItems),
       positiveItems: buildInsightItems(parsed.positiveItems),
@@ -634,6 +793,14 @@ export async function getGeneticInsights(
       disclaimer: "基因检测结果仅反映遗传倾向，不等于疾病诊断。环境、生活方式等因素同样重要。如有疑问，请咨询遗传咨询师或医疗专业人员。",
       generatedAt: new Date().toISOString()
     };
+    result.summaryHighlights = parsed.summaryHighlights ?? deriveSummaryHighlights(
+      result.summary,
+      result.urgentItems,
+      result.attentionItems,
+      result.positiveItems
+    );
+    setCachedInsight(cacheKey, result);
+    return result;
   } catch {
     return buildRuleBasedGeneticResult(findings);
   }

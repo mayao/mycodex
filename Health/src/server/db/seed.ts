@@ -43,10 +43,10 @@ export function seedDatabase(database: DatabaseSync): void {
   `);
   const insertGeneticFinding = database.prepare(`
     INSERT INTO genetic_findings (
-      id, source_id, gene_symbol, variant_id, trait_code, risk_level,
+      id, user_id, source_id, gene_symbol, variant_id, trait_code, risk_level,
       evidence_level, summary, suggestion, recorded_at, raw_payload_json
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertMeta = database.prepare(`
     INSERT INTO app_meta (key, value)
@@ -141,6 +141,7 @@ export function seedDatabase(database: DatabaseSync): void {
     for (const finding of geneticFindings) {
       insertGeneticFinding.run(
         finding.id,
+        "user-self",
         finding.sourceId,
         finding.geneSymbol,
         finding.variantId,

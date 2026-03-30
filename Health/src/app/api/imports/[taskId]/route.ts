@@ -2,8 +2,10 @@ import { getAuthenticatedUserId, AuthError } from "../../../../server/http/auth-
 import { jsonOk, jsonSafeError } from "../../../../server/http/safe-response";
 import { getDatabase } from "../../../../server/db/sqlite";
 import { getImportTaskRow, taskRowDisplayTitle } from "../../../../server/importers/import-task-support";
+import { buildImportTaskCompletionPreview } from "../../../../server/importers/import-task-presentation";
 
 function serializeTask(task: NonNullable<ReturnType<typeof getImportTaskRow>>) {
+  const database = getDatabase();
   return {
     importTaskId: task.importTaskId,
     title: taskRowDisplayTitle(task),
@@ -17,7 +19,8 @@ function serializeTask(task: NonNullable<ReturnType<typeof getImportTaskRow>>) {
     totalRecords: task.totalRecords,
     successRecords: task.successRecords,
     failedRecords: task.failedRecords,
-    parseMode: task.parseMode
+    parseMode: task.parseMode,
+    completionPreview: buildImportTaskCompletionPreview(database, task)
   };
 }
 

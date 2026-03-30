@@ -17,6 +17,7 @@ const envSchema = z.object({
   HEALTH_LOG_LEVEL: z.enum(["silent", "error", "info"]).default("error"),
   HEALTH_AUTH_ENABLED: booleanFlagSchema,
   HEALTH_JWT_SECRET: z.string().min(16).optional().or(z.literal("").transform(() => undefined)),
+  HEALTH_APPLE_CLIENT_ID: z.string().optional().or(z.literal("").transform(() => undefined)),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

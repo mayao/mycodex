@@ -1,5 +1,6 @@
 import { NON_DIAGNOSTIC_DISCLAIMER } from "../../data/mock/seed-data";
 import { getAppEnv } from "../config/env";
+import { getProviderPriority } from "../services/llm-provider-routing";
 import type {
   HealthSummaryGenerationResult,
   HealthSummaryPeriod,
@@ -111,7 +112,7 @@ function isDocumentInsight(insight: StructuredInsight): boolean {
   return insight.id.startsWith("doc::");
 }
 
-function buildFallbackSummary(
+export function buildFallbackSummary(
   input: HealthSummarySourceInput
 ): HealthSummarySectionedOutput {
   const limit = periodLimit(input.period.kind);
@@ -230,8 +231,9 @@ export function buildHealthSummarySourceInput(
 
 export function resolveHealthSummaryProvider(): HealthSummaryProvider {
   const env = getAppEnv();
+  const providerPriority = getProviderPriority(env);
 
-  if (env.HEALTH_LLM_PROVIDER === "anthropic" && env.HEALTH_LLM_API_KEY) {
+  if (providerPriority.includes("anthropic") && env.HEALTH_LLM_API_KEY) {
     return new AnthropicHealthSummaryProvider({
       apiKey: env.HEALTH_LLM_API_KEY,
       model: env.HEALTH_LLM_MODEL ?? "claude-opus-4-6"
@@ -239,7 +241,7 @@ export function resolveHealthSummaryProvider(): HealthSummaryProvider {
   }
 
   if (
-    env.HEALTH_LLM_PROVIDER === "openai-compatible" &&
+    providerPriority.includes("openai_compatible") &&
     env.HEALTH_LLM_API_KEY &&
     env.HEALTH_LLM_BASE_URL
   ) {

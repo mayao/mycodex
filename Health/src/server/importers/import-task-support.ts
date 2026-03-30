@@ -138,7 +138,7 @@ export function ensureDataSource(
   userId: string,
   config: DataSourceConfig
 ): string {
-  const sourceId = `data-source::${config.sourceType}`;
+  const sourceId = `data-source::${userId}::${config.sourceType}`;
 
   database
     .prepare(
@@ -379,7 +379,9 @@ function importerKeyFromRow(row: ImportTaskQueryRow): ImportRequest["importerKey
     importerKey === "annual_exam" ||
     importerKey === "blood_test" ||
     importerKey === "body_scale" ||
-    importerKey === "activity"
+    importerKey === "activity" ||
+    importerKey === "genetic" ||
+    importerKey === "diet"
   ) {
     return importerKey;
   }
@@ -393,6 +395,10 @@ function importerKeyFromRow(row: ImportTaskQueryRow): ImportRequest["importerKey
       return "body_scale";
     case "activity_import":
       return "activity";
+    case "genetic_import":
+      return "genetic";
+    case "diet_import":
+      return "diet";
     default:
       return undefined;
   }
@@ -531,6 +537,10 @@ export function taskRowDisplayTitle(task: ImportTaskRow): string {
       return "体脂秤导入";
     case "activity_import":
       return "运动数据导入";
+    case "genetic_import":
+      return "基因报告导入";
+    case "diet_import":
+      return "饮食健康导入";
     case "document_import":
       return "文档识别导入";
     case "healthkit_sync":

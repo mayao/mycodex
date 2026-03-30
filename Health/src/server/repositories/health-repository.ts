@@ -36,6 +36,11 @@ const coverageMeta: Record<
     status: "ready",
     detail: "当前保存卧床和睡眠分钟，后续可扩展睡眠阶段与 HRV。"
   },
+  diet_daily: {
+    label: "饮食记录",
+    status: "ready",
+    detail: "当前仅保留每日热量汇总与记录次数，用于趋势反馈和记录覆盖分析。"
+  },
   genetic_panel: {
     label: "基因检测",
     status: "demo",
@@ -217,15 +222,14 @@ export function getCoverageSummary(database: DatabaseSync, userId?: string): Cov
     ...coverageMeta[row.kind]
   }));
 
-  // genetic_findings doesn't have user_id currently, include for all
   const geneRow = database
     .prepare(
       `
       SELECT COUNT(*) AS count, MAX(recorded_at) AS latestRecordedAt
-      FROM genetic_findings
+      FROM genetic_findings${userFilter}
     `
     )
-    .get() as { count: number; latestRecordedAt: string | null };
+    .get(...params) as { count: number; latestRecordedAt: string | null };
 
   measurementItems.push({
     kind: "genetic_panel",
@@ -240,6 +244,7 @@ export function getCoverageSummary(database: DatabaseSync, userId?: string): Cov
     "body_composition",
     "activity_daily",
     "sleep_daily",
+    "diet_daily",
     "genetic_panel"
   ];
 

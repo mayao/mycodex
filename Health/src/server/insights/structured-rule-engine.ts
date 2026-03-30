@@ -48,7 +48,8 @@ const thresholdOverrides: Record<string, number> = {
   "activity.exercise_minutes": 15,
   "activity.distance_km": 0.5,
   "activity.active_kcal": 60,
-  "activity.steps": 1500
+  "activity.steps": 1500,
+  "diet.calories_intake_kcal": 120
 };
 
 const thresholdByUnit: Record<string, number> = {
@@ -469,7 +470,8 @@ function buildTrendInsights(
     "body.body_fat_pct",
     "lipid.ldl_c",
     "lipid.triglycerides",
-    "activity.exercise_minutes"
+    "activity.exercise_minutes",
+    "diet.calories_intake_kcal"
   ];
 
   for (const metricCode of interestingMetrics) {
@@ -535,12 +537,16 @@ function buildCorrelationInsights(
   const bodyFatPoints = histories["body.body_fat_pct"] ?? [];
   const exercisePoints = histories["activity.exercise_minutes"] ?? [];
   const weightPoints = histories["body.weight"] ?? [];
+  const dietPoints = histories["diet.calories_intake_kcal"] ?? [];
+  const mealUploadPoints = histories["diet.meal_upload_count"] ?? [];
 
   const bodyFatSummary = summaries["body.body_fat_pct"];
   const exerciseSummary = summaries["activity.exercise_minutes"];
   const weightSummary = summaries["body.weight"];
   const ldlSummary = summaries["lipid.ldl_c"];
   const tgSummary = summaries["lipid.triglycerides"];
+  const dietSummary = summaries["diet.calories_intake_kcal"];
+  const mealUploadSummary = summaries["diet.meal_upload_count"];
 
   if (bodyFatPoints.length >= 2 && exercisePoints.length >= 3 && bodyFatSummary && exerciseSummary) {
     const latestBodyFat = bodyFatPoints.at(-1)!;
@@ -680,6 +686,78 @@ function buildCorrelationInsights(
         },
         possible_reason: "训练频率下降和体重回升同步出现，可能说明当前活动量难以覆盖近期摄入或恢复状态变化。",
         suggested_action: "优先恢复稳定训练频率，并结合体脂率一起确认体重回升来自脂肪还是短期波动。",
+        disclaimer: NON_DIAGNOSTIC_DISCLAIMER
+      });
+    }
+  }
+
+  if (dietPoints.length >= 3 && dietSummary) {
+    const latestDiet = dietPoints.at(-1)!;
+    const recentDietAverage = averageInWindow(dietPoints, latestDiet.timestamp, 7);
+    const previousDietAverage = averageInWindow(
+      dietPoints,
+      latestDiet.timestamp - 7 * 24 * 60 * 60 * 1000,
+      7
+    );
+
+    if (
+      typeof recentDietAverage === "number" &&
+      typeof previousDietAverage === "number" &&
+      weightPoints.length >= 2 &&
+      weightSummary
+    ) {
+      const dietDelta = recentDietAverage - previousDietAverage;
+      const weightDelta = weightPoints.at(-1)!.value - weightPoints.at(-2)!.value;
+
+      if (dietDelta >= 150 && weightDelta >= 0.4) {
+        pushInsight(insights, {
+          id: "correlation-diet-up-weight-up",
+          kind: "correlation",
+          title: "近期热量上行且体重同步上行",
+          severity: "medium",
+          evidence: {
+            summary: `近 7 天平均热量较前一窗口上升 ${round(dietDelta, 0)} kcal，同时体重较上次增加 ${round(weightDelta, 2)} kg。`,
+            metrics: [buildEvidenceMetric(dietSummary), buildEvidenceMetric(weightSummary)]
+          },
+          possible_reason: "近期摄入增加与体重回升同步出现，说明这更像连续趋势而不是单日波动。",
+          suggested_action: "优先确认饮食记录连续性，并把未来 1-2 周的热量趋势与体重变化放在一起看。",
+          disclaimer: NON_DIAGNOSTIC_DISCLAIMER
+        });
+      }
+
+      if (dietDelta <= -150 && weightDelta <= -0.4) {
+        pushInsight(insights, {
+          id: "correlation-diet-down-weight-down",
+          kind: "correlation",
+          title: "热量回落并伴随体重改善",
+          severity: "positive",
+          evidence: {
+            summary: `近 7 天平均热量较前一窗口下降 ${round(Math.abs(dietDelta), 0)} kcal，同时体重较上次下降 ${round(Math.abs(weightDelta), 2)} kg。`,
+            metrics: [buildEvidenceMetric(dietSummary), buildEvidenceMetric(weightSummary)]
+          },
+          possible_reason: "饮食侧与体重变化方向一致，当前记录已能支撑趋势反馈。",
+          suggested_action: "继续保持当前记录方式，确认这种联动是否能稳定持续，而不是只看单周变化。",
+          disclaimer: NON_DIAGNOSTIC_DISCLAIMER
+        });
+      }
+    }
+  }
+
+  if (mealUploadPoints.length > 0 && mealUploadSummary) {
+    const recentCoverage = averageInWindow(mealUploadPoints, mealUploadPoints.at(-1)!.timestamp, 7);
+
+    if (typeof recentCoverage === "number" && recentCoverage < 1) {
+      pushInsight(insights, {
+        id: "correlation-diet-coverage-low",
+        kind: "correlation",
+        title: "热量记录覆盖不足",
+        severity: "low",
+        evidence: {
+          summary: `近 7 天日均饮食记录次数约为 ${round(recentCoverage, 1)}，当前连续性不足以支持稳定趋势判断。`,
+          metrics: [buildEvidenceMetric(mealUploadSummary)]
+        },
+        possible_reason: "饮食记录天数偏少时，热量趋势更容易受到单次上传影响。",
+        suggested_action: "先连续上传 3-7 天饮食照片，把记录覆盖率建立起来，再解读热量变化。",
         disclaimer: NON_DIAGNOSTIC_DISCLAIMER
       });
     }

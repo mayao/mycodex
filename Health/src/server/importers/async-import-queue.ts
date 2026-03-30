@@ -9,10 +9,14 @@ import {
   makeTaskNoteEntries,
   markImportTaskFailed
 } from "./import-task-support";
+import { importDietData } from "./diet-importer";
 import { importDocumentHealthData } from "./document-importer";
+import { importGeneticData } from "./genetic-importer";
 import { importHealthData } from "./import-service";
 import { importerSpecs } from "./specs";
 import type { ImporterKey } from "./types";
+import { invalidateInsightCache } from "../services/document-insight-ai-service";
+import { deleteReportSnapshotsForUser } from "../repositories/unified-health-repository";
 
 interface QueueImportJobInput {
   database: DatabaseSync;
@@ -38,7 +42,26 @@ function isDocumentLike(sourceFileName: string, mimeType?: string): boolean {
 
 async function runQueuedImport(job: QueueImportJobInput & { importTaskId: string; dataSourceId: string; taskNotes?: string }) {
   try {
-    if (isDocumentLike(job.sourceFileName, job.mimeType)) {
+    if (job.importerKey === "genetic") {
+      await importGeneticData(job.database, {
+        userId: job.userId,
+        filePath: job.filePath,
+        importTaskId: job.importTaskId,
+        dataSourceId: job.dataSourceId,
+        sourceFileName: job.sourceFileName,
+        taskNotes: job.taskNotes,
+        extractedText: job.extractedText ?? ""
+      });
+    } else if (job.importerKey === "diet") {
+      await importDietData(job.database, {
+        userId: job.userId,
+        filePath: job.filePath,
+        importTaskId: job.importTaskId,
+        dataSourceId: job.dataSourceId,
+        sourceFileName: job.sourceFileName,
+        taskNotes: job.taskNotes
+      });
+    } else if (isDocumentLike(job.sourceFileName, job.mimeType)) {
       await importDocumentHealthData(job.database, {
         importerKey: job.importerKey,
         userId: job.userId,
@@ -60,7 +83,17 @@ async function runQueuedImport(job: QueueImportJobInput & { importTaskId: string
         taskNotes: job.taskNotes
       });
     }
+    // Invalidate insight cache after successful import
+    const cacheType = job.importerKey === "annual_exam" || job.importerKey === "blood_test"
+      ? "medical_exam" as const
+      : job.importerKey === "genetic" ? "genetic" as const : undefined;
+    invalidateInsightCache(job.userId, cacheType);
+    deleteReportSnapshotsForUser(job.database, job.userId);
   } catch (error) {
+    console.error(
+      `[ImportQueue] ${job.importerKey} import failed for ${job.sourceFileName}:`,
+      error instanceof Error ? error.stack ?? error.message : error
+    );
     markImportTaskFailed(
       job.database,
       job.importTaskId,
@@ -73,6 +106,14 @@ async function runQueuedImport(job: QueueImportJobInput & { importTaskId: string
 
 export function enqueueImportJob(input: QueueImportJobInput) {
   const spec = importerSpecs[input.importerKey];
+  const usesSpecialTaskType = input.importerKey === "genetic" || input.importerKey === "diet";
+  const parseMode = input.importerKey === "diet"
+    ? "vision"
+    : input.importerKey === "genetic"
+      ? "genetic"
+      : isDocumentLike(input.sourceFileName, input.mimeType)
+        ? "document"
+        : "tabular";
   const dataSourceId = ensureDataSource(input.database, input.userId, {
     sourceType: spec.sourceType,
     sourceName: spec.sourceName,
@@ -82,7 +123,7 @@ export function enqueueImportJob(input: QueueImportJobInput) {
   });
   const taskNotes = makeTaskNoteEntries([
     ["importer_key", input.importerKey],
-    ["parse_mode", isDocumentLike(input.sourceFileName, input.mimeType) ? "document" : "tabular"],
+    ["parse_mode", parseMode],
     ["mime_type", input.mimeType]
   ]);
   const importTaskId = createImportTask(
@@ -90,7 +131,11 @@ export function enqueueImportJob(input: QueueImportJobInput) {
     { userId: input.userId },
     {
       dataSourceId,
-      taskType: isDocumentLike(input.sourceFileName, input.mimeType) ? "document_import" : spec.taskType,
+      taskType: usesSpecialTaskType
+        ? spec.taskType
+        : isDocumentLike(input.sourceFileName, input.mimeType)
+          ? "document_import"
+          : spec.taskType,
       sourceType: spec.sourceType,
       sourceFile: input.sourceFileName,
       notes: taskNotes

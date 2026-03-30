@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 
 import { getAppEnv } from "../config/env";
 import { getDatabase } from "../db/sqlite";
+import { getKimiOpenAIHeaders } from "./llm-provider-routing";
 import {
   buildHealthPlanSystemPrompt,
   buildHealthPlanUserPrompt,
@@ -188,7 +189,7 @@ async function callLLMForSuggestions(
 
   if (!apiKey) {
     // Return mock suggestions when no API key
-    return getMockSuggestions();
+    return getMockSuggestions(metrics);
   }
 
   if (provider === "anthropic") {
@@ -232,7 +233,8 @@ async function callLLMForSuggestions(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
+      Authorization: `Bearer ${apiKey}`,
+      ...(getKimiOpenAIHeaders(apiKey) ?? {})
     },
     body: JSON.stringify({
       model,
@@ -287,16 +289,25 @@ function parseLLMSuggestions(rawContent: string): HealthPlanSuggestionOutput {
   return healthPlanSuggestionSchema.parse(parsed);
 }
 
-function getMockSuggestions(): HealthPlanSuggestionOutput {
+function getMockSuggestions(metrics: MetricSummaryRow[] = []): HealthPlanSuggestionOutput {
+  const byCode = Object.fromEntries(metrics.map((metric) => [metric.metric_code, metric])) as Record<string, MetricSummaryRow | undefined>;
+  const dietMetric = byCode["diet.calories_intake_kcal"];
+  const dietCoverageMetric = byCode["diet.meal_upload_count"];
+  const weightMetric = byCode["body.weight"];
+  const sleepMetric = byCode["sleep.asleep_minutes"];
+  const exerciseMetric = byCode["activity.exercise_minutes"];
+  const hasDietData = Boolean(dietMetric && dietMetric.count > 0);
+  const hasLowDietCoverage = !dietCoverageMetric || (dietCoverageMetric.avg_value ?? 0) < 1;
+
   return {
     suggestions: [
       {
         dimension: "exercise",
         title: "每日步行 8000 步",
         description: "根据您最近的活动数据，建议将每日步数目标设为 8000 步。可以通过午餐后散步 20 分钟和晚饭后散步 15 分钟来达成。规律步行有助于改善心血管健康和体重管理。",
-        target_metric_code: "steps",
+        target_metric_code: "activity.steps",
         target_value: 8000,
-        target_unit: "steps",
+        target_unit: "count",
         frequency: "daily",
         time_hint: "morning",
         priority: 3
@@ -305,34 +316,36 @@ function getMockSuggestions(): HealthPlanSuggestionOutput {
         dimension: "exercise",
         title: "每周 3 次 30 分钟中等强度运动",
         description: "建议每周安排至少 3 次 30 分钟的中等强度运动（如快走、游泳、骑车），以提升活动消耗和心肺功能。",
-        target_metric_code: "exercise_minutes",
+        target_metric_code: "activity.exercise_minutes",
         target_value: 30,
-        target_unit: "minutes",
+        target_unit: "min",
         frequency: "weekly",
         time_hint: "18:00",
-        priority: 4
+        priority: exerciseMetric?.latest_value != null && exerciseMetric.latest_value < 30 ? 4 : 3
       },
       {
         dimension: "sleep",
         title: "保证每晚 7-8 小时睡眠",
         description: "充足的睡眠对身体恢复和代谢至关重要。建议在 23:00 前入睡，保证 7-8 小时的睡眠时间。",
-        target_metric_code: "sleep_minutes",
+        target_metric_code: "sleep.asleep_minutes",
         target_value: 420,
-        target_unit: "minutes",
+        target_unit: "min",
         frequency: "daily",
         time_hint: "22:30",
-        priority: 4
+        priority: sleepMetric?.latest_value != null && sleepMetric.latest_value < 420 ? 4 : 3
       },
       {
         dimension: "diet",
-        title: "每日饮水 2000ml",
-        description: "充足的水分摄入有助于新陈代谢和身体各项机能。建议每天饮水不少于 2000ml，可以在早起、餐前和运动后各补充一杯。",
-        target_metric_code: null,
-        target_value: null,
-        target_unit: null,
+        title: hasDietData ? "连续记录饮食热量 7 天" : "先连续上传 3-7 天饮食照片",
+        description: hasDietData
+          ? `目前已有饮食热量记录${dietMetric?.latest_value != null ? `，最近值约 ${Math.round(dietMetric.latest_value)} kcal` : ""}${weightMetric?.latest_value != null ? `，可与当前体重 ${weightMetric.latest_value} ${weightMetric.unit} 一起看趋势` : ""}。接下来优先保证每天都有饮食照片，让热量趋势先稳定下来。`
+          : "当前还缺少连续饮食记录。建议先连续 3-7 天上传每次进食照片，建立最基本的热量趋势和记录覆盖，再决定是否需要更细化调整。",
+        target_metric_code: hasDietData ? "diet.meal_upload_count" : null,
+        target_value: hasDietData ? 1 : null,
+        target_unit: hasDietData ? "count" : null,
         frequency: "daily",
-        time_hint: "07:00",
-        priority: 2
+        time_hint: "evening",
+        priority: hasLowDietCoverage ? 5 : 3
       },
       {
         dimension: "checkup",

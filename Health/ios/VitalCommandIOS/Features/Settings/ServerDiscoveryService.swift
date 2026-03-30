@@ -31,6 +31,7 @@ final class ServerDiscoveryService: ObservableObject {
         guard !isScanning else { return }
         isScanning = true
         listenForBroadcasts()
+        Task { await scanKnownServers() }
     }
 
     func stopScanning() {
@@ -119,32 +120,66 @@ final class ServerDiscoveryService: ObservableObject {
         discoveredServers.removeAll { !$0.isRecentlyActive && Date().timeIntervalSince($0.lastSeen) > 30 }
     }
 
-    /// Fallback: scan common ports on the local subnet
+    /// Fallback: scan common ports on the local subnet (batched to limit concurrency)
     func scanSubnet() async {
+        await scanKnownServers()
+
         guard let ip = getWiFiAddress() else { return }
         let parts = ip.split(separator: ".")
         guard parts.count == 4 else { return }
         let subnet = parts[0...2].joined(separator: ".")
+        let allIPs = (1...254).map { "\(subnet).\($0)" }
+        let batchSize = 20
 
-        await withTaskGroup(of: DiscoveredServer?.self) { group in
-            for i in 1...254 {
-                let targetIP = "\(subnet).\(i)"
-                group.addTask {
-                    await self.probeServer(ip: targetIP, port: 3000)
+        for batchStart in stride(from: 0, to: allIPs.count, by: batchSize) {
+            let batch = Array(allIPs[batchStart..<min(batchStart + batchSize, allIPs.count)])
+            await withTaskGroup(of: DiscoveredServer?.self) { group in
+                for targetIP in batch {
+                    group.addTask {
+                        await self.probeServer(ip: targetIP, port: 3000)
+                    }
+                }
+                for await result in group {
+                    if let server = result {
+                        addOrUpdateServer(from: BroadcastMessage(
+                            service: server.service,
+                            name: server.name,
+                            ip: server.ip,
+                            port: server.port,
+                            version: server.version,
+                            serverId: server.serverId
+                        ))
+                    }
                 }
             }
+        }
+    }
 
-            for await result in group {
-                if let server = result {
-                    addOrUpdateServer(from: BroadcastMessage(
-                        service: server.service,
-                        name: server.name,
-                        ip: server.ip,
-                        port: server.port,
-                        version: server.version,
-                        serverId: server.serverId
-                    ))
-                }
+    private func scanKnownServers() async {
+        let knownURLs = Set([
+            AppSettingsStore.currentRemoteServerURL,
+            AppSettingsStore.defaultLANServerURL
+        ])
+
+        for urlString in knownURLs {
+            guard
+                let url = URL(string: urlString),
+                let host = url.host
+            else {
+                continue
+            }
+
+            let port = url.port ?? (url.scheme == "https" ? 443 : 80)
+
+            if let server = await probeServer(ip: host, port: port) {
+                addOrUpdateServer(from: BroadcastMessage(
+                    service: server.service,
+                    name: server.name,
+                    ip: server.ip,
+                    port: server.port,
+                    version: server.version,
+                    serverId: server.serverId
+                ))
             }
         }
     }
