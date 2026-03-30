@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import tempfile
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -15,6 +18,7 @@ except ModuleNotFoundError:
 
 BASE_DIR = Path(__file__).resolve().parent
 AUTH_STORE_PATH = BASE_DIR / "user_store.json"
+AUTH_STORE_LOCK = threading.RLock()
 PHONE_CODE_TTL_SECONDS = 5 * 60
 SESSION_TTL_DAYS = 30
 MOCK_PHONE_NUMBER = "13800138000"
@@ -122,10 +126,21 @@ def _load_store() -> dict[str, Any]:
 
 
 def _write_store(payload: dict[str, Any]) -> None:
-    AUTH_STORE_PATH.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2),
+    AUTH_STORE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2)
+    with tempfile.NamedTemporaryFile(
+        mode="w",
         encoding="utf-8",
-    )
+        dir=AUTH_STORE_PATH.parent,
+        prefix=f"{AUTH_STORE_PATH.name}.",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(serialized)
+        handle.flush()
+        os.fsync(handle.fileno())
+        temp_path = Path(handle.name)
+    os.replace(temp_path, AUTH_STORE_PATH)
 
 
 def _ensure_owner_user(payload: dict[str, Any]) -> None:
@@ -173,6 +188,13 @@ def _sanitize_device_name(device_name: str | None) -> str:
     return cleaned or "MyInvAI iPhone"
 
 
+def _sanitize_apple_user_identifier(user_identifier: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9._-]+", "", user_identifier or "").strip()
+    if len(cleaned) < 8:
+        raise ValueError("Apple 身份标识无效，请重新使用系统授权登录。")
+    return cleaned
+
+
 def _make_device_password() -> str:
     return f"MIA-{uuid4().hex[:10].upper()}"
 
@@ -216,6 +238,16 @@ def _find_user_by_device_id(payload: dict[str, Any], device_id: str) -> dict[str
             continue
         linked_ids = user.get("linked_device_ids") or []
         if isinstance(linked_ids, list) and normalized in linked_ids:
+            return user
+    return None
+
+
+def _find_user_by_apple_identifier(payload: dict[str, Any], user_identifier: str) -> dict[str, Any] | None:
+    normalized = _sanitize_apple_user_identifier(user_identifier)
+    for user in payload.get("users", []):
+        if not isinstance(user, dict):
+            continue
+        if user.get("apple_user_identifier") == normalized:
             return user
     return None
 
@@ -282,171 +314,223 @@ def _serialize_device_credentials(
 
 
 def create_or_login_device_session(device_id: str, device_name: str | None = None) -> dict[str, Any]:
-    payload = _load_store()
-    _clean_expired(payload)
-    normalized_device_id = _sanitize_device_id(device_id)
-    resolved_device_name = _sanitize_device_name(device_name)
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
+        normalized_device_id = _sanitize_device_id(device_id)
+        resolved_device_name = _sanitize_device_name(device_name)
 
-    existing_user = _find_user_by_device_id(payload, normalized_device_id)
-    if existing_user is not None:
-        existing_user["last_login_at"] = _now_iso()
-        existing_user["device_name"] = resolved_device_name
-        existing_user.setdefault("portfolio_user_id", OWNER_USER_ID)
-        session = _issue_session(payload, existing_user["user_id"])
+        existing_user = _find_user_by_device_id(payload, normalized_device_id)
+        if existing_user is not None:
+            existing_user["last_login_at"] = _now_iso()
+            existing_user["device_name"] = resolved_device_name
+            existing_user.setdefault("portfolio_user_id", OWNER_USER_ID)
+            session = _issue_session(payload, existing_user["user_id"])
+            _write_store(payload)
+            return {
+                "session_token": session["token"],
+                "user": serialize_user(existing_user),
+                "message": "已识别当前设备，正在同步你的个人投资数据。",
+                "device_credentials": _serialize_device_credentials(
+                    existing_user,
+                    device_name=resolved_device_name,
+                    default_password=None,
+                    is_new_device=False,
+                ),
+            }
+
+        user = {
+            "user_id": f"usr_dev_{uuid4().hex[:10]}",
+            "display_name": f"{resolved_device_name} 的账户",
+            "phone_number": None,
+            "auth_provider": "device",
+            "is_owner": False,
+            "created_at": _now_iso(),
+            "last_login_at": _now_iso(),
+            "linked_device_ids": [normalized_device_id],
+            "device_name": resolved_device_name,
+            "device_password": _make_device_password(),
+            "portfolio_user_id": OWNER_USER_ID,
+        }
+        payload.setdefault("users", []).append(user)
+        session = _issue_session(payload, user["user_id"])
         _write_store(payload)
         return {
             "session_token": session["token"],
-            "user": serialize_user(existing_user),
-            "message": "已识别当前设备，正在同步你的个人投资数据。",
+            "user": serialize_user(user),
+            "message": "已为当前设备启用安全登录，组合数据已连接到你的个人账户。",
             "device_credentials": _serialize_device_credentials(
-                existing_user,
+                user,
                 device_name=resolved_device_name,
-                default_password=None,
-                is_new_device=False,
+                default_password=user["device_password"],
+                is_new_device=True,
             ),
         }
 
-    user = {
-        "user_id": f"usr_dev_{uuid4().hex[:10]}",
-        "display_name": f"{resolved_device_name} 的账户",
-        "phone_number": None,
-        "auth_provider": "device",
-        "is_owner": False,
-        "created_at": _now_iso(),
-        "last_login_at": _now_iso(),
-        "linked_device_ids": [normalized_device_id],
-        "device_name": resolved_device_name,
-        "device_password": _make_device_password(),
-        "portfolio_user_id": OWNER_USER_ID,
-    }
-    payload.setdefault("users", []).append(user)
-    session = _issue_session(payload, user["user_id"])
-    _write_store(payload)
-    return {
-        "session_token": session["token"],
-        "user": serialize_user(user),
-        "message": "已为当前设备启用安全登录，组合数据已连接到你的个人账户。",
-        "device_credentials": _serialize_device_credentials(
-            user,
-            device_name=resolved_device_name,
-            default_password=user["device_password"],
-            is_new_device=True,
-        ),
-    }
-
 
 def request_phone_code(phone_number: str) -> dict[str, Any]:
-    payload = _load_store()
-    _clean_expired(payload)
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
 
-    normalized = _sanitize_phone(phone_number)
-    payload["pending_codes"] = [
-        row
-        for row in payload.get("pending_codes", [])
-        if row.get("phone_number") != normalized
-    ]
-    code = MOCK_VERIFICATION_CODE if normalized == MOCK_PHONE_NUMBER else f"{uuid4().int % 1000000:06d}"
-    payload["pending_codes"].append(
-        {
-            "phone_number": normalized,
-            "code": code,
-            "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=PHONE_CODE_TTL_SECONDS)).isoformat(),
-            "created_at": _now_iso(),
+        normalized = _sanitize_phone(phone_number)
+        payload["pending_codes"] = [
+            row
+            for row in payload.get("pending_codes", [])
+            if row.get("phone_number") != normalized
+        ]
+        code = MOCK_VERIFICATION_CODE if normalized == MOCK_PHONE_NUMBER else f"{uuid4().int % 1000000:06d}"
+        payload["pending_codes"].append(
+            {
+                "phone_number": normalized,
+                "code": code,
+                "expires_at": (datetime.now(timezone.utc) + timedelta(seconds=PHONE_CODE_TTL_SECONDS)).isoformat(),
+                "created_at": _now_iso(),
+            }
+        )
+        _write_store(payload)
+        return {
+            "message": (
+                f"验证码已生成，开发模式下请直接输入 {code}"
+                + ("；当前 mock 手机号可直接用这个固定验证码登录。" if normalized == MOCK_PHONE_NUMBER else "")
+            ),
+            "expires_in_seconds": PHONE_CODE_TTL_SECONDS,
+            "debug_code": code,
         }
-    )
-    _write_store(payload)
-    return {
-        "message": (
-            f"验证码已生成，开发模式下请直接输入 {code}"
-            + ("；当前 mock 手机号可直接用这个固定验证码登录。" if normalized == MOCK_PHONE_NUMBER else "")
-        ),
-        "expires_in_seconds": PHONE_CODE_TTL_SECONDS,
-        "debug_code": code,
-    }
 
 
 def create_session_for_phone(phone_number: str, code: str) -> dict[str, Any]:
-    payload = _load_store()
-    _clean_expired(payload)
-    normalized = _sanitize_phone(phone_number)
-    entered_code = str(code).strip()
-    if normalized == MOCK_PHONE_NUMBER and entered_code == MOCK_VERIFICATION_CODE:
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
+        normalized = _sanitize_phone(phone_number)
+        entered_code = str(code).strip()
+        if normalized == MOCK_PHONE_NUMBER and entered_code == MOCK_VERIFICATION_CODE:
+            user = _upsert_user(
+                payload,
+                phone_number=normalized,
+                display_name="Mock 用户 8000",
+                auth_provider="phone",
+            )
+            session = _issue_session(payload, user["user_id"])
+            _write_store(payload)
+            return {
+                "session_token": session["token"],
+                "user": serialize_user(user),
+                "message": "已使用 mock 手机号和固定验证码直接登录。",
+            }
+
+        matched = next(
+            (
+                row
+                for row in payload.get("pending_codes", [])
+                if row.get("phone_number") == normalized and row.get("code") == entered_code
+            ),
+            None,
+        )
+        if matched is None:
+            raise ValueError("验证码无效或已过期。")
+
         user = _upsert_user(
             payload,
             phone_number=normalized,
-            display_name="Mock 用户 8000",
+            display_name=f"用户 {normalized[-4:]}",
             auth_provider="phone",
+        )
+        payload["pending_codes"] = [
+            row
+            for row in payload.get("pending_codes", [])
+            if not (row.get("phone_number") == normalized and row.get("code") == entered_code)
+        ]
+        session = _issue_session(payload, user["user_id"])
+        _write_store(payload)
+        return {
+            "session_token": session["token"],
+            "user": serialize_user(user),
+            "message": "手机号登录成功。",
+        }
+
+
+def create_wechat_dev_session(display_name: str | None = None) -> dict[str, Any]:
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
+        nickname = (display_name or "").strip() or f"微信用户{uuid4().hex[:4].upper()}"
+        user = _upsert_user(
+            payload,
+            phone_number=None,
+            display_name=nickname,
+            auth_provider="wechat",
         )
         session = _issue_session(payload, user["user_id"])
         _write_store(payload)
         return {
             "session_token": session["token"],
             "user": serialize_user(user),
-            "message": "已使用 mock 手机号和固定验证码直接登录。",
+            "message": "当前服务未配置真实微信开放平台参数，已使用开发模式模拟微信授权。",
         }
 
-    matched = next(
-        (
-            row
-            for row in payload.get("pending_codes", [])
-            if row.get("phone_number") == normalized and row.get("code") == entered_code
-        ),
-        None,
-    )
-    if matched is None:
-        raise ValueError("验证码无效或已过期。")
 
-    user = _upsert_user(
-        payload,
-        phone_number=normalized,
-        display_name=f"用户 {normalized[-4:]}",
-        auth_provider="phone",
-    )
-    payload["pending_codes"] = [
-        row
-        for row in payload.get("pending_codes", [])
-        if not (row.get("phone_number") == normalized and row.get("code") == entered_code)
-    ]
-    session = _issue_session(payload, user["user_id"])
-    _write_store(payload)
-    return {
-        "session_token": session["token"],
-        "user": serialize_user(user),
-        "message": "手机号登录成功。",
-    }
+def create_or_login_apple_session(
+    user_identifier: str,
+    display_name: str | None = None,
+    email_address: str | None = None,
+) -> dict[str, Any]:
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
+        normalized_identifier = _sanitize_apple_user_identifier(user_identifier)
+        resolved_name = (display_name or "").strip() or f"Apple 用户 {normalized_identifier[-4:]}"
 
+        existing_user = _find_user_by_apple_identifier(payload, normalized_identifier)
+        if existing_user is not None:
+            existing_user["last_login_at"] = _now_iso()
+            existing_user["display_name"] = resolved_name
+            if email_address:
+                existing_user["email_address"] = str(email_address).strip() or existing_user.get("email_address")
+            session = _issue_session(payload, existing_user["user_id"])
+            _write_store(payload)
+            return {
+                "session_token": session["token"],
+                "user": serialize_user(existing_user),
+                "message": "已恢复 Apple 登录，会话和组合数据已同步到你的账户。",
+            }
 
-def create_wechat_dev_session(display_name: str | None = None) -> dict[str, Any]:
-    payload = _load_store()
-    _clean_expired(payload)
-    nickname = (display_name or "").strip() or f"微信用户{uuid4().hex[:4].upper()}"
-    user = _upsert_user(
-        payload,
-        phone_number=None,
-        display_name=nickname,
-        auth_provider="wechat",
-    )
-    session = _issue_session(payload, user["user_id"])
-    _write_store(payload)
-    return {
-        "session_token": session["token"],
-        "user": serialize_user(user),
-        "message": "当前服务未配置真实微信开放平台参数，已使用开发模式模拟微信授权。",
-    }
+        user = {
+            "user_id": f"usr_apple_{uuid4().hex[:12]}",
+            "display_name": resolved_name,
+            "phone_number": None,
+            "auth_provider": "apple",
+            "is_owner": True,
+            "created_at": _now_iso(),
+            "last_login_at": _now_iso(),
+            "apple_user_identifier": normalized_identifier,
+            "email_address": str(email_address).strip() if email_address else None,
+            "portfolio_user_id": OWNER_USER_ID,
+        }
+        payload.setdefault("users", []).append(user)
+        session = _issue_session(payload, user["user_id"])
+        _write_store(payload)
+        return {
+            "session_token": session["token"],
+            "user": serialize_user(user),
+            "message": "Apple 登录成功，已创建你的账户并可继续同步数据。",
+        }
 
 
 def create_owner_session() -> dict[str, Any]:
-    payload = _load_store()
-    _clean_expired(payload)
-    owner = next(
-        user
-        for user in payload["users"]
-        if isinstance(user, dict) and user.get("user_id") == OWNER_USER_ID
-    )
-    owner["last_login_at"] = _now_iso()
-    session = _issue_session(payload, OWNER_USER_ID)
-    _write_store(payload)
-    return {"session_token": session["token"], "user": serialize_user(owner)}
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
+        owner = next(
+            user
+            for user in payload["users"]
+            if isinstance(user, dict) and user.get("user_id") == OWNER_USER_ID
+        )
+        owner["last_login_at"] = _now_iso()
+        session = _issue_session(payload, OWNER_USER_ID)
+        _write_store(payload)
+        return {"session_token": session["token"], "user": serialize_user(owner)}
 
 
 def _issue_session(payload: dict[str, Any], user_id: str) -> dict[str, Any]:
@@ -465,63 +549,66 @@ def _issue_session(payload: dict[str, Any], user_id: str) -> dict[str, Any]:
 def get_session(token: str | None) -> dict[str, Any] | None:
     if not token:
         return None
-    payload = _load_store()
-    _clean_expired(payload)
-    session = next(
-        (
-            item
-            for item in payload.get("sessions", [])
-            if isinstance(item, dict) and item.get("token") == token
-        ),
-        None,
-    )
-    if session is None:
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        _clean_expired(payload)
+        session = next(
+            (
+                item
+                for item in payload.get("sessions", [])
+                if isinstance(item, dict) and item.get("token") == token
+            ),
+            None,
+        )
+        if session is None:
+            _write_store(payload)
+            return None
+        session["last_seen_at"] = _now_iso()
+        user = next(
+            (
+                item
+                for item in payload.get("users", [])
+                if isinstance(item, dict) and item.get("user_id") == session.get("user_id")
+            ),
+            None,
+        )
         _write_store(payload)
-        return None
-    session["last_seen_at"] = _now_iso()
-    user = next(
-        (
-            item
-            for item in payload.get("users", [])
-            if isinstance(item, dict) and item.get("user_id") == session.get("user_id")
-        ),
-        None,
-    )
-    _write_store(payload)
-    if user is None:
-        return None
-    return {"token": session["token"], "user": user}
+        if user is None:
+            return None
+        return {"token": session["token"], "user": user}
 
 
 def revoke_session(token: str | None) -> None:
     if not token:
         return
-    payload = _load_store()
-    payload["sessions"] = [
-        item
-        for item in payload.get("sessions", [])
-        if not (isinstance(item, dict) and item.get("token") == token)
-    ]
-    _write_store(payload)
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        payload["sessions"] = [
+            item
+            for item in payload.get("sessions", [])
+            if not (isinstance(item, dict) and item.get("token") == token)
+        ]
+        _write_store(payload)
 
 
 def get_import_center_payload(user_id: str) -> dict[str, Any]:
-    payload = _load_store()
-    user = next(
-        (
-            item
-            for item in payload.get("users", [])
-            if isinstance(item, dict) and item.get("user_id") == user_id
-        ),
-        None,
-    )
-    return {
-        "user": serialize_user(user),
-        "brokers": [],
-        "statement_templates": get_statement_import_templates(),
-        "notes": [
-            "当前版本只保留稳定可用的结单导入能力，不再展示未落地的券商在线接入配置说明。",
-            "上传新的 PDF 结单后，服务会自动重建组合快照与账户视图。",
-            "如果 iPhone 支持 Face ID 或 Touch ID，可以把它作为本机解锁入口。",
-        ],
-    }
+    with AUTH_STORE_LOCK:
+        payload = _load_store()
+        user = next(
+            (
+                item
+                for item in payload.get("users", [])
+                if isinstance(item, dict) and item.get("user_id") == user_id
+            ),
+            None,
+        )
+        return {
+            "user": serialize_user(user),
+            "brokers": [],
+            "statement_templates": get_statement_import_templates(),
+            "notes": [
+                "当前版本只保留稳定可用的结单导入能力，不再展示未落地的券商在线接入配置说明。",
+                "上传新的 PDF 结单后，服务会自动重建组合快照与账户视图。",
+                "如果 iPhone 支持 Face ID 或 Touch ID，可以把它作为本机解锁入口。",
+            ],
+        }

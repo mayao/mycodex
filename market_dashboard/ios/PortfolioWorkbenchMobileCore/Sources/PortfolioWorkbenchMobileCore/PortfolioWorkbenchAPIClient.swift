@@ -128,8 +128,46 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         return try await send(path: "api/mobile/dashboard-ai", query: query)
     }
 
-    public func fetchAIServiceStatus() async throws -> AIServiceStatusPayload {
-        try await send(path: "api/mobile/ai-service-status")
+    public func fetchAIServiceStatus(probe: Bool = false) async throws -> AIServiceStatusPayload {
+        let query = probe ? [URLQueryItem(name: "probe", value: "1")] : []
+        return try await send(path: "api/mobile/ai-service-status", query: query)
+    }
+
+    public func downloadHoldingsExport(format: HoldingsExportFormat) async throws -> ExportedDocument {
+        let request = makeRequest(
+            path: "api/mobile/export/holdings",
+            method: "GET",
+            query: [URLQueryItem(name: "format", value: format.rawValue)]
+        )
+        let payload: Data
+        let response: URLResponse
+
+        do {
+            (payload, response) = try await session.data(for: request)
+        } catch {
+            throw PortfolioWorkbenchAPIClientError.transport(error.localizedDescription)
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PortfolioWorkbenchAPIClientError.invalidResponse
+        }
+
+        guard (200 ..< 300).contains(httpResponse.statusCode) else {
+            if let envelope = try? decoder.decode(APIErrorEnvelope.self, from: payload) {
+                throw PortfolioWorkbenchAPIClientError.server(statusCode: httpResponse.statusCode, message: envelope.error.message)
+            }
+            throw PortfolioWorkbenchAPIClientError.server(statusCode: httpResponse.statusCode, message: "导出失败。")
+        }
+
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "application/octet-stream"
+        let headerFileName = httpResponse.value(forHTTPHeaderField: "Content-Disposition")
+            .flatMap(Self.fileName(fromContentDisposition:))
+        let fileName = headerFileName ?? "myinvai-holdings.\(format.rawValue)"
+        let safeFileName = fileName.replacingOccurrences(of: "/", with: "-")
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-\(safeFileName)")
+        try payload.write(to: tempURL, options: .atomic)
+        return ExportedDocument(fileURL: tempURL, fileName: fileName, contentType: contentType)
     }
 
     public func fetchHoldingDetail(symbol: String, refresh: Bool = false) async throws -> HoldingDetailPayload {
@@ -273,6 +311,35 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         return try await send(request: request)
     }
 
+    public func loginWithApple(
+        userIdentifier: String,
+        displayName: String? = nil,
+        emailAddress: String? = nil
+    ) async throws -> MobileSessionPayload {
+        struct RequestBody: Encodable {
+            let userIdentifier: String
+            let displayName: String?
+            let emailAddress: String?
+
+            enum CodingKeys: String, CodingKey {
+                case userIdentifier = "user_identifier"
+                case displayName = "display_name"
+                case emailAddress = "email_address"
+            }
+        }
+
+        var request = makeRequest(path: "api/mobile/auth/apple/login", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(
+            RequestBody(
+                userIdentifier: userIdentifier,
+                displayName: displayName,
+                emailAddress: emailAddress
+            )
+        )
+        return try await send(request: request)
+    }
+
     public func loginAsLocalOwner() async throws -> MobileSessionPayload {
         var request = makeRequest(path: "api/mobile/auth/dev/owner", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -300,6 +367,10 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
     }
 
     private func send<T: Decodable>(request: URLRequest) async throws -> T {
+        #if DEBUG
+        debugLogRequest(request)
+        #endif
+
         let payload: Data
         let response: URLResponse
 
@@ -312,6 +383,10 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PortfolioWorkbenchAPIClientError.invalidResponse
         }
+
+        #if DEBUG
+        debugLogResponse(httpResponse, payload: payload, request: request)
+        #endif
 
         guard (200 ..< 300).contains(httpResponse.statusCode) else {
             if let envelope = try? decoder.decode(APIErrorEnvelope.self, from: payload) {
@@ -331,12 +406,28 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         }
     }
 
+    private static func fileName(fromContentDisposition value: String) -> String? {
+        let parts = value.split(separator: ";").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        for part in parts {
+            if part.lowercased().hasPrefix("filename=") {
+                let raw = part.dropFirst("filename=".count)
+                return raw.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+            }
+        }
+        return nil
+    }
+
     private func makeRequest(path: String, method: String, query: [URLQueryItem] = []) -> URLRequest {
         let url = makeURL(path: path, query: query)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = configuration.sessionToken?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty {
+        let runtimeToken = configuration.sessionToken?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let persistedToken = UserDefaults.standard.string(forKey: "portfolio-workbench-ios.session-token")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token =
+            (runtimeToken?.isEmpty == false ? runtimeToken : nil)
+            ?? (persistedToken?.isEmpty == false ? persistedToken : nil)
+        if let token {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         if let encodedAIConfiguration = encodeAIRequestConfiguration(configuration.aiRequestConfiguration) {
@@ -345,6 +436,41 @@ public final class PortfolioWorkbenchAPIClient: @unchecked Sendable {
         request.timeoutInterval = 45
         return request
     }
+
+    #if DEBUG
+    private func debugLogRequest(_ request: URLRequest) {
+        let urlString = request.url?.absoluteString ?? "nil"
+        let token = request.value(forHTTPHeaderField: "Authorization")
+            ?? "(none)"
+        let tokenLength = token.hasPrefix("Bearer ") ? token.dropFirst("Bearer ".count).count : 0
+        let tokenPrefix: String
+        if tokenLength > 0, let bearer = request.value(forHTTPHeaderField: "Authorization")?.dropFirst("Bearer ".count) {
+            tokenPrefix = String(bearer.prefix(8))
+        } else {
+            tokenPrefix = "none"
+        }
+        let method = request.httpMethod ?? "GET"
+        NSLog(
+            "[PortfolioWorkbenchAPIClient] request method=%@ url=%@ token_len=%d token_prefix=%@",
+            method,
+            urlString,
+            tokenLength,
+            tokenPrefix
+        )
+    }
+
+    private func debugLogResponse(_ response: HTTPURLResponse, payload: Data, request: URLRequest) {
+        let urlString = request.url?.absoluteString ?? "nil"
+        let bodyPrefix = String(data: payload.prefix(180), encoding: .utf8) ?? "<binary>"
+        NSLog(
+            "[PortfolioWorkbenchAPIClient] response status=%d url=%@ body_len=%d body_prefix=%@",
+            response.statusCode,
+            urlString,
+            payload.count,
+            bodyPrefix.replacingOccurrences(of: "\n", with: " ")
+        )
+    }
+    #endif
 
     private func encodeAIRequestConfiguration(_ value: AIRequestConfiguration?) -> String? {
         guard let value, let data = try? encoder.encode(value) else {

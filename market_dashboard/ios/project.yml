@@ -8,9 +8,9 @@ settings:
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: BBT2D26L2V
     TARGETED_DEVICE_FAMILY: 1
-    PRODUCT_BUNDLE_IDENTIFIER: com.bbt2d26l2v.PortfolioWorkbenchIOS
+    PRODUCT_BUNDLE_IDENTIFIER: com.xmly.portfolioworkbenchios
     ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-    PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL: http://10.8.144.16:8008/
+    PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL: http://127.0.0.1:8008/
 targets:
   PortfolioWorkbenchMobileCore:
     type: framework
@@ -37,3 +37,4 @@ targets:
       base:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: PortfolioWorkbenchIOS/Info.plist
+        CODE_SIGN_ENTITLEMENTS: PortfolioWorkbenchIOS/PortfolioWorkbenchIOS.entitlements

@@ -1,3 +1,5 @@
+import AuthenticationServices
+import Foundation
 import SwiftUI
 import PortfolioWorkbenchMobileCore
 
@@ -17,7 +19,10 @@ enum BrokerPalette {
     static let green = Color(red: 0.13, green: 0.90, blue: 0.64)
     static let panel = Color(red: 0.05, green: 0.13, blue: 0.24, opacity: 0.94)
     static let panelStrong = Color(red: 0.03, green: 0.09, blue: 0.17, opacity: 0.98)
+    static let panelElevated = Color(red: 0.08, green: 0.18, blue: 0.31, opacity: 0.96)
     static let line = Color.white.opacity(0.08)
+    static let lineStrong = Color.white.opacity(0.14)
+    static let shadow = Color.black.opacity(0.24)
 
     static func tone(_ tone: MobileTone?) -> Color {
         switch tone {
@@ -69,6 +74,69 @@ func loadStatusLabel(_ status: String?) -> String {
         return "异常"
     default:
         return "待检查"
+    }
+}
+
+struct AppleSignInControl: View {
+    let onStart: (() -> Void)?
+    let onSuccess: (_ userIdentifier: String, _ displayName: String?, _ emailAddress: String?) -> Void
+    let onFailure: (_ message: String) -> Void
+
+    init(
+        onStart: (() -> Void)? = nil,
+        onSuccess: @escaping (_ userIdentifier: String, _ displayName: String?, _ emailAddress: String?) -> Void,
+        onFailure: @escaping (_ message: String) -> Void
+    ) {
+        self.onStart = onStart
+        self.onSuccess = onSuccess
+        self.onFailure = onFailure
+    }
+
+    var body: some View {
+        SignInWithAppleButton(.signIn) { request in
+            request.requestedScopes = [.fullName, .email]
+            onStart?()
+        } onCompletion: { result in
+            handleCompletion(result)
+        }
+        .signInWithAppleButtonStyle(.white)
+        .frame(maxWidth: .infinity, minHeight: 50)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private func handleCompletion(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential else {
+                onFailure("Apple 登录返回了无法识别的身份信息。")
+                return
+            }
+            onSuccess(
+                credential.user,
+                displayName(from: credential.fullName),
+                credential.email?.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+        case let .failure(error):
+            onFailure(message(for: error))
+        }
+    }
+
+    private func displayName(from components: PersonNameComponents?) -> String? {
+        guard let components else {
+            return nil
+        }
+        let resolved = PersonNameComponentsFormatter().string(from: components)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return resolved.isEmpty ? nil : resolved
+    }
+
+    private func message(for error: Error) -> String {
+        if let authorizationError = error as? ASAuthorizationError,
+           authorizationError.code == .canceled {
+            return "已取消 Apple 登录。"
+        }
+        let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return message.isEmpty ? "Apple 登录暂时不可用，请稍后重试。" : message
     }
 }
 
@@ -128,12 +196,12 @@ struct SectionPanel<Content: View>: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .font(.system(.title3, design: .rounded, weight: .heavy))
                     .foregroundStyle(BrokerPalette.ink)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.footnote)
+                        .font(.footnote.weight(.medium))
                         .foregroundStyle(BrokerPalette.muted)
                 }
             }
@@ -146,7 +214,7 @@ struct SectionPanel<Content: View>: View {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [BrokerPalette.panel, BrokerPalette.panelStrong],
+                        colors: [BrokerPalette.panelElevated, BrokerPalette.panelStrong],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -154,8 +222,9 @@ struct SectionPanel<Content: View>: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(BrokerPalette.line, lineWidth: 1)
+                .stroke(BrokerPalette.lineStrong, lineWidth: 1)
         )
+        .shadow(color: BrokerPalette.shadow, radius: 18, y: 10)
     }
 }
 
@@ -266,7 +335,8 @@ struct SummaryCardView: View {
                 }
         }
         .padding(16)
-        .frame(width: 184, alignment: .leading)
+        .frame(width: 206, alignment: .leading)
+        .frame(minHeight: 152)
         .background(BrokerPalette.tone(card.tone).opacity(0.08), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
@@ -314,7 +384,7 @@ struct InsightCardView: View {
                     Text(detail)
                         .font(.subheadline)
                         .foregroundStyle(BrokerPalette.muted)
-                        .lineLimit(2)
+                        .lineLimit(3)
                 }
             }
         }
@@ -373,11 +443,12 @@ struct SyncStatusBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(BrokerPalette.panelStrong.opacity(0.94), in: Capsule())
+        .background(BrokerPalette.panelElevated.opacity(0.97), in: Capsule())
         .overlay(
             Capsule()
-                .stroke(BrokerPalette.line, lineWidth: 1)
+                .stroke(BrokerPalette.lineStrong, lineWidth: 1)
         )
+        .shadow(color: BrokerPalette.shadow, radius: 10, y: 6)
     }
 }
 
@@ -681,14 +752,17 @@ struct SparklineShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        guard values.count > 1, let minValue = values.min(), let maxValue = values.max() else {
+        let renderableValues = values.filter(\.isFinite)
+        guard renderableValues.count > 1,
+              let minValue = renderableValues.min(),
+              let maxValue = renderableValues.max() else {
             return path
         }
 
         let span = max(maxValue - minValue, 0.0001)
 
-        for (index, value) in values.enumerated() {
-            let x = rect.minX + CGFloat(index) / CGFloat(values.count - 1) * rect.width
+        for (index, value) in renderableValues.enumerated() {
+            let x = rect.minX + CGFloat(index) / CGFloat(renderableValues.count - 1) * rect.width
             let normalized = (value - minValue) / span
             let y = rect.maxY - CGFloat(normalized) * rect.height
 
@@ -707,9 +781,13 @@ struct SparklineView: View {
     let points: [Double]
     let color: Color
 
+    private var renderablePoints: [Double] {
+        points.filter(\.isFinite)
+    }
+
     var body: some View {
-        if points.count > 1 {
-            SparklineShape(values: points)
+        if renderablePoints.count > 1 {
+            SparklineShape(values: renderablePoints)
                 .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                 .frame(width: 96, height: 34)
         } else {
@@ -756,6 +834,35 @@ struct PositionCompactCard: View {
                 TagBadge(text: position.stance, tint: BrokerPalette.gold)
             }
 
+            HStack(spacing: 10) {
+                if let quantity = position.quantity {
+                    metricPill(
+                        title: "持仓",
+                        value: NumberFormatters.grouped(quantity),
+                        tint: BrokerPalette.silver
+                    )
+                }
+                if let changePct = position.changePct {
+                    metricPill(
+                        title: "日内",
+                        value: NumberFormatters.signedPercent(changePct),
+                        tint: NumberFormatters.pnlColor(changePct)
+                    )
+                }
+                if let signalScore = position.signalScore {
+                    metricPill(
+                        title: "信号",
+                        value: "\(signalScore)",
+                        tint: toneColor
+                    )
+                }
+                metricPill(
+                    title: "趋势",
+                    value: position.trendState ?? "待确认",
+                    tint: BrokerPalette.teal
+                )
+            }
+
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(SensitiveValueMask.display(NumberFormatters.hkd(position.statementValueHkd), hidden: settings.hideSensitiveAmounts))
@@ -770,6 +877,10 @@ struct PositionCompactCard: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 4) {
+                    Text(NumberFormatters.signedHKD(position.statementPnlHkd))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(NumberFormatters.pnlColor(position.statementPnlHkd))
+                        .monospacedDigit()
                     Text(NumberFormatters.signedPercent(position.statementPnlPct))
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(NumberFormatters.pnlColor(position.statementPnlPct))
@@ -791,6 +902,7 @@ struct PositionCompactCard: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(BrokerPalette.line, lineWidth: 1)
         )
+        .shadow(color: BrokerPalette.shadow.opacity(0.5), radius: 10, y: 6)
     }
 
     private var toneColor: Color {
@@ -804,6 +916,22 @@ struct PositionCompactCard: View {
         default:
             return BrokerPalette.gold
         }
+    }
+
+    @ViewBuilder
+    private func metricPill(title: String, value: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(BrokerPalette.muted)
+            Text(value)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(tint)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -844,6 +972,12 @@ enum NumberFormatters {
     static func hkd(_ value: Double?) -> String {
         guard let value else { return "N/A" }
         return "HK$" + grouped(value)
+    }
+
+    static func signedHKD(_ value: Double?) -> String {
+        guard let value else { return "N/A" }
+        let sign = value > 0 ? "+" : value < 0 ? "-" : ""
+        return "\(sign)HK$" + grouped(abs(value))
     }
 
     static func currency(_ value: Double?, code: String) -> String {

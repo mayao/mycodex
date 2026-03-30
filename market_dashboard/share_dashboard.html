@@ -21,11 +21,14 @@
       --purple: #8e99ff;
       --shadow: 0 24px 60px rgba(0, 0, 0, 0.34);
       --radius: 24px;
+      --focus: rgba(103, 228, 255, 0.42);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: var(--text);
+      font-size: 16px;
+      line-height: 1.6;
       font-family: "Avenir Next", "SF Pro Display", "IBM Plex Sans", "PingFang SC", sans-serif;
       background:
         radial-gradient(circle at top right, rgba(103, 228, 255, 0.16), transparent 22%),
@@ -33,6 +36,36 @@
         radial-gradient(circle at 85% 82%, rgba(57, 224, 188, 0.12), transparent 22%),
         linear-gradient(180deg, #040911 0%, #08121e 48%, #0b1827 100%);
       min-height: 100vh;
+    }
+    body.is-busy {
+      cursor: progress;
+    }
+    .page-progress {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      height: 3px;
+      margin-bottom: 14px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.04);
+    }
+    .page-progress::after {
+      content: "";
+      display: block;
+      width: 34%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--cyan), var(--teal), var(--purple));
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+    body.is-busy .page-progress::after {
+      opacity: 1;
+      animation: share-loading-slide 1.05s ease-in-out infinite;
+    }
+    @keyframes share-loading-slide {
+      100% { transform: translateX(360%); }
     }
     .wrap {
       max-width: 1440px;
@@ -66,12 +99,29 @@
       color: var(--muted);
       line-height: 1.7;
     }
+    .lead {
+      font-size: 16px;
+    }
     .toolbar {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
       flex-wrap: wrap;
     }
+    .page-state {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .page-state.info { color: var(--cyan); }
+    .page-state.warn { color: var(--gold); }
+    .page-state.error { color: var(--red); }
+    .page-state.success { color: var(--green); }
     a.button {
       display: inline-flex;
       align-items: center;
@@ -85,6 +135,17 @@
       color: var(--text);
       border: 1px solid rgba(255,255,255,0.08);
       box-shadow: none;
+      min-height: 44px;
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+    a.button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(103, 228, 255, 0.22);
+    }
+    a.button:focus-visible,
+    .stock-link:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--focus);
     }
     .hero, .panel, .view-card, .action-card, .macro-card, .holding-card {
       background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
@@ -243,6 +304,7 @@
       border-radius: 20px;
       border: 1px solid var(--line);
       background: rgba(255,255,255,0.02);
+      position: relative;
     }
     table {
       width: 100%;
@@ -368,15 +430,44 @@
       }
       .toolbar {
         justify-content: flex-start;
+        width: 100%;
+      }
+      .toolbar > * {
+        width: 100%;
       }
       table {
         min-width: 820px;
+      }
+      .table-wrap::after {
+        content: "左右滑动查看更多";
+        position: sticky;
+        left: 12px;
+        bottom: 10px;
+        display: inline-flex;
+        padding: 6px 10px;
+        border-radius: 999px;
+        background: rgba(4, 9, 17, 0.82);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: var(--muted);
+        font-size: 11px;
+        pointer-events: none;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
       }
     }
   </style>
 </head>
 <body>
   <div class="wrap">
+    <div class="page-progress" aria-hidden="true"></div>
     <div class="topbar">
       <div>
         <div class="eyebrow">Sanitized Share View</div>
@@ -387,6 +478,7 @@
         <a class="button" href="/">返回原始工作台</a>
       </div>
     </div>
+    <div class="page-state info" id="pageState" role="status" aria-live="polite">正在加载分享摘要…</div>
 
     <section class="hero">
       <div class="hero-grid">
@@ -607,6 +699,17 @@
 
     function byId(id) {
       return document.getElementById(id);
+    }
+
+    function setBusy(isBusy) {
+      document.body.classList.toggle("is-busy", Boolean(isBusy));
+      document.body.setAttribute("aria-busy", isBusy ? "true" : "false");
+    }
+
+    function setPageState(text, tone = "info") {
+      const node = byId("pageState");
+      node.className = `page-state ${tone}`.trim();
+      node.textContent = text || "";
     }
 
     function fmtPct(value) {
@@ -1022,6 +1125,8 @@
     }
 
     async function init() {
+      setBusy(true);
+      setPageState("正在加载分享摘要与脱敏图表…", "warn");
       const resp = await fetch("/api/share-data", {cache: "no-store"});
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
@@ -1048,9 +1153,13 @@
       renderBrief(data.brief?.holding_notes || []);
       renderTrades(data);
       renderDerivatives(data.derivatives || []);
+      setBusy(false);
+      setPageState(`已更新到 ${data.analysis_date_cn || "--"} · 分享版数据已就绪`, "success");
     }
 
     init().catch(error => {
+      setBusy(false);
+      setPageState(`加载失败：${error.message}`, "error");
       byId("headline").textContent = `加载失败：${error.message}`;
     });
   </script>

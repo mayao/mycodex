@@ -5,6 +5,7 @@ import json
 import mimetypes
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -12,12 +13,18 @@ from typing import Any
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 
+DEPS_DIR = Path(__file__).resolve().parent / ".deps"
+if str(DEPS_DIR) not in sys.path:
+    # Keep statement parsing self-contained even when system Python lacks deps.
+    sys.path.insert(0, str(DEPS_DIR))
+
 try:
     from ai_insight_model import (
         GEMINI_API_BASE_URL,
         REQUEST_TIMEOUT_SECONDS,
         _clean_json_text,
         _configured_provider_order,
+        _extract_anthropic_text,
         _extract_gemini_text,
         _extract_openai_compatible_text,
         _provider_label,
@@ -29,6 +36,7 @@ except ModuleNotFoundError:
         REQUEST_TIMEOUT_SECONDS,
         _clean_json_text,
         _configured_provider_order,
+        _extract_anthropic_text,
         _extract_gemini_text,
         _extract_openai_compatible_text,
         _provider_label,
@@ -44,6 +52,11 @@ try:
     from PIL import Image  # type: ignore
 except Exception:  # noqa: BLE001
     Image = None
+
+try:
+    import pypdfium2  # type: ignore
+except Exception:  # noqa: BLE001
+    pypdfium2 = None
 
 
 ANTHROPIC_MEDIA_API_URL = "https://api.anthropic.com/v1/messages"
@@ -78,10 +91,39 @@ KNOWN_STATEMENT_TYPES = {
     "futu_monthly_hk",
     "longbridge_daily",
 }
+TEXT_ONLY_EXCERPT_LIMIT = 8000
 
 
 def _trimmed_string(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _summarize_ai_issue_text(value: str | None) -> str:
+    text = _trimmed_string(value)
+    if not text:
+        return "服务暂不可用"
+    lowered = text.lower()
+    compact = lowered.replace(" ", "")
+    if "connectionresetbypeer" in compact or "connection reset by peer" in lowered:
+        return "连接中断"
+    if "http error 401" in lowered or "unauthorized" in lowered:
+        return "鉴权失败"
+    if "http error 404" in lowered:
+        return "模型或地址配置错误"
+    if "access_terminated_error" in lowered or "only available for coding agents" in lowered:
+        return "当前 Kimi Key 仅支持 coding 兼容通道"
+    if "timed out" in lowered or "timeout" in lowered:
+        return "请求超时"
+    return "解析失败"
+
+
+def _build_anthropic_messages_url(base_url: str) -> str:
+    normalized = base_url.rstrip("/")
+    if normalized.endswith("/messages"):
+        return normalized
+    if normalized.endswith("/v1"):
+        return normalized + "/messages"
+    return normalized + "/v1/messages"
 
 
 def _now_iso() -> str:
@@ -234,6 +276,39 @@ def _extract_pdf_text(path: Path, max_pages: int = 8) -> str:
 
 
 def _render_pdf_preview_images(path: Path, max_pages: int = 4) -> list[Path]:
+    # Prefer a pure-Python renderer to avoid external poppler dependency.
+    if pypdfium2 is not None:
+        try:
+            pdf = pypdfium2.PdfDocument(str(path))
+            persisted_dir = Path(tempfile.mkdtemp(prefix="statement-preview-persist-"))
+            persisted_paths: list[Path] = []
+            page_count = min(len(pdf), max_pages)
+            for index in range(page_count):
+                page = pdf[index]
+                # Render at 2x for better OCR/vision.
+                bitmap = page.render(scale=2.0)
+                try:
+                    pil_image = bitmap.to_pil()
+                    target = persisted_dir / f"preview-{index + 1}.png"
+                    pil_image.save(target, format="PNG")
+                    persisted_paths.append(target)
+                finally:
+                    try:
+                        bitmap.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+                    try:
+                        page.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+            pdf.close()
+            if not persisted_paths:
+                raise RuntimeError("PDF 页面渲染失败")
+            return persisted_paths
+        except Exception:  # noqa: BLE001
+            # Fall back to pdftoppm below.
+            pass
+
     with tempfile.TemporaryDirectory(prefix="statement-preview-") as tmp_dir:
         output_prefix = Path(tmp_dir) / "preview"
         command = [
@@ -246,7 +321,10 @@ def _render_pdf_preview_images(path: Path, max_pages: int = 4) -> list[Path]:
             str(path),
             str(output_prefix),
         ]
-        subprocess.run(command, check=True, capture_output=True)
+        try:
+            subprocess.run(command, check=True, capture_output=True)
+        except FileNotFoundError as exc:
+            raise RuntimeError("缺少 pdftoppm，无法把 PDF 渲染成图片；请安装 poppler，或启用 pypdfium2 依赖") from exc
         rendered = sorted(Path(tmp_dir).glob("preview-*.png"))
         if not rendered:
             raise RuntimeError("PDF 页面渲染失败")
@@ -276,7 +354,20 @@ def _ensure_supported_image(path: Path, mime_type: str, *, provider: str) -> tup
             temp_path.unlink(missing_ok=True)
             return data, "image/png"
     except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(f"图片格式转换失败：{exc}") from exc
+        # HEIC/HEIF can fail to decode without optional pillow plugins. On macOS, fall back to `sips`.
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as temp_file:
+                temp_path = Path(temp_file.name)
+            subprocess.run(
+                ["sips", "-s", "format", "png", str(path), "--out", str(temp_path)],
+                check=True,
+                capture_output=True,
+            )
+            data = temp_path.read_bytes()
+            temp_path.unlink(missing_ok=True)
+            return data, "image/png"
+        except Exception:  # noqa: BLE001
+            raise RuntimeError(f"图片格式转换失败：{exc}") from exc
 
 
 def _anthropic_media_request(
@@ -310,6 +401,54 @@ def _anthropic_media_request(
             "所有字段都必须基于输入页面内容，不允许编造看不到的数字。"
         ),
         "messages": [{"role": "user", "content": content_blocks}],
+    }
+    request = Request(
+        ANTHROPIC_MEDIA_API_URL,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": provider_settings["api_key"],
+            "anthropic-version": "2023-06-01",
+        },
+    )
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    content = response_payload.get("content") or []
+    text = "\n".join(
+        block.get("text", "")
+        for block in content
+        if isinstance(block, dict) and block.get("type") == "text"
+    ).strip()
+    return text, str(response_payload.get("model") or provider_settings["candidate_models"][0])
+
+
+def _anthropic_text_request(
+    *,
+    provider_settings: dict[str, Any],
+    prompt_text: str,
+    extracted_text: str,
+) -> tuple[str, str]:
+    payload = {
+        "model": provider_settings["candidate_models"][0],
+        "max_tokens": 3200,
+        "temperature": 0.1,
+        "system": (
+            "你是券商结单结构化解析器。"
+            "你必须只输出 JSON。"
+            "所有字段都必须基于输入文本，不允许编造看不到的数字。"
+        ),
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": f"{prompt_text}\n\n文档文本摘录：\n{extracted_text[:TEXT_ONLY_EXCERPT_LIMIT]}",
+                    }
+                ],
+            }
+        ],
     }
     request = Request(
         ANTHROPIC_MEDIA_API_URL,
@@ -377,12 +516,85 @@ def _gemini_media_request(
     return _extract_gemini_text(response_payload), provider_settings["candidate_models"][0]
 
 
+def _gemini_text_request(
+    *,
+    provider_settings: dict[str, Any],
+    prompt_text: str,
+    extracted_text: str,
+) -> tuple[str, str]:
+    payload = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": f"{prompt_text}\n\n文档文本摘录：\n{extracted_text[:TEXT_ONLY_EXCERPT_LIMIT]}"},
+                ],
+            }
+        ],
+        "generationConfig": {"temperature": 0.1, "maxOutputTokens": 3200},
+        "systemInstruction": {
+            "parts": [
+                {
+                    "text": (
+                        "你是券商结单结构化解析器。"
+                        "你必须只输出 JSON。"
+                        "所有字段都必须基于输入文本，不允许编造看不到的数字。"
+                    )
+                }
+            ]
+        },
+    }
+    request = Request(
+        f"{provider_settings['base_url'].rstrip('/') or GEMINI_API_BASE_URL}/models/{quote(provider_settings['candidate_models'][0], safe='')}:generateContent?key={quote(provider_settings['api_key'], safe='')}",
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+        response_payload = json.loads(response.read().decode("utf-8"))
+    return _extract_gemini_text(response_payload), provider_settings["candidate_models"][0]
+
+
 def _text_only_request(
     *,
     provider_settings: dict[str, Any],
     prompt_text: str,
     extracted_text: str,
 ) -> tuple[str, str]:
+    if provider_settings.get("request_format") == "anthropic":
+        request_body = json.dumps(
+            {
+                "model": provider_settings["candidate_models"][0],
+                "max_tokens": 3200,
+                "temperature": 0.1,
+                "system": (
+                    "你是券商结单结构化解析器。"
+                    "你必须只输出 JSON。"
+                    "所有字段都必须基于输入文本，不允许编造看不到的数字。"
+                ),
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": [{"type": "text", "text": f"{prompt_text}\n\n文档文本摘录：\n{extracted_text[:TEXT_ONLY_EXCERPT_LIMIT]}"}],
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = Request(
+            _build_anthropic_messages_url(str(provider_settings.get("base_url") or "")),
+            data=request_body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": provider_settings["api_key"],
+                "anthropic-version": "2023-06-01",
+            },
+        )
+        with urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as response:
+            response_payload = json.loads(response.read().decode("utf-8"))
+        return _extract_anthropic_text(response_payload), str(response_payload.get("model") or provider_settings["candidate_models"][0])
+
     request_body = json.dumps(
         {
             "model": provider_settings["candidate_models"][0],
@@ -399,7 +611,7 @@ def _text_only_request(
                 },
                 {
                     "role": "user",
-                    "content": f"{prompt_text}\n\n文档文本摘录：\n{extracted_text[:24000]}",
+                    "content": f"{prompt_text}\n\n文档文本摘录：\n{extracted_text[:TEXT_ONLY_EXCERPT_LIMIT]}",
                 },
             ],
         },
@@ -443,6 +655,7 @@ def _statement_prompt(
         "\"holdings\":[{\"symbol\":\"...\",\"name\":\"...\",\"quantity\":number|null,\"cost\":number|null,\"statement_price\":number|null,\"statement_value\":number|null,\"statement_pnl\":number|null,\"currency\":\"HKD|USD|null\",\"market\":\"HK|US|null\"}],"
         "\"derivatives\":[{\"symbol\":\"...\",\"description\":\"...\",\"quantity\":number|null,\"market_value\":number|null,\"unrealized_pnl\":number|null,\"estimated_notional\":number|null,\"currency\":\"HKD|USD|null\",\"underlyings\":[\"...\"]}],"
         "\"recent_trades\":[{\"date\":\"YYYY-MM-DD|null\",\"symbol\":\"...\",\"name\":\"...\",\"side\":\"买入|卖出\",\"quantity\":number|null,\"price\":number|null,\"currency\":\"HKD|USD|null\"}],"
+        "\"account_pnl\":{\"realized_pnl\":number|null,\"unrealized_pnl\":number|null,\"total_pnl\":number|null,\"currency\":\"HKD|USD|null\"},"
         "\"risk_notes\":[\"...\"],"
         "\"parser_notes\":[\"...\"]"
         "}\n"
@@ -453,7 +666,7 @@ def _statement_prompt(
         "如果识别到文件更像其他券商或其他结单类型，请在 broker / statement_type 中如实填写，并在 parser_notes 说明。\n"
         "symbol 需要尽量标准化：港股写成 5 位数字加 .HK，美股保持大写代码。\n"
         "recent_trades 只保留最近可见的交易；derivatives 只保留文档中明确出现的期权、FCN、雪球或结构化票据。\n"
-        f"辅助文本摘录（可能不完整）：\n{extracted_text[:12000]}"
+        "后续请求会附带文档文本摘录，请据此提取结构化字段。"
     )
 
 
@@ -561,6 +774,28 @@ def _normalize_recent_trades(rows: Any, *, source: dict[str, Any]) -> list[dict[
     return normalized
 
 
+def _normalize_account_pnl(raw_payload: dict[str, Any], *, fallback_currency: str | None) -> dict[str, Any]:
+    row = raw_payload.get("account_pnl")
+    if not isinstance(row, dict):
+        row = {}
+    currency = _normalize_currency(row.get("currency")) or _normalize_currency(fallback_currency)
+    realized = _coerce_float(row.get("realized_pnl"))
+    unrealized = _coerce_float(row.get("unrealized_pnl"))
+    total = _coerce_float(row.get("total_pnl"))
+
+    entries: list[dict[str, Any]] = []
+    if realized is not None and currency:
+        entries.append({"amount": realized, "currency": currency, "source": "statement"})
+
+    return {
+        "realized_pnl": realized,
+        "unrealized_pnl": unrealized,
+        "total_pnl": total,
+        "currency": currency,
+        "realized_entries": entries,
+    }
+
+
 def _normalize_risk_notes(rows: Any, parser_notes: Any) -> list[str]:
     notes: list[str] = []
     for collection in (rows or [], parser_notes or []):
@@ -590,13 +825,15 @@ def _normalize_ai_account_payload(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     detected_broker = _normalize_broker_name(raw_payload.get("broker"))
     expected_broker = _normalize_broker_name(source.get("broker"))
+    mismatch_notes: list[str] = []
     if expected_broker and detected_broker and detected_broker != expected_broker:
-        raise RuntimeError(f"识别到上传资料更像 {detected_broker} 结单，与当前账户 {expected_broker} 不匹配")
+        mismatch_notes.append(f"识别到券商更像 {detected_broker}，但当前目标账户标记为 {expected_broker}。")
 
     holdings = _normalize_holdings(raw_payload.get("holdings"))
     recent_trades = _normalize_recent_trades(raw_payload.get("recent_trades"), source=source)
     derivatives = _normalize_derivatives(raw_payload.get("derivatives"))
     base_currency = _normalize_currency(raw_payload.get("base_currency"))
+    account_pnl = _normalize_account_pnl(raw_payload, fallback_currency=base_currency)
     detected_statement_type = _normalize_statement_type(
         raw_payload.get("statement_type"),
         broker=detected_broker or expected_broker,
@@ -605,13 +842,14 @@ def _normalize_ai_account_payload(
     )
     expected_type = _trimmed_string(source.get("type"))
     if expected_type and detected_statement_type and detected_statement_type != expected_type:
-        raise RuntimeError(f"识别到上传资料更像 {detected_statement_type}，与当前账户类型 {expected_type} 不匹配")
+        mismatch_notes.append(f"识别到结单类型更像 {detected_statement_type}，但当前目标账户标记为 {expected_type}。")
 
     if not holdings and not recent_trades and not derivatives:
         raise RuntimeError("大模型未提取到有效持仓、交易或衍生品字段")
 
-    broker = expected_broker or detected_broker or "Unknown"
-    statement_type = expected_type or detected_statement_type or "unknown"
+    # Prefer model-detected routing hints so upload staging can correct wrong entry points.
+    broker = detected_broker or expected_broker or "Unknown"
+    statement_type = detected_statement_type or expected_type or "unknown"
     statement_date = _normalize_date(raw_payload.get("statement_date"), fallback=_now_iso()[:10])
     account = {
         "account_id": source["account_id"],
@@ -624,10 +862,17 @@ def _normalize_ai_account_payload(
         "holdings": holdings,
         "derivatives": derivatives,
         "recent_trades": recent_trades,
+        "realized_pnl": account_pnl.get("realized_pnl"),
+        "unrealized_pnl": account_pnl.get("unrealized_pnl"),
+        "total_pnl": account_pnl.get("total_pnl"),
+        "pnl_currency": account_pnl.get("currency"),
+        "realized_pnl_entries": account_pnl.get("realized_entries") or [],
         "risk_notes": _normalize_risk_notes(raw_payload.get("risk_notes"), raw_payload.get("parser_notes")),
         "load_status": "parsed",
         "load_issue": None,
     }
+    if mismatch_notes:
+        account["risk_notes"] = (account.get("risk_notes") or []) + mismatch_notes[:2]
     return account, {
         "detected_broker": detected_broker,
         "detected_statement_type": detected_statement_type,
@@ -645,7 +890,7 @@ def parse_statement_with_ai(
     if not path.exists():
         raise FileNotFoundError(path)
 
-    mime_type = _guess_mime_type(path)
+    mime_type = _trimmed_string(source.get("uploaded_media_type")) or _guess_mime_type(path)
     is_pdf = mime_type == "application/pdf" or path.suffix.lower() == ".pdf"
     extracted_text = _extract_pdf_text(path) if is_pdf else ""
     prompt_text = _statement_prompt(source=source, extracted_text=extracted_text, parse_error=parse_error)
@@ -662,6 +907,14 @@ def parse_statement_with_ai(
             provider_settings = _provider_runtime_settings(provider, ai_request_config=ai_request_config)
             if provider_settings is None:
                 continue
+            if (
+                provider == "kimi"
+                and provider_settings.get("request_format") == "anthropic"
+                and extracted_text
+                and len(extracted_text) > 1800
+            ):
+                errors.append("Kimi: 当前 coding 通道对长文本结单稳定性不足，已自动切换其他模型")
+                continue
 
             try:
                 if media_paths and provider == "anthropic":
@@ -675,6 +928,18 @@ def parse_statement_with_ai(
                         provider_settings=provider_settings,
                         prompt_text=prompt_text,
                         media_paths=media_paths,
+                    )
+                elif extracted_text and provider == "anthropic":
+                    response_text, resolved_model = _anthropic_text_request(
+                        provider_settings=provider_settings,
+                        prompt_text=prompt_text,
+                        extracted_text=extracted_text,
+                    )
+                elif extracted_text and provider == "gemini":
+                    response_text, resolved_model = _gemini_text_request(
+                        provider_settings=provider_settings,
+                        prompt_text=prompt_text,
+                        extracted_text=extracted_text,
                     )
                 elif extracted_text:
                     response_text, resolved_model = _text_only_request(
@@ -707,3 +972,132 @@ def parse_statement_with_ai(
                 item.parent.rmdir()
             except OSError:
                 pass
+
+
+def parse_statement_with_ai_best_effort(
+    source: dict[str, Any],
+    *,
+    ai_request_config: dict[str, Any] | None = None,
+    parse_error: str | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
+    """
+    Best-effort wrapper:
+    1) Try deterministic parser fallback across likely statement types (fast path).
+    2) If local fallback fails, try full LLM extraction.
+    3) If LLM also fails, retry local fallback and return the first successful local result.
+    """
+    try:
+        from statement_parser import (
+            parse_futu_monthly_hk,
+            parse_futu_monthly_us,
+            parse_ib,
+            parse_longbridge,
+            parse_tiger,
+        )
+    except ModuleNotFoundError:
+        from market_dashboard.statement_parser import (
+            parse_futu_monthly_hk,
+            parse_futu_monthly_us,
+            parse_ib,
+            parse_longbridge,
+            parse_tiger,
+        )
+
+    parser_map = {
+        "tiger_activity": parse_tiger,
+        "ib_daily": parse_ib,
+        "futu_monthly_us": parse_futu_monthly_us,
+        "futu_monthly_hk": parse_futu_monthly_hk,
+        "longbridge_daily": parse_longbridge,
+    }
+    broker_for_type = {
+        "tiger_activity": "Tiger",
+        "ib_daily": "Interactive Brokers",
+        "futu_monthly_us": "Futu",
+        "futu_monthly_hk": "Futu",
+        "longbridge_daily": "Longbridge",
+    }
+
+    def try_local_fallback(ai_issue: str | None) -> tuple[dict[str, Any], dict[str, Any], list[str]] | None:
+        source_type = _trimmed_string(source.get("type"))
+        extracted_text = _extract_pdf_text(Path(source["path"])) if str(source.get("path") or "").lower().endswith(".pdf") else ""
+        hint_text = (extracted_text[:2000] + " " + Path(source.get("path") or "").name).lower()
+        candidate_types: list[str] = []
+        if source_type:
+            candidate_types.append(source_type)
+        if any(token in hint_text for token in ("tiger", "老虎", "活动报表")):
+            candidate_types.append("tiger_activity")
+        if any(token in hint_text for token in ("interactive brokers", "ibkr", "盈透")):
+            candidate_types.append("ib_daily")
+        if any(token in hint_text for token in ("longbridge", "长桥")):
+            candidate_types.append("longbridge_daily")
+        if any(token in hint_text for token in ("futu", "moomoo", "富途")):
+            if any(token in hint_text for token in ("港股", "港元", ".hk", "hkd")):
+                candidate_types.append("futu_monthly_hk")
+            if any(token in hint_text for token in ("美股", "usd", "nasdaq", "nyse")):
+                candidate_types.append("futu_monthly_us")
+            candidate_types.extend(["futu_monthly_hk", "futu_monthly_us"])
+        candidate_types.extend(parser_map.keys())
+
+        deduped_candidates: list[str] = []
+        for statement_type in candidate_types:
+            if statement_type in parser_map and statement_type not in deduped_candidates:
+                deduped_candidates.append(statement_type)
+
+        local_errors: list[str] = []
+        for statement_type in deduped_candidates:
+            parser = parser_map[statement_type]
+            local_source = dict(source)
+            local_source["type"] = statement_type
+            local_source["broker"] = broker_for_type.get(statement_type) or _trimmed_string(source.get("broker")) or "Unknown"
+            try:
+                account = parser(local_source)
+            except Exception as local_exc:  # noqa: BLE001
+                local_errors.append(f"{statement_type}: {str(local_exc).strip() or local_exc.__class__.__name__}")
+                continue
+
+            if not (account.get("holdings") or account.get("recent_trades") or account.get("derivatives")):
+                local_errors.append(f"{statement_type}: 未提取到持仓、交易或衍生品")
+                continue
+
+            account["account_id"] = source["account_id"]
+            account["statement_type"] = statement_type
+            account["broker"] = local_source["broker"]
+            account["load_status"] = "parsed"
+            account["load_issue"] = None
+            warnings: list[str] = []
+            if ai_issue:
+                warnings.append(f"AI解析不可用，回退本地解析（{_summarize_ai_issue_text(ai_issue)}）")
+            if source_type and statement_type != source_type:
+                warnings.append(f"本地回退时识别为 {statement_type}，已替换原始类型 {source_type}")
+            account["risk_notes"] = (account.get("risk_notes") or []) + warnings[:2]
+            meta = {
+                "parser_mode": "fallback_local",
+                "provider": "none",
+                "provider_label": "Local Parser",
+                "model": "",
+                "uploaded_media_type": _trimmed_string(source.get("uploaded_media_type")) or _guess_mime_type(Path(source["path"])),
+                "detected_broker": _normalize_broker_name(account.get("broker")) or "",
+                "detected_statement_type": statement_type,
+            }
+            return account, meta, warnings
+
+        return None
+
+    local_result = try_local_fallback(ai_issue=None)
+    if local_result is not None:
+        return local_result
+
+    try:
+        account, meta = parse_statement_with_ai(
+            source,
+            ai_request_config=ai_request_config,
+            parse_error=parse_error,
+        )
+        return account, meta, []
+    except Exception as exc:  # noqa: BLE001
+        ai_issue = str(exc).strip() or exc.__class__.__name__
+        local_result = try_local_fallback(ai_issue=ai_issue)
+        if local_result is not None:
+            return local_result
+        raise RuntimeError(f"{ai_issue}；且本地回退失败") from exc

@@ -68,6 +68,7 @@ def infer_kimi_preset(
     *,
     base_url: Any = None,
     model: Any = None,
+    api_key: Any = None,
 ) -> str:
     normalized = str(preset or "").strip().lower()
     aliases = {
@@ -79,12 +80,26 @@ def infer_kimi_preset(
         "coding": "kimi_coding",
         "code": "kimi_coding",
     }
-    if normalized in aliases:
-        return aliases[normalized]
-
     lowered_base_url = str(base_url or "").strip().lower()
     lowered_model = str(model or "").strip().lower()
-    if "api.kimi.com/coding" in lowered_base_url or lowered_model == "kimi-for-coding":
+    lowered_api_key = str(api_key or "").strip().lower()
+    coding_key_hint = lowered_api_key.startswith("sk-kimi-")
+    coding_preset_hint = (
+        "api.kimi.com/coding" in lowered_base_url
+        or lowered_model == "kimi-for-coding"
+        or lowered_model.startswith("kimi-")
+        or coding_key_hint
+    )
+
+    if normalized in aliases:
+        mapped = aliases[normalized]
+        # Some users paste a Kimi Coding key while keeping legacy Moonshot preset/model.
+        # Prefer the coding channel in this mixed case to avoid systematic 401/403 failures.
+        if mapped == "moonshot" and coding_preset_hint:
+            return "kimi_coding"
+        return mapped
+
+    if coding_preset_hint:
         return "kimi_coding"
     return "moonshot"
 
@@ -137,12 +152,22 @@ def normalize_service_ai_request_config(raw_payload: Any) -> dict[str, Any] | No
                 row.get("preset"),
                 base_url=normalized_row["base_url"],
                 model=normalized_row["model"],
+                api_key=normalized_row["api_key"],
             )
             preset_defaults = kimi_preset_defaults(preset)
             normalized_row["preset"] = preset
-            if not normalized_row["model"]:
+            if (
+                not normalized_row["model"]
+                or (preset == "kimi_coding" and normalized_row["model"].lower().startswith("moonshot-"))
+            ):
                 normalized_row["model"] = preset_defaults["model"]
-            if not normalized_row["base_url"]:
+            # If the config mixes preset/model/base_url, prefer the inferred preset defaults so the
+            # runtime doesn't silently hit a mismatched gateway and 401.
+            if (
+                not normalized_row["base_url"]
+                or (preset == "moonshot" and "api.moonshot.cn" not in normalized_row["base_url"].lower())
+                or (preset == "kimi_coding" and "api.kimi.com/coding" not in normalized_row["base_url"].lower())
+            ):
                 normalized_row["base_url"] = preset_defaults["base_url"]
         normalized["providers"].append(normalized_row)
     return normalized

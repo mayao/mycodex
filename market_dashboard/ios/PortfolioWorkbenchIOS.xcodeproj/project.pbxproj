@@ -7,8 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00A2D04FAAA270671393F0E2 /* LongbridgeDiagnosticsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55C52CFBFB2CAA677F4E64DA /* LongbridgeDiagnosticsStore.swift */; };
 		0C9B1B2AD478138782DA610F /* MultipartFormData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 786EB81B8EF3E352EC7B88AA /* MultipartFormData.swift */; };
 		0D95619F42854426BC1165EA /* AIChatScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6120C54DD6D5FC6A0FE1D8ED /* AIChatScreen.swift */; };
+		2F53E6F049EC4C8D34D773AB /* LongbridgeEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A033D4D85203561CD947B38 /* LongbridgeEnvironment.swift */; };
 		3171F9F3D07866451D3089A1 /* PortfolioWorkbenchAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A4A5F31CA9A053ADD1D064E /* PortfolioWorkbenchAPIClient.swift */; };
 		31B3720273651C38C4D8DB1E /* HoldingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EAF4EF4E92895376414BA95 /* HoldingsScreen.swift */; };
 		35AD8E9528C376F3B009AAE5 /* AccountsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9606718ABC419F1EA282E343 /* AccountsScreen.swift */; };
@@ -16,18 +18,28 @@
 		47CC148CF8BA977C425D84B1 /* OverviewDrilldownViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E3F1D79A7976480297AC3A9 /* OverviewDrilldownViews.swift */; };
 		4CE4BA5DA2063513847107A5 /* ServerDiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73FDE400FE8E36A8A7261F6F /* ServerDiscoveryService.swift */; };
 		5BC7D22E0BFAF8C9C09DEE36 /* DeviceAccountIdentityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */; };
+		5FA5FC7CCF379C0717650F8A /* MarketDataOrchestrator.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED6A35CF590E1A41A131C2A4 /* MarketDataOrchestrator.swift */; };
 		607D2E4225E2C3D9D44F67D4 /* PortfolioWorkbenchIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D46D61A5E924FA58270BBFA /* PortfolioWorkbenchIOSApp.swift */; };
+		67A26C038A9CBE00736786D7 /* DailyStrategySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BBFDAD0E0BAC9B4E9B62537 /* DailyStrategySupport.swift */; };
+		6A9214A543B9623A4A06B54A /* LongbridgeAuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59AD6FE97C38A3BD3F20372 /* LongbridgeAuthService.swift */; };
 		7A685292EF04DD569A4D3660 /* OverviewScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF619D9ECB95AE8735165420 /* OverviewScreen.swift */; };
+		90FC4B677218150D7EA6BBA1 /* AITabScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46173763AC9D042023DE448A /* AITabScreen.swift */; };
 		9B34878EF5BE053B102F829D /* PortfolioDashboardStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462AF149E90AC502ABA6E308 /* PortfolioDashboardStore.swift */; };
 		A7143C5816949AF6576D9B6C /* HoldingDetailScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6861EE915907DA98EECE0E1D /* HoldingDetailScreen.swift */; };
+		A72CA9701C693E982C9C0CE6 /* LongbridgeDailyStrategyBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 089ACCD31FDC139BEE04C63D /* LongbridgeDailyStrategyBuilder.swift */; };
 		ABBADE061CB9A09E990A0401 /* HoldingDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81EAB2B7C1B84326CC2E0050 /* HoldingDetailViewModel.swift */; };
+		AEBBF4BDABE6F25D413BC688 /* LongbridgeQuoteMarkdownClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60029792F3D2B3F06D17B2A7 /* LongbridgeQuoteMarkdownClient.swift */; };
 		AF43D3456B833F9F52B6DACE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5251B548EE3AE317ACC5E88D /* Assets.xcassets */; };
+		B6EF1894A3A9FC941DAB4FB2 /* BootBranding.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7961FDAE60C52AC6108E30D /* BootBranding.swift */; };
 		B7411FA3FD54C0827B0F66F2 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDAD06DB4CF1424598BD8309 /* MainTabView.swift */; };
 		B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */; };
 		BA9739AD06A3B37F3E0486C9 /* SettingsScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2514C7174B5A98587F947B55 /* SettingsScreen.swift */; };
+		BB1914F16AE0C79C893761B5 /* LongbridgeDashboardSnapshotFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0DF597101828C7BE1953DA /* LongbridgeDashboardSnapshotFactory.swift */; };
 		BFC34B2C9DDD91A3D69FEF83 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */; };
 		C75CE6C6183F0411F978311A /* LoadState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A004A88204862891DF42780 /* LoadState.swift */; };
+		D69A223F196A02CA9870BB2E /* LongbridgeAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6E6995B1B0D830EB59E353 /* LongbridgeAPIClient.swift */; };
 		D71A356CC2645FA632DDE7C1 /* LoginScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BB09CEA48A1F12B05972056 /* LoginScreen.swift */; };
+		DB734C722428D72B84A7FF46 /* ServiceDashboardSnapshotFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A6B0ECC025CE265C5A1D5A9 /* ServiceDashboardSnapshotFactory.swift */; };
 		ECE0CCE00B12B0BA81F63D3D /* PortfolioWorkbenchMobileCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0410839EE2F6F947FB989BFF /* PortfolioWorkbenchMobileCore.framework */; };
 		EDC21F0C392F626FC548B806 /* CachedSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */; };
 		F0ECB97AC849809A20085215 /* UIComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 710CCCB27BBE88F1EAA34C04 /* UIComponents.swift */; };
@@ -62,23 +74,31 @@
 
 /* Begin PBXFileReference section */
 		0410839EE2F6F947FB989BFF /* PortfolioWorkbenchMobileCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PortfolioWorkbenchMobileCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		089ACCD31FDC139BEE04C63D /* LongbridgeDailyStrategyBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeDailyStrategyBuilder.swift; sourceTree = "<group>"; };
+		0BBFDAD0E0BAC9B4E9B62537 /* DailyStrategySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyStrategySupport.swift; sourceTree = "<group>"; };
+		1A6B0ECC025CE265C5A1D5A9 /* ServiceDashboardSnapshotFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceDashboardSnapshotFactory.swift; sourceTree = "<group>"; };
 		1BB09CEA48A1F12B05972056 /* LoginScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginScreen.swift; sourceTree = "<group>"; };
 		1D46D61A5E924FA58270BBFA /* PortfolioWorkbenchIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioWorkbenchIOSApp.swift; sourceTree = "<group>"; };
 		2514C7174B5A98587F947B55 /* SettingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsScreen.swift; sourceTree = "<group>"; };
 		2A183DD990D83CF724DA4C3A /* AIProviderSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIProviderSettings.swift; sourceTree = "<group>"; };
 		33370D7C9C9AF6229D8B2000 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		3A4A5F31CA9A053ADD1D064E /* PortfolioWorkbenchAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioWorkbenchAPIClient.swift; sourceTree = "<group>"; };
+		46173763AC9D042023DE448A /* AITabScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AITabScreen.swift; sourceTree = "<group>"; };
 		462AF149E90AC502ABA6E308 /* PortfolioDashboardStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PortfolioDashboardStore.swift; sourceTree = "<group>"; };
 		5251B548EE3AE317ACC5E88D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		55C52CFBFB2CAA677F4E64DA /* LongbridgeDiagnosticsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeDiagnosticsStore.swift; sourceTree = "<group>"; };
 		5A004A88204862891DF42780 /* LoadState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadState.swift; sourceTree = "<group>"; };
+		5C6E6995B1B0D830EB59E353 /* LongbridgeAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeAPIClient.swift; sourceTree = "<group>"; };
 		5C7B9A1763137CB9A7BF8287 /* PortfolioWorkbenchIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = PortfolioWorkbenchIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5EAF4EF4E92895376414BA95 /* HoldingsScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingsScreen.swift; sourceTree = "<group>"; };
+		60029792F3D2B3F06D17B2A7 /* LongbridgeQuoteMarkdownClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeQuoteMarkdownClient.swift; sourceTree = "<group>"; };
 		6120C54DD6D5FC6A0FE1D8ED /* AIChatScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatScreen.swift; sourceTree = "<group>"; };
 		6861EE915907DA98EECE0E1D /* HoldingDetailScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailScreen.swift; sourceTree = "<group>"; };
 		70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
 		710CCCB27BBE88F1EAA34C04 /* UIComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UIComponents.swift; sourceTree = "<group>"; };
 		73FDE400FE8E36A8A7261F6F /* ServerDiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerDiscoveryService.swift; sourceTree = "<group>"; };
 		786EB81B8EF3E352EC7B88AA /* MultipartFormData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultipartFormData.swift; sourceTree = "<group>"; };
+		7A033D4D85203561CD947B38 /* LongbridgeEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeEnvironment.swift; sourceTree = "<group>"; };
 		81EAB2B7C1B84326CC2E0050 /* HoldingDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoldingDetailViewModel.swift; sourceTree = "<group>"; };
 		92C71BF081459D616797827C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		9483CA763B73F4A4E76BAD44 /* LocalMockAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMockAPI.swift; sourceTree = "<group>"; };
@@ -86,9 +106,14 @@
 		9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachedSnapshot.swift; sourceTree = "<group>"; };
 		9E3F1D79A7976480297AC3A9 /* OverviewDrilldownViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewDrilldownViews.swift; sourceTree = "<group>"; };
 		B394BBF5B42657D4FE15D630 /* BiometricUnlockScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BiometricUnlockScreen.swift; sourceTree = "<group>"; };
+		B7961FDAE60C52AC6108E30D /* BootBranding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootBranding.swift; sourceTree = "<group>"; };
+		BC0DF597101828C7BE1953DA /* LongbridgeDashboardSnapshotFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeDashboardSnapshotFactory.swift; sourceTree = "<group>"; };
 		BF619D9ECB95AE8735165420 /* OverviewScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverviewScreen.swift; sourceTree = "<group>"; };
+		C59AD6FE97C38A3BD3F20372 /* LongbridgeAuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LongbridgeAuthService.swift; sourceTree = "<group>"; };
 		CDAD06DB4CF1424598BD8309 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceAccountIdentityStore.swift; sourceTree = "<group>"; };
+		E21D7D9AA0B7B3FD39965AF1 /* PortfolioWorkbenchIOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PortfolioWorkbenchIOS.entitlements; sourceTree = "<group>"; };
+		ED6A35CF590E1A41A131C2A4 /* MarketDataOrchestrator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketDataOrchestrator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -133,9 +158,15 @@
 			isa = PBXGroup;
 			children = (
 				9483CA763B73F4A4E76BAD44 /* LocalMockAPI.swift */,
+				5C6E6995B1B0D830EB59E353 /* LongbridgeAPIClient.swift */,
+				089ACCD31FDC139BEE04C63D /* LongbridgeDailyStrategyBuilder.swift */,
+				BC0DF597101828C7BE1953DA /* LongbridgeDashboardSnapshotFactory.swift */,
+				7A033D4D85203561CD947B38 /* LongbridgeEnvironment.swift */,
+				60029792F3D2B3F06D17B2A7 /* LongbridgeQuoteMarkdownClient.swift */,
 				33370D7C9C9AF6229D8B2000 /* Models.swift */,
 				786EB81B8EF3E352EC7B88AA /* MultipartFormData.swift */,
 				3A4A5F31CA9A053ADD1D064E /* PortfolioWorkbenchAPIClient.swift */,
+				1A6B0ECC025CE265C5A1D5A9 /* ServiceDashboardSnapshotFactory.swift */,
 			);
 			name = PortfolioWorkbenchMobileCore;
 			path = PortfolioWorkbenchMobileCore/Sources/PortfolioWorkbenchMobileCore;
@@ -154,6 +185,7 @@
 			isa = PBXGroup;
 			children = (
 				92C71BF081459D616797827C /* Info.plist */,
+				E21D7D9AA0B7B3FD39965AF1 /* PortfolioWorkbenchIOS.entitlements */,
 				6F4352F98FC56D82C697D453 /* App */,
 				DD80B185D8E668C05B039AB2 /* Features */,
 				25C98EAD2B53D31188F475CB /* Resources */,
@@ -176,6 +208,8 @@
 				70B44538E49B65DCBC0FC758 /* AppSettingsStore.swift */,
 				9CE9DC8DD4A2BF59335CF55E /* CachedSnapshot.swift */,
 				DA37795AF1B7363D8B1BC2A5 /* DeviceAccountIdentityStore.swift */,
+				C59AD6FE97C38A3BD3F20372 /* LongbridgeAuthService.swift */,
+				55C52CFBFB2CAA677F4E64DA /* LongbridgeDiagnosticsStore.swift */,
 				CDAD06DB4CF1424598BD8309 /* MainTabView.swift */,
 				462AF149E90AC502ABA6E308 /* PortfolioDashboardStore.swift */,
 				1D46D61A5E924FA58270BBFA /* PortfolioWorkbenchIOSApp.swift */,
@@ -186,6 +220,7 @@
 		942877D9D7A3A28803B30306 /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				B7961FDAE60C52AC6108E30D /* BootBranding.swift */,
 				5A004A88204862891DF42780 /* LoadState.swift */,
 				710CCCB27BBE88F1EAA34C04 /* UIComponents.swift */,
 			);
@@ -206,6 +241,9 @@
 			isa = PBXGroup;
 			children = (
 				6120C54DD6D5FC6A0FE1D8ED /* AIChatScreen.swift */,
+				46173763AC9D042023DE448A /* AITabScreen.swift */,
+				0BBFDAD0E0BAC9B4E9B62537 /* DailyStrategySupport.swift */,
+				ED6A35CF590E1A41A131C2A4 /* MarketDataOrchestrator.swift */,
 			);
 			path = AI;
 			sourceTree = "<group>";
@@ -339,9 +377,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				F14DB378B1217E3DA8B12536 /* LocalMockAPI.swift in Sources */,
+				D69A223F196A02CA9870BB2E /* LongbridgeAPIClient.swift in Sources */,
+				A72CA9701C693E982C9C0CE6 /* LongbridgeDailyStrategyBuilder.swift in Sources */,
+				BB1914F16AE0C79C893761B5 /* LongbridgeDashboardSnapshotFactory.swift in Sources */,
+				2F53E6F049EC4C8D34D773AB /* LongbridgeEnvironment.swift in Sources */,
+				AEBBF4BDABE6F25D413BC688 /* LongbridgeQuoteMarkdownClient.swift in Sources */,
 				F540F648B039C741F7FD0D55 /* Models.swift in Sources */,
 				0C9B1B2AD478138782DA610F /* MultipartFormData.swift in Sources */,
 				3171F9F3D07866451D3089A1 /* PortfolioWorkbenchAPIClient.swift in Sources */,
+				DB734C722428D72B84A7FF46 /* ServiceDashboardSnapshotFactory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -351,17 +395,23 @@
 			files = (
 				0D95619F42854426BC1165EA /* AIChatScreen.swift in Sources */,
 				B850608E6697B89FE20DB68A /* AIProviderSettings.swift in Sources */,
+				90FC4B677218150D7EA6BBA1 /* AITabScreen.swift in Sources */,
 				35AD8E9528C376F3B009AAE5 /* AccountsScreen.swift in Sources */,
 				BFC34B2C9DDD91A3D69FEF83 /* AppSettingsStore.swift in Sources */,
 				F8923F2ED81C8FD1FAF13FE1 /* BiometricUnlockScreen.swift in Sources */,
+				B6EF1894A3A9FC941DAB4FB2 /* BootBranding.swift in Sources */,
 				EDC21F0C392F626FC548B806 /* CachedSnapshot.swift in Sources */,
+				67A26C038A9CBE00736786D7 /* DailyStrategySupport.swift in Sources */,
 				5BC7D22E0BFAF8C9C09DEE36 /* DeviceAccountIdentityStore.swift in Sources */,
 				A7143C5816949AF6576D9B6C /* HoldingDetailScreen.swift in Sources */,
 				ABBADE061CB9A09E990A0401 /* HoldingDetailViewModel.swift in Sources */,
 				31B3720273651C38C4D8DB1E /* HoldingsScreen.swift in Sources */,
 				C75CE6C6183F0411F978311A /* LoadState.swift in Sources */,
 				D71A356CC2645FA632DDE7C1 /* LoginScreen.swift in Sources */,
+				6A9214A543B9623A4A06B54A /* LongbridgeAuthService.swift in Sources */,
+				00A2D04FAAA270671393F0E2 /* LongbridgeDiagnosticsStore.swift in Sources */,
 				B7411FA3FD54C0827B0F66F2 /* MainTabView.swift in Sources */,
+				5FA5FC7CCF379C0717650F8A /* MarketDataOrchestrator.swift in Sources */,
 				47CC148CF8BA977C425D84B1 /* OverviewDrilldownViews.swift in Sources */,
 				7A685292EF04DD569A4D3660 /* OverviewScreen.swift in Sources */,
 				9B34878EF5BE053B102F829D /* PortfolioDashboardStore.swift in Sources */,
@@ -437,6 +487,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PortfolioWorkbenchIOS/PortfolioWorkbenchIOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PortfolioWorkbenchIOS/Info.plist;
@@ -507,8 +558,8 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.144.16:8008/";
-				PRODUCT_BUNDLE_IDENTIFIER = com.bbt2d26l2v.PortfolioWorkbenchIOS;
+				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://127.0.0.1:8008/";
+				PRODUCT_BUNDLE_IDENTIFIER = com.xmly.portfolioworkbenchios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -569,8 +620,8 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://10.8.144.16:8008/";
-				PRODUCT_BUNDLE_IDENTIFIER = com.bbt2d26l2v.PortfolioWorkbenchIOS;
+				PORTFOLIO_WORKBENCH_DEFAULT_SERVER_URL = "http://127.0.0.1:8008/";
+				PRODUCT_BUNDLE_IDENTIFIER = com.xmly.portfolioworkbenchios;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -584,6 +635,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = PortfolioWorkbenchIOS/PortfolioWorkbenchIOS.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PortfolioWorkbenchIOS/Info.plist;

@@ -928,16 +928,21 @@ def normalize_holding(row: dict[str, Any], total_value_hkd: float) -> dict[str, 
         "statement_price": price,
         "statement_value": row.get("statement_value"),
         "statement_value_hkd": round(statement_value_hkd, 2),
+        "snapshot_statement_value_hkd": round(statement_value_hkd, 2),
         "statement_pnl": row.get("statement_pnl"),
         "statement_pnl_hkd": round(float(statement_pnl_hkd), 2) if statement_pnl_hkd is not None else None,
+        "snapshot_statement_pnl_hkd": round(float(statement_pnl_hkd), 2) if statement_pnl_hkd is not None else None,
         "statement_pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
+        "snapshot_statement_pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
         "pnl_source": pnl_components.get("pnl_source"),
+        "cost_basis_hkd": round(float(pnl_components.get("cost_basis_hkd") or 0.0), 2) if pnl_components.get("cost_basis_hkd") is not None else None,
         "statement_pnl_component_hkd": round(float(pnl_components.get("statement_hkd") or 0.0), 2),
         "estimated_pnl_component_hkd": round(float(pnl_components.get("estimated_hkd") or 0.0), 2),
         "statement_pnl_component_count": int(pnl_components.get("statement_count") or 0),
         "estimated_pnl_component_count": int(pnl_components.get("estimated_count") or 0),
         "unavailable_pnl_component_count": int(pnl_components.get("unavailable_count") or 0),
         "weight_pct": round(weight_pct, 2),
+        "snapshot_weight_pct": round(weight_pct, 2),
         "account_count": row["account_count"],
         "accounts": row["accounts"],
         "category": meta["category"],
@@ -951,6 +956,67 @@ def normalize_holding(row: dict[str, Any], total_value_hkd: float) -> dict[str, 
         "fundamental_note": meta["fundamental_note"],
         "watch_items": meta["watch_items"],
     }
+
+
+def apply_live_portfolio_valuation(
+    holdings: list[dict[str, Any]],
+    *,
+    total_snapshot_value_hkd: float,
+    total_snapshot_nav_hkd: float,
+) -> tuple[list[dict[str, Any]], float, float]:
+    updated_holdings: list[dict[str, Any]] = []
+    total_current_value_hkd = 0.0
+
+    for item in holdings:
+        snapshot_value_hkd = float(item.get("snapshot_statement_value_hkd") or item.get("statement_value_hkd") or 0.0)
+        snapshot_pnl_hkd = item.get("snapshot_statement_pnl_hkd")
+        current_price = item.get("current_price")
+        quantity = float(item.get("quantity") or 0.0)
+        currency = str(item.get("currency") or "").strip().upper()
+
+        if current_price is not None:
+            current_value_native = quantity * float(current_price)
+        else:
+            current_value_native = item.get("statement_value")
+
+        current_value_hkd = hkd_value(current_value_native, currency)
+        total_current_value_hkd += current_value_hkd
+        delta_value_hkd = current_value_hkd - snapshot_value_hkd
+
+        current_pnl_hkd = None
+        if snapshot_pnl_hkd is not None:
+            current_pnl_hkd = round(float(snapshot_pnl_hkd) + delta_value_hkd, 2)
+
+        cost_basis_hkd = item.get("cost_basis_hkd")
+        current_pnl_pct = None
+        if current_pnl_hkd is not None and cost_basis_hkd not in {None, 0}:
+            current_pnl_pct = round(safe_pct(float(current_pnl_hkd), float(cost_basis_hkd)), 2)
+
+        updated_holdings.append(
+            {
+                **item,
+                "current_value": round(float(current_value_native), 4) if current_value_native is not None else None,
+                "current_value_hkd": round(current_value_hkd, 2),
+                "current_pnl_hkd": current_pnl_hkd,
+                "current_pnl_pct": current_pnl_pct,
+                "statement_value": round(float(current_value_native), 4) if current_value_native is not None else None,
+                "statement_value_hkd": round(current_value_hkd, 2),
+                "statement_pnl_hkd": current_pnl_hkd,
+                "statement_pnl_pct": current_pnl_pct,
+            }
+        )
+
+    total_current_value_hkd = round(total_current_value_hkd, 2)
+    total_current_nav_hkd = round(
+        float(total_snapshot_nav_hkd) - float(total_snapshot_value_hkd) + total_current_value_hkd,
+        2,
+    )
+
+    for item in updated_holdings:
+        item["weight_pct"] = round(safe_pct(item["statement_value_hkd"], total_current_value_hkd) or 0.0, 2)
+
+    updated_holdings.sort(key=lambda item: item["statement_value_hkd"], reverse=True)
+    return updated_holdings, total_current_value_hkd, total_current_nav_hkd
 
 
 def fundamental_details_for_holding(holding: dict[str, Any]) -> dict[str, str]:
@@ -1099,6 +1165,72 @@ def build_account_cards(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         )
     cards.sort(key=lambda item: item["nav_hkd"], reverse=True)
     return cards
+
+
+def refresh_account_cards_with_live_holdings(
+    account_cards: list[dict[str, Any]],
+    holdings: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    current_holdings_value_by_account: dict[str, float] = {}
+    holding_members_by_account: dict[str, list[tuple[str, float]]] = {}
+
+    for holding in holdings:
+        current_price = holding.get("current_price")
+        for account_row in holding.get("accounts", []):
+            account_id = str(account_row.get("account_id") or "").strip()
+            if not account_id:
+                continue
+            quantity = float(account_row.get("quantity") or 0.0)
+            currency = str(account_row.get("currency") or holding.get("currency") or "").strip().upper()
+            if current_price is not None:
+                current_value_native = quantity * float(current_price)
+            else:
+                current_value_native = account_row.get("statement_value")
+            current_value_hkd = hkd_value(current_value_native, currency)
+            current_holdings_value_by_account[account_id] = (
+                current_holdings_value_by_account.get(account_id, 0.0) + current_value_hkd
+            )
+            holding_members_by_account.setdefault(account_id, []).append((holding["name"], current_value_hkd))
+
+    refreshed_cards: list[dict[str, Any]] = []
+    for card in account_cards:
+        account_id = card["account_id"]
+        snapshot_holdings_value_hkd = float(card.get("holdings_value_hkd") or 0.0)
+        snapshot_nav_hkd = float(card.get("nav_hkd") or 0.0)
+        current_holdings_value_hkd = round(
+            current_holdings_value_by_account.get(account_id, snapshot_holdings_value_hkd),
+            2,
+        )
+        holdings_delta_hkd = current_holdings_value_hkd - snapshot_holdings_value_hkd
+        current_nav_hkd = round(snapshot_nav_hkd + holdings_delta_hkd, 2)
+        current_unrealized_pnl_hkd = round(float(card.get("unrealized_pnl_hkd") or 0.0) + holdings_delta_hkd, 2)
+        realized_pnl_hkd = card.get("realized_pnl_hkd")
+        current_total_pnl_hkd = round(
+            current_unrealized_pnl_hkd + (float(realized_pnl_hkd) if realized_pnl_hkd is not None else 0.0),
+            2,
+        )
+        top_members = sorted(
+            holding_members_by_account.get(account_id, []),
+            key=lambda item: item[1],
+            reverse=True,
+        )[:3]
+        top_names = "、".join(name for name, _value in top_members) or card.get("top_names")
+
+        refreshed_cards.append(
+            {
+                **card,
+                "snapshot_nav_hkd": round(snapshot_nav_hkd, 2),
+                "snapshot_holdings_value_hkd": round(snapshot_holdings_value_hkd, 2),
+                "nav_hkd": current_nav_hkd,
+                "holdings_value_hkd": current_holdings_value_hkd,
+                "unrealized_pnl_hkd": current_unrealized_pnl_hkd,
+                "total_pnl_hkd": current_total_pnl_hkd,
+                "top_names": top_names,
+            }
+        )
+
+    refreshed_cards.sort(key=lambda item: item["nav_hkd"], reverse=True)
+    return refreshed_cards
 
 
 def build_breakdown(rows: list[dict[str, Any]], key: str, label_key: str) -> list[dict[str, Any]]:
@@ -3649,7 +3781,24 @@ def monitored_statements(accounts: list[dict[str, Any]], user_id: str | None = N
     rows = []
     for item in get_statement_sources(user_id=user_id):
         path = Path(item["path"])
+        parsed_payload_path_raw = str(item.get("parsed_payload_path") or "").strip()
+        parsed_payload_path = Path(parsed_payload_path_raw).expanduser() if parsed_payload_path_raw else None
+        original_file_exists = path.exists()
+        parsed_payload_exists = bool(parsed_payload_path and parsed_payload_path.exists())
         status = source_states.get(item["account_id"], {})
+        load_status = status.get("load_status") or ("parsed" if (original_file_exists or parsed_payload_exists) else "error")
+        if original_file_exists:
+            availability_status = "original"
+            availability_note = "当前服务器可直接读取源文件。"
+        elif parsed_payload_exists:
+            availability_status = "parsed_payload"
+            availability_note = "原始文件不在当前服务器，当前使用已解析数据。"
+        elif load_status == "cache":
+            availability_status = "cache"
+            availability_note = "原始文件不在当前服务器，当前使用最近缓存快照。"
+        else:
+            availability_status = "missing"
+            availability_note = "当前服务器没有可用源文件，需重新上传或恢复文件。"
         rows.append(
             {
                 "broker": item["broker"],
@@ -3666,11 +3815,14 @@ def monitored_statements(accounts: list[dict[str, Any]], user_id: str | None = N
                 "llm_provider": item.get("llm_provider"),
                 "llm_model": item.get("llm_model"),
                 "parsed_payload_path": item.get("parsed_payload_path"),
+                "parsed_payload_exists": parsed_payload_exists,
                 "detected_broker": item.get("detected_broker"),
                 "detected_statement_type": item.get("detected_statement_type"),
                 "last_parsed_at": item.get("last_parsed_at"),
-                "file_exists": path.exists(),
-                "load_status": status.get("load_status") or ("parsed" if path.exists() else "error"),
+                "file_exists": original_file_exists,
+                "availability_status": availability_status,
+                "availability_note": availability_note,
+                "load_status": load_status,
                 "issue": status.get("issue"),
             }
         )
@@ -3818,7 +3970,7 @@ def build_dashboard_payload(
     total_value_hkd = portfolio["total_statement_value_hkd"]
     holdings = [normalize_holding(item, total_value_hkd) for item in portfolio["aggregate_holdings"]]
     holdings.sort(key=lambda item: item["statement_value_hkd"], reverse=True)
-    account_cards = build_account_cards(accounts)
+    snapshot_account_cards = build_account_cards(accounts)
     derivatives = [normalize_derivative(item) for item in portfolio["derivatives"]]
     trades = [normalize_trade(item) for item in portfolio["recent_trades"]]
     total_derivative_notional_hkd = round(sum(item["estimated_notional_hkd"] for item in derivatives), 2)
@@ -3846,12 +3998,19 @@ def build_dashboard_payload(
         macro_bundle.get("category_scores", {}),
         research_cache,
     )
+    holdings, total_current_value_hkd, total_current_nav_hkd = apply_live_portfolio_valuation(
+        holdings,
+        total_snapshot_value_hkd=portfolio["total_statement_value_hkd"],
+        total_snapshot_nav_hkd=portfolio["total_nav_hkd"],
+    )
+    account_cards = refresh_account_cards_with_live_holdings(snapshot_account_cards, holdings)
+    top5_ratio = round(sum(item["weight_pct"] for item in holdings[:5]), 2)
     risk_flags = build_risk_flags(
         holdings,
-        portfolio["total_nav_hkd"],
+        total_current_nav_hkd,
         portfolio["total_financing_hkd"],
         total_derivative_notional_hkd,
-        portfolio["top5_ratio"],
+        top5_ratio,
     )
 
     snapshot_dates = sorted(account["statement_date"] for account in accounts)
@@ -3866,7 +4025,7 @@ def build_dashboard_payload(
         macro_bundle,
         portfolio["total_financing_hkd"],
         total_derivative_notional_hkd,
-        portfolio["total_nav_hkd"],
+        total_current_nav_hkd,
     )
     key_drivers = build_key_drivers(holdings, risk_flags, macro_topics)
     ai_insights = (
@@ -3874,7 +4033,7 @@ def build_dashboard_payload(
             holdings,
             trades,
             derivatives,
-            portfolio["total_nav_hkd"],
+            total_current_nav_hkd,
             portfolio["total_financing_hkd"],
             total_derivative_notional_hkd,
             macro_topics,
@@ -3933,12 +4092,14 @@ def build_dashboard_payload(
     if source_health.get("cached_count"):
         source_cache_overview = f"结单层有 {source_health['cached_count']} 个账户使用缓存快照。"
     headline = (
-        f"截至 {snapshot_dates[-1]} 的真实结单快照显示，这是一组以 {main_theme_names} 为主轴、"
+        f"截至 {snapshot_dates[-1]} 的结单持仓数量与最新价格估算显示，这是一组以 {main_theme_names} 为主轴、"
         f"头部仓位集中在 {top_names} 的高波动组合。"
     )
     overview = (
-        f"股票市值约 HK${portfolio['total_statement_value_hkd']:,.0f}，净资产约 HK${portfolio['total_nav_hkd']:,.0f}，"
+        f"股票市值约 HK${total_current_value_hkd:,.0f}，净资产约 HK${total_current_nav_hkd:,.0f}，"
         f"融资相关负现金约 HK${portfolio['total_financing_hkd']:,.0f}。"
+        " 持仓数量固定取自最新结单，个股金额和组合总额会在每次同步价格后动态重算；"
+        "若在线行情不可用，则自动回退到最近一次已同步价格，再兜底为结单价格。"
         f"账户盈亏口径：已实现 HK${total_realized_pnl_hkd:,.0f} + 未实现 HK${total_unrealized_pnl_hkd:,.0f}"
         f" = 合计 HK${total_pnl_hkd:,.0f}（已实现含结单现金项，如利息/分红/税费）"
         f"（已实现覆盖 {realized_account_count}/{len(account_cards)} 个账户；"
@@ -3960,8 +4121,8 @@ def build_dashboard_payload(
             "holding_count": len(holdings),
             "trade_count": len(trades),
             "derivative_count": len(derivatives),
-            "total_nav_hkd": portfolio["total_nav_hkd"],
-            "total_statement_value_hkd": portfolio["total_statement_value_hkd"],
+            "total_nav_hkd": total_current_nav_hkd,
+            "total_statement_value_hkd": total_current_value_hkd,
             "total_financing_hkd": portfolio["total_financing_hkd"],
             "total_derivative_notional_hkd": total_derivative_notional_hkd,
             "total_unrealized_pnl_hkd": total_unrealized_pnl_hkd,
@@ -3973,7 +4134,7 @@ def build_dashboard_payload(
             "statement_realized_account_count": statement_realized_account_count,
             "estimated_realized_account_count": estimated_realized_account_count,
             "inferred_zero_realized_account_count": inferred_zero_realized_account_count,
-            "top5_ratio": portfolio["top5_ratio"],
+            "top5_ratio": top5_ratio,
             "top1_weight_pct": holdings[0]["weight_pct"] if holdings else 0.0,
             "statement_start_date": snapshot_dates[0],
             "statement_end_date": snapshot_dates[-1],

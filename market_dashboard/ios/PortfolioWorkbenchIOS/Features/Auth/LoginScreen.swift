@@ -5,320 +5,443 @@ struct LoginScreen: View {
     @EnvironmentObject private var settings: AppSettingsStore
 
     @State private var isSubmitting = false
-    @State private var statusMessage: String?
-    @State private var isShowingServerSwitcher = false
-    @State private var serverDraft = ""
+    @State private var statusMessage: String = "正在连接你的投资账户…"
+    @State private var hasTriggeredAutoLogin = false
+    @State private var hasAttemptedServerRecovery = false
+    @State private var isShowingServerConfig = false
 
     var body: some View {
-        AppBackdrop {
-            ScrollView {
-                VStack(spacing: 18) {
-                    Spacer(minLength: 24)
-                    headerSection
-                    accessSection
-                    serverAccessory
-                    if let statusMessage, !statusMessage.isEmpty {
-                        statusBanner
-                    }
-                    Spacer(minLength: 12)
-                }
-                .padding(18)
-                .frame(maxWidth: 520)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 20)
-                .padding(.bottom, 32)
-            }
-        }
-        .sheet(isPresented: $isShowingServerSwitcher) {
-            serverSwitcherSheet
-        }
-        .task(id: settings.trimmedServerURLString) {
-            await settings.restoreDeviceSessionIfPossible()
-        }
-    }
+        ZStack {
+            BootBrandBackdrop()
 
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(BrokerPalette.panelStrong.opacity(0.96))
-                    .frame(width: 92, height: 92)
-
-                Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(BrokerPalette.cyan)
-            }
-
-            Text("MyInvAI")
-                .font(.system(size: 32, weight: .heavy, design: .rounded))
-                .foregroundStyle(BrokerPalette.ink)
-            Text("打开你的投资组合、持仓详情和 AI 判断。")
-                .font(.subheadline)
-                .foregroundStyle(BrokerPalette.muted)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private var accessSection: some View {
-        SectionPanel(title: "进入应用", subtitle: accessSubtitle) {
-            VStack(alignment: .leading, spacing: 12) {
-                if settings.isRestoringDeviceSession {
-                    HStack(spacing: 10) {
-                        ProgressView()
-                            .tint(BrokerPalette.cyan)
-                        Text("正在恢复当前设备的专属会话…")
-                            .font(.footnote)
-                            .foregroundStyle(BrokerPalette.muted)
-                    }
-                }
+            VStack {
+                BootBrandWordmark(logoSize: 86, titleSize: 33, subtitleSize: 11)
 
                 HStack(spacing: 10) {
-                    Button {
-                        Task { await loginWithDevice(requireLocalAuthentication: false) }
-                    } label: {
-                        HStack {
-                            if isSubmitting || settings.isRestoringDeviceSession {
-                                ProgressView()
-                                    .tint(Color.black)
-                            } else {
-                                Image(systemName: settings.hasProvisionedDeviceAccount ? "iphone.gen3" : "person.crop.circle.badge.plus")
-                            }
-                            Text(deviceLoginButtonTitle)
+                    ForEach(0..<4, id: \.self) { _ in
+                        Circle()
+                            .fill(Color.white.opacity(0.78))
+                            .frame(width: 7, height: 7)
+                    }
+                }
+                .padding(.top, 2)
+            }
+            .offset(y: -112)
+
+            VStack(spacing: 12) {
+                Spacer()
+
+                if isSubmitting || settings.isRestoringDeviceSession {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.14)
+                }
+
+                Text(displayStatusMessage)
+                    .font(.footnote)
+                    .foregroundStyle(Color.white.opacity(0.90))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+
+                VStack(spacing: 10) {
+                    if shouldShowRetryActions {
+                        Button {
+                            Task { await attemptAutomaticLogin() }
+                        } label: {
+                            Text("重新尝试")
+                                .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
+                        .buttonStyle(.borderedProminent)
+                        .tint(BrokerPalette.cyan)
+                        .foregroundStyle(Color.black)
+                        .disabled(isSubmitting || settings.isRestoringDeviceSession)
+                    }
+
+                    AppleSignInControl(
+                        onStart: {
+                            statusMessage = "正在请求 Apple 授权…"
+                        },
+                        onSuccess: { userIdentifier, displayName, emailAddress in
+                            Task {
+                                await loginWithApple(
+                                    userIdentifier: userIdentifier,
+                                    displayName: displayName,
+                                    emailAddress: emailAddress
+                                )
+                            }
+                        },
+                        onFailure: { message in
+                            statusMessage = message
+                        }
+                    )
+                    .disabled(isSubmitting || settings.isRestoringDeviceSession)
+
+                    Button {
+                        Task { await loginWithDevice(requireLocalAuthentication: shouldUseBiometricForDeviceLogin) }
+                    } label: {
+                        Text(deviceLoginButtonTitle)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.teal)
+                    .disabled(isSubmitting || settings.isRestoringDeviceSession)
+
+                    Button {
+                        settings.enableStandaloneAIEntry()
+                    } label: {
+                        Text("先进入 AI 模式")
+                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(BrokerPalette.cyan)
+                    .tint(BrokerPalette.gold)
                     .foregroundStyle(Color.black)
                     .disabled(isSubmitting || settings.isRestoringDeviceSession)
 
-                    if settings.supportsBiometricUnlock && settings.hasProvisionedDeviceAccount {
-                        Button {
-                            Task { await loginWithDevice(requireLocalAuthentication: true) }
-                        } label: {
-                            Text("\(settings.biometryType.displayName) 继续")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(BrokerPalette.teal)
-                        .disabled(isSubmitting || settings.isRestoringDeviceSession)
+                    Button {
+                        isShowingServerConfig = true
+                    } label: {
+                        Text("配置服务器")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(BrokerPalette.gold)
+                }
+                .padding(.top, 2)
+                .padding(.horizontal, 20)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("连接信息")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.white.opacity(0.72))
+
+                    Text("当前服务器：\(settings.trimmedServerURLString)")
+                        .font(.system(size: 11, weight: .regular, design: .monospaced))
+                        .foregroundStyle(Color.white.opacity(0.66))
+                        .lineLimit(1)
+
+                    if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                        Text("本机构建：\(suggestedBuildURL)")
+                            .font(.system(size: 11, weight: .regular, design: .monospaced))
+                            .foregroundStyle(Color.white.opacity(0.58))
+                            .lineLimit(1)
                     }
                 }
+                .padding(.horizontal, 20)
 
-                Text(deviceAccessHint)
-                    .font(.footnote)
-                    .foregroundStyle(BrokerPalette.muted)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
-
-    private var serverAccessory: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("服务器")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(BrokerPalette.muted)
-                Text(serverDisplayName)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(BrokerPalette.ink)
-                Text(settings.trimmedServerURLString)
-                    .font(.system(size: 11, weight: .regular, design: .monospaced))
-                    .foregroundStyle(BrokerPalette.muted)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                serverDraft = settings.trimmedServerURLString
-                isShowingServerSwitcher = true
-            } label: {
-                Text("切换服务器")
-            }
-            .buttonStyle(.bordered)
-            .tint(BrokerPalette.teal)
-
-            if !isUsingDefaultServer {
-                Button {
-                    settings.selectServerURL(
-                        preferredDefaultServerURL,
-                        name: "默认服务器",
-                        rememberSelection: true
-                    )
-                    statusMessage = "已切换到默认服务器。"
-                } label: {
-                    Text("默认")
+                if let message = settings.connectionStatusMessage,
+                   message.contains("未找到可连接的服务器") || message.contains("暂无可探测服务器地址") {
+                    Text("如果自动切换失败，可以直接点上方“配置服务器”手工切换。")
+                        .font(.caption)
+                        .foregroundStyle(Color.white.opacity(0.66))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
                 }
-                .buttonStyle(.bordered)
-                .tint(BrokerPalette.cyan)
             }
+            .padding(.bottom, 32)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(.horizontal, 2)
+        .task {
+            await attemptAutomaticLogin()
+        }
+        .onChange(of: settings.connectionStatusMessage) { _, newValue in
+            guard let newValue, !newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
+            }
+            statusMessage = newValue
+        }
+        .sheet(isPresented: $isShowingServerConfig) {
+            ServerConnectionConfigSheet()
+                .presentationDetents([.medium, .large])
+        }
     }
 
-    private var statusBanner: some View {
-        Text(statusMessage ?? "")
-            .font(.footnote)
-            .foregroundStyle(statusColor)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    private var shouldShowRetryActions: Bool {
+        let lowered = displayStatusMessage.lowercased()
+        return lowered.contains("失败")
+            || lowered.contains("错误")
+            || lowered.contains("超时")
+            || lowered.contains("无法")
+            || lowered.contains("未找到可连接的服务器")
+            || lowered.contains("暂未发现可用服务器")
+            || lowered.contains("暂无可探测服务器地址")
+    }
+
+    private var shouldUseBiometricForDeviceLogin: Bool {
+        settings.supportsBiometricUnlock && settings.hasProvisionedDeviceAccount
     }
 
     private var deviceLoginButtonTitle: String {
-        if settings.isRestoringDeviceSession {
-            return "正在恢复"
+        if shouldUseBiometricForDeviceLogin {
+            return "使用 \(settings.biometryType.displayName) 登录设备账号"
         }
-        return settings.hasProvisionedDeviceAccount ? "继续进入" : "启用并进入"
-    }
-
-    private var accessSubtitle: String {
-        if settings.isRestoringDeviceSession {
-            return "已检测到当前设备，正在尝试恢复之前的专属会话。"
+        if settings.hasProvisionedDeviceAccount {
+            return "使用设备账号登录"
         }
-        return settings.hasProvisionedDeviceAccount
-            ? "当前设备已绑定，可直接继续进入。"
-            : "首次使用会为当前设备创建一个专属账户。"
+        return "继续用本机设备身份"
     }
 
-    private var deviceAccessHint: String {
-        if settings.supportsBiometricUnlock {
-            return settings.biometricUnlockEnabled
-                ? "已开启 \(settings.biometryType.displayName) 本机解锁。"
-                : "登录成功后可启用 \(settings.biometryType.displayName) 本机解锁。"
+    private var displayStatusMessage: String {
+        if let message = settings.connectionStatusMessage,
+           !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return message
         }
-        return "当前设备未检测到可用的 Face ID / Touch ID，仍可直接使用设备登录。"
+        return statusMessage
     }
 
-    private var isUsingDefaultServer: Bool {
-        settings.trimmedServerURLString == preferredDefaultServerURL
-    }
-
-    private var preferredDefaultServerURL: String {
-        settings.suggestedBuildServerURLString ?? AppSettingsStore.defaultServerURLString
-    }
-
-    private var serverDisplayName: String {
-        if isUsingDefaultServer {
-            return "默认服务器"
+    private func attemptAutomaticLogin() async {
+        guard !hasTriggeredAutoLogin || shouldShowRetryActions else {
+            return
         }
-        guard let host = URL(string: settings.trimmedServerURLString)?.host,
-              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return "自定义服务器"
+        hasTriggeredAutoLogin = true
+
+        guard settings.hasProvisionedDeviceAccount else {
+            statusMessage = "默认建议先用 Apple ID 登录；也可以继续进入 AI 模式。"
+            return
         }
-        return host
+
+        if settings.canAttemptAutomaticDeviceLogin {
+            statusMessage = "正在恢复设备会话…"
+            await settings.restoreDeviceSessionIfPossible()
+            if settings.isAuthenticated {
+                statusMessage = "已恢复会话。"
+                return
+            }
+        }
+
+        statusMessage = settings.supportsBiometricUnlock
+            ? "可以继续使用 \(settings.biometryType.displayName) 或 Apple ID 登录。"
+            : "可以继续使用设备账号或 Apple ID 登录。"
     }
 
-    private var statusColor: Color {
-        let message = statusMessage ?? ""
-        return message.contains("失败") || message.contains("错误") || message.contains("无效")
-            ? BrokerPalette.red
-            : BrokerPalette.teal
+    private func loginWithDevice(requireLocalAuthentication: Bool) async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        do {
+            let response = try await performDeviceLogin(requireLocalAuthentication: requireLocalAuthentication)
+            let isNewDevice = response.deviceCredentials?.isNewDevice == true
+            if isNewDevice {
+                statusMessage = "设备绑定完成，正在进入首页…"
+            } else if requireLocalAuthentication {
+                statusMessage = "验证通过，正在进入首页…"
+            } else {
+                statusMessage = "登录成功，正在进入首页…"
+            }
+        } catch {
+            if !hasAttemptedServerRecovery, await settings.recoverServerConnectionIfNeeded() {
+                hasAttemptedServerRecovery = true
+                statusMessage = settings.connectionStatusMessage ?? "已切换到可用服务器，正在重新登录…"
+                do {
+                    let response = try await performDeviceLogin(requireLocalAuthentication: false)
+                    let isNewDevice = response.deviceCredentials?.isNewDevice == true
+                    if isNewDevice {
+                        statusMessage = "设备绑定完成，正在进入首页…"
+                    } else {
+                        statusMessage = "已切换到可用服务器，正在进入首页…"
+                    }
+                    return
+                } catch {
+                    statusMessage = friendlyErrorMessage(error)
+                    return
+                }
+            }
+            statusMessage = friendlyErrorMessage(error)
+        }
     }
 
-    private var serverSwitcherSheet: some View {
+    private func loginWithApple(
+        userIdentifier: String,
+        displayName: String?,
+        emailAddress: String?
+    ) async {
+        isSubmitting = true
+        defer { isSubmitting = false }
+
+        do {
+            _ = try await settings.loginWithAppleAccount(
+                userIdentifier: userIdentifier,
+                displayName: displayName,
+                emailAddress: emailAddress
+            )
+            statusMessage = settings.isLocalOnlySession
+                ? "已进入本机 Apple 身份，正在进入首页…"
+                : "Apple 登录成功，正在进入首页…"
+        } catch {
+            statusMessage = friendlyErrorMessage(error)
+        }
+    }
+
+    private func performDeviceLogin(requireLocalAuthentication: Bool) async throws -> MobileSessionPayload {
+        try await settings.loginWithDeviceAccount(requireLocalAuthentication: requireLocalAuthentication)
+    }
+
+    private func friendlyErrorMessage(_ error: Error) -> String {
+        let lowered = error.localizedDescription.lowercased()
+        if lowered.contains("timed out") || lowered.contains("timeout") {
+            return "连接超时，已尝试自动切换服务器，请稍后重试。"
+        }
+        if lowered.contains("could not connect")
+            || lowered.contains("offline")
+            || lowered.contains("network")
+            || lowered.contains("connection") {
+            return "当前网络连接异常，请检查网络后重试。"
+        }
+        return error.localizedDescription
+    }
+}
+
+struct ServerConnectionConfigSheet: View {
+    @EnvironmentObject private var settings: AppSettingsStore
+    @StateObject private var discovery = ServerDiscoveryService()
+    @Environment(\.dismiss) private var dismiss
+    @State private var isApplying = false
+    @State private var helperMessage: String = "如果当前默认服务器不可用，可以自动探测或手动切换到可连接的地址。"
+    @State private var statusItems: [ServerStatusItem] = []
+    @State private var isRefreshingStatus = false
+
+    var body: some View {
         NavigationStack {
             AppBackdrop {
                 ScrollView {
-                    VStack(spacing: 16) {
-                        SectionPanel(title: "服务器地址", subtitle: "默认地址已经预填，也可以切到其他服务器。") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        SectionPanel(
+                            title: "服务器配置",
+                            subtitle: "先试自动探测；如果仍无可用服务器，再手工填写服务地址。"
+                        ) {
                             VStack(alignment: .leading, spacing: 12) {
-                                TextField(preferredDefaultServerURL, text: $serverDraft)
+                                if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("当前 Mac 局域网地址")
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundStyle(BrokerPalette.muted)
+                                        Text(suggestedBuildURL)
+                                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                                            .foregroundStyle(BrokerPalette.ink)
+                                            .lineLimit(1)
+                                    }
+                                    .padding(12)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                }
+
+                                TextField(AppSettingsStore.defaultServerURLString, text: $settings.serverURLString)
                                     .appURLTextEntry()
                                     .padding(14)
                                     .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .foregroundStyle(BrokerPalette.ink)
 
                                 HStack(spacing: 10) {
                                     Button {
-                                        serverDraft = preferredDefaultServerURL
+                                        settings.selectServerURL(AppSettingsStore.remoteDefaultServerURLString, name: "远端默认服务器", rememberSelection: true)
+                                        helperMessage = "已切换到远端默认服务器。"
                                     } label: {
-                                        Text("填入默认地址")
+                                        Text("远端默认")
                                             .frame(maxWidth: .infinity)
                                     }
                                     .buttonStyle(.bordered)
-                                    .tint(BrokerPalette.teal)
+                                    .tint(BrokerPalette.cyan)
 
                                     Button {
-                                        applyServerDraft()
+                                        Task { await autoRecover() }
                                     } label: {
-                                        Text("保存并使用")
+                                        Text(discovery.isScanning ? "探测中…" : "自动探测")
                                             .frame(maxWidth: .infinity)
                                     }
                                     .buttonStyle(.borderedProminent)
-                                    .tint(BrokerPalette.cyan)
+                                    .tint(BrokerPalette.gold)
                                     .foregroundStyle(Color.black)
+                                    .disabled(isApplying)
                                 }
-                            }
-                        }
 
-                        if let suggestedBuildURL = settings.suggestedBuildServerURLString, !suggestedBuildURL.isEmpty {
-                            SectionPanel(title: "本机测试地址", subtitle: "当前构建已注入你这台 Mac 的最新局域网 IP。") {
                                 Button {
-                                    settings.selectServerURL(suggestedBuildURL, name: "本机测试地址", rememberSelection: true)
-                                    statusMessage = "已切换到本机测试地址。"
-                                    isShowingServerSwitcher = false
+                                    Task { await saveAndRetry() }
                                 } label: {
-                                    HStack(alignment: .top, spacing: 12) {
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("当前构建本机地址")
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundStyle(BrokerPalette.ink)
-                                            Text(suggestedBuildURL)
-                                                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                                                .foregroundStyle(BrokerPalette.muted)
-                                                .multilineTextAlignment(.leading)
-                                        }
-
-                                        Spacer()
-
-                                        if settings.trimmedServerURLString == suggestedBuildURL {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(BrokerPalette.cyan)
-                                        }
-                                    }
-                                    .padding(14)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    Text("保存并重新连接")
+                                        .frame(maxWidth: .infinity)
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(.borderedProminent)
+                                .tint(BrokerPalette.teal)
+                                .foregroundStyle(Color.black)
+                                .disabled(isApplying)
+
+                                Text(helperMessage)
+                                    .font(.footnote)
+                                    .foregroundStyle(BrokerPalette.muted)
                             }
                         }
 
-                        if !settings.savedServers.isEmpty {
-                            SectionPanel(title: "最近服务器", subtitle: "点一下即可切换。") {
-                                VStack(spacing: 10) {
-                                    ForEach(settings.savedServers) { server in
-                                        Button {
-                                            settings.selectServerURL(server.url, name: server.name, rememberSelection: true)
-                                            statusMessage = "已切换到 \(server.name)。"
-                                            isShowingServerSwitcher = false
-                                        } label: {
-                                            HStack(alignment: .top, spacing: 12) {
-                                                VStack(alignment: .leading, spacing: 4) {
-                                                    Text(server.name)
-                                                        .font(.subheadline.weight(.semibold))
-                                                        .foregroundStyle(BrokerPalette.ink)
-                                                    Text(server.url)
-                                                        .font(.system(size: 11, weight: .regular, design: .monospaced))
-                                                        .foregroundStyle(BrokerPalette.muted)
-                                                        .multilineTextAlignment(.leading)
-                                                }
-
-                                                Spacer()
-
-                                                if settings.trimmedServerURLString == server.url {
-                                                    Image(systemName: "checkmark.circle.fill")
-                                                        .foregroundStyle(BrokerPalette.cyan)
-                                                }
+                        SectionPanel(
+                            title: "网络状态",
+                            subtitle: "这里会显示当前地址和远端默认地址的实时连通情况。"
+                        ) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(spacing: 10) {
+                                    Button {
+                                        Task { await refreshServerStatuses() }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            if isRefreshingStatus {
+                                                ProgressView()
+                                                    .tint(BrokerPalette.cyan)
+                                            } else {
+                                                Image(systemName: "dot.radiowaves.left.and.right")
                                             }
-                                            .padding(14)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                            .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                            Text(isRefreshingStatus ? "检查中…" : "刷新状态")
                                         }
-                                        .buttonStyle(.plain)
+                                        .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .tint(BrokerPalette.cyan)
+
+                                    TagBadge(
+                                        text: discovery.discoveredServers.isEmpty ? "已发现 0 台" : "已发现 \(discovery.discoveredServers.count) 台",
+                                        tint: discovery.discoveredServers.isEmpty ? BrokerPalette.gold : BrokerPalette.green
+                                    )
+                                }
+
+                                ForEach(statusItems) { item in
+                                    serverStatusRow(item)
+                                }
+
+                                if statusItems.isEmpty {
+                                    Text("当前还没有状态数据，点击“刷新状态”后会检查当前地址与远端默认地址。")
+                                        .font(.footnote)
+                                        .foregroundStyle(BrokerPalette.muted)
+                                }
+                            }
+                        }
+
+                        SectionPanel(
+                            title: "探测结果",
+                            subtitle: "如果这台 Mac 或远端机器在当前网络可达，会出现在这里。"
+                        ) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                if discovery.isScanning {
+                                    ProgressView()
+                                        .tint(BrokerPalette.cyan)
+                                }
+
+                                if discovery.discoveredServers.isEmpty {
+                                    Text(discovery.statusMessage ?? "点击“自动探测”后，系统会扫描当前局域网中的可用服务。")
+                                        .font(.footnote)
+                                        .foregroundStyle(BrokerPalette.muted)
+                                } else {
+                                    ForEach(discovery.discoveredServers) { server in
+                                        Button {
+                                            settings.selectServerURL(server.urlString, name: server.name, rememberSelection: true)
+                                            helperMessage = "已切换到 \(server.name)。"
+                                        } label: {
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(server.name)
+                                                    .foregroundStyle(BrokerPalette.ink)
+                                                Text(server.urlString)
+                                                    .font(.footnote)
+                                                    .foregroundStyle(BrokerPalette.muted)
+                                            }
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .tint(BrokerPalette.cyan)
                                     }
                                 }
                             }
@@ -328,45 +451,155 @@ struct LoginScreen: View {
                     .padding(.bottom, 24)
                 }
             }
-            .navigationTitle("切换服务器")
+            .navigationTitle("配置服务器")
             .appInlineNavigationTitle()
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭") {
-                        isShowingServerSwitcher = false
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        dismiss()
                     }
-                    .tint(BrokerPalette.cyan)
                 }
             }
+            .onChange(of: discovery.discoveredServers) { _, servers in
+                guard let first = servers.first else { return }
+                if settings.trimmedServerURLString != first.urlString {
+                    settings.selectServerURL(first.urlString, name: first.name, rememberSelection: true)
+                    helperMessage = "已自动切换到 \(first.name)。"
+                }
+            }
+            .task(id: settings.trimmedServerURLString) {
+                discovery.stopScanning()
+                discovery.startScan(currentServerURLString: settings.trimmedServerURLString)
+                await refreshServerStatuses()
+            }
         }
-        .presentationDetents([.medium, .large])
     }
 
-    private func loginWithDevice(requireLocalAuthentication: Bool) async {
-        await withBusyState {
-            let response = try await settings.loginWithDeviceAccount(requireLocalAuthentication: requireLocalAuthentication)
-            let isNewDevice = response.deviceCredentials?.isNewDevice == true
-            let hasPassword = !(settings.deviceAccountProfile.defaultPassword ?? "").isEmpty
-            statusMessage = isNewDevice
-                ? "设备已完成绑定。\(hasPassword ? "备用密码已保存，可在设置页查看。" : "")"
-                : (requireLocalAuthentication ? "已通过 \(settings.biometryType.displayName) 登录。" : (response.message ?? "登录成功。"))
+    private struct ServerStatusItem: Identifiable {
+        let name: String
+        let url: String
+        let state: String
+        let detail: String
+        let tint: Color
+
+        var id: String { name + url }
+    }
+
+    @ViewBuilder
+    private func serverStatusRow(_ item: ServerStatusItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text(item.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(BrokerPalette.ink)
+
+                TagBadge(text: item.state, tint: item.tint)
+
+                Spacer()
+            }
+
+            Text(item.url)
+                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .foregroundStyle(BrokerPalette.muted)
+                .lineLimit(1)
+
+            Text(item.detail)
+                .font(.footnote)
+                .foregroundStyle(BrokerPalette.muted)
         }
+        .padding(12)
+        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(BrokerPalette.line, lineWidth: 1)
+        )
     }
 
-    private func applyServerDraft() {
-        settings.selectServerURL(serverDraft, rememberSelection: true)
-        statusMessage = "已切换到 \(settings.trimmedServerURLString)"
-        isShowingServerSwitcher = false
+    private func autoRecover() async {
+        isApplying = true
+        defer { isApplying = false }
+        helperMessage = "正在自动探测并切换可用服务器…"
+        if await settings.recoverServerConnectionIfNeeded() {
+            helperMessage = settings.connectionStatusMessage ?? "已找到可用服务器。"
+            await refreshServerStatuses()
+            return
+        }
+        helperMessage = "未发现可用服务器，请手工填写运行服务的机器地址。"
+        await refreshServerStatuses()
     }
 
-    private func withBusyState(_ operation: @escaping () async throws -> Void) async {
-        isSubmitting = true
-        defer { isSubmitting = false }
+    private func saveAndRetry() async {
+        isApplying = true
+        defer { isApplying = false }
+        settings.saveCurrentServer()
+        helperMessage = "已保存当前地址，正在重新连接…"
+        _ = await settings.recoverServerConnectionIfNeeded()
+        await refreshServerStatuses()
+    }
+
+    private func refreshServerStatuses() async {
+        isRefreshingStatus = true
+        defer { isRefreshingStatus = false }
+
+        let candidates = [
+            ("当前地址", settings.trimmedServerURLString),
+            ("远端默认", AppSettingsStore.remoteDefaultServerURLString)
+        ]
+
+        var rows: [ServerStatusItem] = []
+        for (name, url) in candidates {
+            guard !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { continue }
+            rows.append(await probeStatus(name: name, url: url))
+        }
+        statusItems = rows
+    }
+
+    private func probeStatus(name: String, url: String) async -> ServerStatusItem {
+        guard let baseURL = URL(string: url) else {
+            return ServerStatusItem(
+                name: name,
+                url: url,
+                state: "地址异常",
+                detail: "URL 格式无效，请检查 http/https 和端口。",
+                tint: BrokerPalette.red
+            )
+        }
+
+        let startedAt = Date()
+        var request = URLRequest(url: baseURL.appending(path: "api/mobile/discovery"))
+        request.timeoutInterval = 1.5
+        request.cachePolicy = .reloadIgnoringLocalCacheData
 
         do {
-            try await operation()
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse, (200..<300).contains(httpResponse.statusCode) else {
+                return ServerStatusItem(
+                    name: name,
+                    url: url,
+                    state: "不可用",
+                    detail: "服务返回异常状态码。",
+                    tint: BrokerPalette.red
+                )
+            }
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            let payload = try decoder.decode(MobileServerDiscoveryPayload.self, from: data)
+            let latency = max(Int(Date().timeIntervalSince(startedAt) * 1000), 1)
+            return ServerStatusItem(
+                name: name,
+                url: url,
+                state: "在线",
+                detail: "\(payload.appName) · \(payload.detectedLanIp ?? payload.bindHost):\(payload.port) · \(latency)ms",
+                tint: BrokerPalette.green
+            )
         } catch {
-            statusMessage = error.localizedDescription
+            return ServerStatusItem(
+                name: name,
+                url: url,
+                state: "离线",
+                detail: "当前未连通该地址：\(error.localizedDescription)",
+                tint: BrokerPalette.orange
+            )
         }
     }
 }
